@@ -174,7 +174,7 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
   </div>
   <div class="panel">
     <h2>Photo → PRN · AI</h2>
-    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. The photo is sent to Cloudflare Workers AI to read it and is not stored.</p>
+    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. The photo is read by Claude (Anthropic), with Google Gemini as backup, and is not stored.</p>
     <div class="form">
       <div class="row">
         <label class="btn" for="aiFile">Choose photo</label>
@@ -1127,7 +1127,8 @@ $("aiGo").onclick = async () => {
     p2l.lastW = L.w; p2l.lastH = L.h;
     const { prn, warn } = layoutPRN(L, lang, dpi);
     const notes = ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn];
-    $("aiStatus").textContent = `Done: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
+    const who = { claude: "Claude", gemini: "Gemini", "workers-ai": "Cloudflare Llama (backup)" }[j.provider] || j.provider || "AI";
+    $("aiStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
     showGenerated(prn, `pic2label_${lang}_${dpi}dpi.prn`, notes);
   } catch (err) { $("aiStatus").textContent = "Conversion failed: " + err.message; }
   finally { $("aiGo").disabled = false; }

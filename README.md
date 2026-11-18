@@ -25,5 +25,5 @@ Prices print as "Rs." because built-in printer fonts lack the ₹ sign.
 ## Pic2Label (picture → PRN)
 
 - **Bitmap:** logo or picture → ZPL `^GFA` (compressed ASCII), TSPL `BITMAP` or EPL2 `GW`. Runs in the browser; Download .prn writes the binary data.
-- **AI photo → PRN:** `POST /api/pic2label` (src/index.js) sends the photo to Cloudflare Workers AI (`@cf/meta/llama-4-scout-17b-16e-instruct`) and returns a layout; the page turns it into TSPL, ZPL, EPL2 or PGL. Limited to 8 requests per minute per IP. Barcodes are decoded in the browser where `BarcodeDetector` exists.
+- **AI photo → PRN:** `POST /api/pic2label` (src/index.js) sends the photo to Claude (`claude-sonnet-5-5`, secret `ANTHROPIC_API_KEY`), falling back to Gemini Flash (secret `GEMINI_API_KEY`) and then Workers AI Llama 4 Scout, and returns a layout; the page turns it into TSPL, ZPL, EPL2 or PGL. Limited to 8 requests per minute per IP. Barcodes are decoded in the browser where `BarcodeDetector` exists.
 - The preview also renders ZPL `^GF` (hex, compressed, Z64/B64), `~DG` + `^XG`, TSPL `BITMAP` and EPL2 `GW` graphics.

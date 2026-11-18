@@ -1,5 +1,8 @@
 // prn-preview Worker: serves the static site from ./public and the Pic2Label AI endpoint.
-const MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+// Providers tried in order: Claude (ANTHROPIC_API_KEY), Gemini (GEMINI_API_KEY), then Workers AI as last resort.
+const CLAUDE_MODEL = "claude-sonnet-5-5";
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"];
+const CF_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
@@ -30,9 +33,7 @@ ${hints}
 List every printed line of text, top to bottom. Never invent text that is not printed.`;
 }
 
-function extractJSON(r) {
-  let v = r && (r.response ?? r.result ?? r);
-  if (v && typeof v === "object" && (v.elements || v.label)) return v;
+function extractJSON(v) {
   if (typeof v !== "string") v = JSON.stringify(v ?? "");
   v = v.replace(/```(?:json)?/gi, "");
   const a = v.indexOf("{"), z = v.lastIndexOf("}");
@@ -55,21 +56,67 @@ async function pic2label(request, env) {
   if (img.length > 4_000_000) return json({ error: "Image too large; send at most about 3 MB" }, 413);
   const num = v => (Number.isFinite(+v) && +v > 0 && +v < 1000 ? +v : null);
   const body = { width_mm: num(b.width_mm), height_mm: num(b.height_mm), barcodes: b.barcodes };
-  try {
-    const r = await env.AI.run(MODEL, {
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: [{ type: "text", text: userPrompt(body) }, { type: "image_url", image_url: { url: img } }] },
-      ],
-      max_tokens: 3000,
-      temperature: 0.1,
-    });
-    const layout = extractJSON(r);
-    if (!layout || !Array.isArray(layout.elements)) return json({ error: "The AI reply could not be read as a label layout. Try a sharper, straight-on photo.", raw: String(r && r.response || "").slice(0, 500) }, 502);
-    return json({ layout, model: MODEL });
-  } catch (e) {
-    return json({ error: "AI service error: " + (e && e.message || e) }, 502);
+  const prompt = userPrompt(body);
+  const [, mime, b64] = img.match(/^data:(image\/\w+);base64,(.*)$/s);
+  const providers = [];
+  if (env.ANTHROPIC_API_KEY) providers.push(["claude", () => viaClaude(env, env.CLAUDE_MODEL || CLAUDE_MODEL, prompt, mime, b64)]);
+  if (env.GEMINI_API_KEY) for (const m of (env.GEMINI_MODEL ? [env.GEMINI_MODEL] : GEMINI_MODELS)) providers.push(["gemini", () => viaGemini(env, m, prompt, mime, b64)]);
+  if (env.AI) providers.push(["workers-ai", () => viaWorkersAI(env, prompt, img)]);
+  const errors = [];
+  for (const [name, run] of providers) {
+    try {
+      const { text, model } = await run();
+      const layout = extractJSON(text);
+      if (layout && Array.isArray(layout.elements)) return json({ layout, provider: name, model, errors });
+      errors.push(`${name}: reply was not a label layout`);
+    } catch (e) { errors.push(`${name}: ${String(e && e.message || e).slice(0, 200)}`); }
   }
+  return json({ error: "No AI service could read this photo. " + errors.join(" | ") }, 502);
+}
+
+async function viaClaude(env, model, prompt, mime, b64) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model, max_tokens: 4096, system: SYSTEM,
+      messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: mime, data: b64 } },
+        { type: "text", text: prompt },
+      ] }],
+    }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
+  return { text: (j.content || []).filter(c => c.type === "text").map(c => c.text).join(""), model };
+}
+
+async function viaGemini(env, model, prompt, mime, b64) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+    }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
+  const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+  return { text: parts.filter(p => p.text && !p.thought).map(p => p.text).join(""), model };
+}
+
+async function viaWorkersAI(env, prompt, img) {
+  const r = await env.AI.run(CF_MODEL, {
+    messages: [
+      { role: "system", content: SYSTEM },
+      { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: img } }] },
+    ],
+    max_tokens: 3000, temperature: 0.1,
+  });
+  const v = r && (r.response ?? r.result ?? r);
+  return { text: typeof v === "string" ? v : JSON.stringify(v), model: CF_MODEL };
 }
 
 export default {
