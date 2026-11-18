@@ -11,9 +11,10 @@ The site is one static file, `public/index.html`, served as Worker static assets
 
 ## Hosting
 
+Live at **https://labels.infinitesolutions.co.in** (Cloudflare Worker `prn-preview`; every push to `main` redeploys).
+
 **Cloudflare Workers:** Workers & Pages → Create → Import a repository → this repo. Build command: empty. Deploy command: `npx wrangler deploy`.
 
-**GitHub Pages:** Settings → Pages → Deploy from branch `main`, folder `/public` is not offered by GitHub Pages; use Cloudflare, or move `public/` contents to the root.
 
 ## Templates
 
