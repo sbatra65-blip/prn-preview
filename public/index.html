@@ -338,7 +338,7 @@ function parseTSPL(t, dpi) {
       if (esc && data.startsWith(esc + "1")) { gs1 = true; data = data.split(esc + "1").join("\x1d"); }
       m.items.push({ k: "dm", x: +a[0], y: +a[1], mod, gs1, text: gs1 ? gs1Paren(data) : data, deg, tspl: true });
     } else if (cmd === "QRCODE") {
-      m.items.push({ k: "qr", x: +a[0], y: +a[1], mod: +a[3] || 4, deg: +a[5] || 0, text: unesc(a[a.length - 1]), tspl: true });
+      m.items.push({ k: "qr", x: +a[0], y: +a[1], mod: +a[3] || 4, deg: +a[5] || 0, ecc: (a[2] || "M").trim().toUpperCase(), text: unesc(a[a.length - 1]), tspl: true });
     } else if (!TSPL_IGNORE.has(cmd)) {
       m.warn.push("TSPL command not previewed: " + cmd);
     }
@@ -400,7 +400,7 @@ function parseZPL(t, dpi) {
         } else if (field.kind === "dm") {
           let d = data, gs1 = false; if (d.startsWith(field.esc + "1")) { gs1 = true; d = d.split(field.esc + "1").join("\x1d"); }
           m.items.push({ k: "dm", ...pos, rot: field.rot, mod: field.mod, gs1, text: gs1 ? gs1Paren(d) : d });
-        } else if (field.kind === "qr") m.items.push({ k: "qr", ...pos, rot: field.rot, mod: field.mod, text: data.replace(/^[LMQH]A,/, "") });
+        } else if (field.kind === "qr") m.items.push({ k: "qr", ...pos, rot: field.rot, mod: field.mod, ecc: (data.match(/^([LMQH])[AM],/) || [, "Q"])[1], text: data.replace(/^[LMQH][AM],/, "") });
         field = null; break;
       }
       default:
@@ -594,7 +594,7 @@ function render(model, canvas, opts) {
       }
       ctx.restore();
     } else if (it.k === "dm" || it.k === "qr") {
-      const c = bwipCanvas({ bcid: it.k === "qr" ? "qrcode" : (it.gs1 ? "gs1datamatrix" : "datamatrix"), text: it.text });
+      const c = bwipCanvas({ bcid: it.k === "qr" ? "qrcode" : (it.gs1 ? "gs1datamatrix" : "datamatrix"), text: it.text, ...(it.k === "qr" ? { eclevel: /^[LMQH]$/.test(it.ecc) ? it.ecc : "M" } : {}) });
       if (!c) { drawError(ctx, it, "2D data invalid"); continue; }
       const mods = it.k === "dm" ? dmModules(c) : qrModules(c);
       const s = mods * it.mod;
