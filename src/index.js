@@ -1,7 +1,7 @@
 // prn-preview Worker: serves the static site from ./public and the Pic2Label AI endpoint.
 // Providers tried in order: Claude (ANTHROPIC_API_KEY), Gemini (GEMINI_API_KEY), then Workers AI as last resort.
 const CLAUDE_MODEL = "claude-sonnet-5-5";
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"];
+const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"];
 const CF_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const CORS = {
   "access-control-allow-origin": "*",
@@ -94,6 +94,14 @@ async function viaClaude(env, model, prompt, mime, b64) {
 }
 
 async function viaGemini(env, model, prompt, mime, b64) {
+  try { return await geminiOnce(env, model, prompt, mime, b64); }
+  catch (e) { // free tier often returns 503/429 for a moment: wait and retry once
+    if (!/HTTP (503|429|500)/.test(e.message)) throw e;
+    await new Promise(r => setTimeout(r, 2500));
+    return geminiOnce(env, model, prompt, mime, b64);
+  }
+}
+async function geminiOnce(env, model, prompt, mime, b64) {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
