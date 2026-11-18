@@ -1,7 +1,7 @@
 // prn-preview Worker: serves the static site from ./public and the Pic2Label AI endpoint.
 // Providers tried in order: Claude (ANTHROPIC_API_KEY), Gemini (GEMINI_API_KEY), then Workers AI as last resort.
 const CLAUDE_MODEL = "claude-sonnet-5-5";
-const GEMINI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"];
+const GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
 const CF_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 const CORS = {
   "access-control-allow-origin": "*",
@@ -110,7 +110,7 @@ async function geminiOnce(env, model, prompt, mime, b64) {
       contents: [{ role: "user", parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
       generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "low" } },
     }),
-    signal: AbortSignal.timeout(50000),
+    signal: AbortSignal.timeout(40000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
