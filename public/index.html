@@ -145,7 +145,15 @@ table.t1 th { color: var(--muted); font-weight: 600; }
           <button type="button" data-dpi="300">300 dpi</button>
           <button type="button" data-dpi="600">600 dpi</button>
         </div>
+        <div class="seg" role="group" aria-label="View rotation" id="viewSeg">
+          <button type="button" data-view="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-view="0">0°</button>
+          <button type="button" data-view="90">90°</button>
+          <button type="button" data-view="180">180°</button>
+          <button type="button" data-view="270">270°</button>
+        </div>
         <label class="check"><input type="checkbox" id="grid"> 5 mm grid</label>
+        <button type="button" class="btn" id="redrawBtn">Redraw</button>
         <span class="detect" id="detectBadge" role="status" aria-live="polite"></span>
       </div>
       <div class="stage">
@@ -254,7 +262,7 @@ function ean13Full(d) {
 function detect(t) {
   if (/\^XA/i.test(t)) return "ZPL";
   if (/~CREATE;/i.test(t)) return "PGL";
-  if (/^\s*SIZE\s+[\d.]/mi.test(t) || /^\s*(CLS|PRINT\s+\d)/mi.test(t)) return "TSPL";
+  if (/(^|>)\s*SIZE\s+[\d.]/mi.test(t) || /^\s*(CLS|PRINT\s+\d)/mi.test(t)) return "TSPL";
   if (/^\s*q\d+/m.test(t) || /^\s*A\d+,\d+,\d/m.test(t)) return "EPL2";
   return "UNKNOWN";
 }
@@ -273,37 +281,54 @@ const TSPL_BMP = { 203: {1:[8,12],2:[12,20],3:[16,24],4:[24,32],5:[32,48],6:[14,
                    300: {1:[12,20],2:[16,28],3:[24,32],4:[32,48],5:[48,64],6:[19,27],7:[27,39],8:[19,35]},
                    600: {1:[24,40],2:[32,56],3:[48,64],4:[64,96],5:[96,128],6:[38,54],7:[54,78],8:[38,70]} };
 
+const TSPL_IGNORE = new Set(["GAP","REFERENCE","CODEPAGE","DENSITY","SPEED","CLS","PRINT","OFFSET","SET","SHIFT","BLINE","LIMITFEED","FEED","BACKFEED","HOME","FORMFEED","CUT","EOP","DOWNLOAD","KILL","MOVE","SOUND","SELFTEST","INITIALPRINTER","CODEPAGE","COUNTRY","CODEPAGE","~!T","!"]);
+function tsplStatements(t) {
+  // join lines while a quoted string is open; \["] is TSPL's escaped quote
+  const src = t.replace(/<xpml>[\s\S]*?<\/xpml>/gi, "\n").replace(/\\\["\]/g, "\u0001");
+  const out = []; let cur = "", q = false;
+  for (const ch of src) {
+    if (ch === '"') q = !q;
+    if ((ch === "\n" || ch === "\r") && !q) { if (cur.trim()) out.push(cur.trim()); cur = ""; continue; }
+    cur += ch === "\r" ? "" : ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+const unesc = s => unq(s).replace(/\u0001/g, '"');
 function parseTSPL(t, dpi) {
-  const m = { items: [], warn: [], dpi, w: 0, h: 0 };
+  const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
+  if (/<xpml>/i.test(t)) m.meta.source = "BarTender / Seagull driver (XPML wrapper)";
   const dpmm = dpi / 25.4;
-  for (const raw of t.split(/\r?\n/)) {
-    const line = raw.trim(); if (!line) continue;
-    const sp = line.indexOf(" "); const cmd = (sp < 0 ? line : line.slice(0, sp)).toUpperCase(); const a = sp < 0 ? [] : csv(line.slice(sp + 1));
+  for (const line of tsplStatements(t)) {
+    const sp = line.search(/\s/); const cmd = (sp < 0 ? line : line.slice(0, sp)).toUpperCase(); const a = sp < 0 ? [] : csv(line.slice(sp + 1));
     if (cmd === "SIZE") {
       const conv = v => /mm/i.test(v) ? parseFloat(v) * dpmm : (/dot/i.test(v) ? parseFloat(v) : parseFloat(v) * dpi);
       m.w = conv(a[0]); m.h = conv(a[1]);
+    } else if (cmd === "DIRECTION") { m.meta.direction = a[0];
     } else if (cmd === "TEXT") {
-      const font = unq(a[2]); const xm = parseFloat(a[4]), ym = parseFloat(a[5]); const s = unq(a[a.length - 1]).replace(/\\\["\]/g, '"');
-      if (font === "0" || /\.TTF$/i.test(font)) m.items.push({ k: "text", x: +a[0], y: +a[1], em: ym / 72 * dpi, s, cond: true });
-      else { const f = (TSPL_BMP[dpi] || TSPL_BMP[203])[font] || [12, 20]; m.items.push({ k: "text", x: +a[0], y: +a[1], em: f[1] * ym, cw: f[0] * xm, s, mono: true }); }
+      const font = unq(a[2]); const deg = +a[3] || 0; const xm = parseFloat(a[4]), ym = parseFloat(a[5]);
+      const align = a.length >= 8 ? +a[6] : 1; const s = unesc(a[a.length - 1]);
+      if (font === "0" || /\.TTF$/i.test(font)) m.items.push({ k: "text", x: +a[0], y: +a[1], em: ym / 72 * dpi, sx: xm && ym ? xm / ym : 1, s, deg, align, tspl: true });
+      else { const f = (TSPL_BMP[dpi] || TSPL_BMP[203])[font] || [12, 20]; m.items.push({ k: "text", x: +a[0], y: +a[1], em: f[1] * ym, cw: f[0] * xm, s, mono: true, deg, tspl: true }); }
     } else if (cmd === "BAR") m.items.push({ k: "rect", x: +a[0], y: +a[1], w: +a[2], h: +a[3] });
     else if (cmd === "BOX") { const [x, y, x2, y2, th] = a.map(Number); boxRects(m, x, y, x2 - x, y2 - y, th || 1); }
     else if (cmd === "BARCODE") {
-      const type = unq(a[2]).toUpperCase(), data = unq(a[a.length - 1]);
-      const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[3], mod: +a[6], hri: a[4] !== "0" };
+      const type = unq(a[2]).toUpperCase(), data = unesc(a[a.length - 1]);
+      const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[3], mod: +a[6], hri: a[4] !== "0", deg: +a[5] || 0, tspl: true };
       if (type.startsWith("EAN13")) Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
       else if (type.startsWith("EAN128")) { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
-      else if (type === "128" || type === "128M") Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+      else if (/^128M?$/.test(type)) Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+      else if (type === "39" || type === "39S") Object.assign(bc, { bcid: "code39", text: data, hriText: data });
       else { m.warn.push("Barcode type " + type + " not previewed"); continue; }
       m.items.push(bc);
     } else if (cmd === "DMATRIX") {
-      let esc = null, mod = 4; for (const p of a.slice(4, -1)) { if (/^c\d+/i.test(p)) esc = String.fromCharCode(+p.slice(1)); if (/^x\d+/i.test(p)) mod = +p.slice(1); }
-      let data = unq(a[a.length - 1]); let gs1 = false;
+      let esc = null, mod = 4, deg = 0; for (const p of a.slice(4, -1)) { if (/^c\d+/i.test(p)) esc = String.fromCharCode(+p.slice(1)); if (/^x\d+/i.test(p)) mod = +p.slice(1); if (/^r\d+/i.test(p)) deg = +p.slice(1); }
+      let data = unesc(a[a.length - 1]); let gs1 = false;
       if (esc && data.startsWith(esc + "1")) { gs1 = true; data = data.split(esc + "1").join("\x1d"); }
-      m.items.push({ k: "dm", x: +a[0], y: +a[1], mod, gs1, text: gs1 ? gs1Paren(data) : data });
+      m.items.push({ k: "dm", x: +a[0], y: +a[1], mod, gs1, text: gs1 ? gs1Paren(data) : data, deg, tspl: true });
     } else if (cmd === "QRCODE") {
-      m.items.push({ k: "qr", x: +a[0], y: +a[1], mod: +a[3] || 4, text: unq(a[a.length - 1]) });
-    } else if (!["GAP","DIRECTION","REFERENCE","CODEPAGE","DENSITY","SPEED","CLS","PRINT","OFFSET","SET","SHIFT","BLINE","CODEPAGE"].includes(cmd)) {
+      m.items.push({ k: "qr", x: +a[0], y: +a[1], mod: +a[3] || 4, deg: +a[5] || 0, text: unesc(a[a.length - 1]), tspl: true });
+    } else if (!TSPL_IGNORE.has(cmd)) {
       m.warn.push("TSPL command not previewed: " + cmd);
     }
   }
@@ -313,47 +338,62 @@ function boxRects(m, x, y, w, h, t) {
   m.items.push({ k: "rect", x, y, w, h: t }, { k: "rect", x, y: y + h - t, w, h: t }, { k: "rect", x, y, w: t, h }, { k: "rect", x: x + w - t, y, w: t, h });
 }
 
+const ZPL_IGNORE = new Set(["XA","XZ","CI","PQ","FS","MM","PR","MD","PO","SZ","JM","MC","PM","JZ","LR","LT","LS","MN","MT","JU","FX","FH","FR","PF","ID","IL","IS","JB","JW","KD","KN","SS","ST","TO","XG","DF","XF","FN","EG","HH","WD"]);
 function parseZPL(t, dpi) {
-  const m = { items: [], warn: [], dpi, w: 0, h: 0 };
-  let fo = [0, 0], lh = [0, 0], font = { h: 30, w: 0 }, by = 2, field = null, cf = { h: 30 };
-  const toks = t.replace(/\r?\n/g, "").split("^").slice(1);
+  const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
+  const pitch = t.match(/pitch='([\d.]+)\s*mm'/i);
+  if (/<xpml>/i.test(t)) m.meta.source = "BarTender / Seagull driver (XPML wrapper)";
+  if (pitch) m.h = Math.round(+pitch[1] * dpi / 25.4);
+  let s = t.replace(/<xpml>[\s\S]*?<\/xpml>/gi, "").replace(/\r?\n/g, "");
+  s = s.replace(/~[A-Z]{2}[^\^~]*/gi, "");            // strip ~ control commands (~JSN, ~SD...)
+  m.meta.formats = (s.match(/\^XA/gi) || []).length;
+  m.meta.dialect = /\^SZ1/i.test(s) ? "ZPL I (^SZ1)" : (/\^SZ2/i.test(s) ? "ZPL II (^SZ2)" : "ZPL II");
+  let fo = [0, 0], anchor = "FO", lh = [0, 0], fw = "N", font = { h: 30, w: 0, rot: "N" }, by = 2, field = null, cf = 30;
+  const toks = s.split("^").slice(1);
   for (const tok of toks) {
     const cmd = tok.slice(0, 2).toUpperCase(), rest = tok.slice(2);
     const a = rest.split(",");
+    if (cmd[0] === "A" && cmd !== "AF") {           // ^A{font}{o},h,w
+      const p = tok.slice(2).split(","); const o = (p[0] || "").toUpperCase();
+      font = { h: +p[1] || cf, w: +p[2] || 0, rot: "NRIB".includes(o) && o ? o : fw, name: tok[1] };
+      continue;
+    }
     switch (cmd) {
-      case "XA": case "XZ": case "CI": case "PQ": case "FS": case "MM": case "PR": case "MD": case "PO": break;
-      case "PW": m.w = +a[0]; break;
-      case "LL": m.h = +a[0]; break;
+      case "PW": m.w = parseInt(a[0]) || m.w; break;
+      case "LL": m.h = parseInt(a[0]) || m.h; break;
       case "LH": lh = [+a[0] || 0, +a[1] || 0]; break;
-      case "FO": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1]]; field = null; break;
-      case "FT": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1] - font.h]; field = null; break;
-      case "CF": cf = { h: +a[1] || 30 }; font = { h: cf.h, w: 0 }; break;
+      case "FW": fw = (a[0] || "N").toUpperCase(); font.rot = fw; break;
+      case "FO": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1]]; anchor = "FO"; field = null; break;
+      case "FT": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1]]; anchor = "FT"; field = null; break;
+      case "CF": cf = +a[1] || 30; font = { h: cf, w: +a[2] || 0, rot: fw }; break;
       case "BY": by = +a[0] || 2; break;
-      case "GB": { const w = +a[0] || 1, h = +a[1] || 1, th = +a[2] || 1;
-        if (th >= Math.min(w, h)) m.items.push({ k: "rect", x: fo[0], y: fo[1], w, h }); else boxRects(m, fo[0], fo[1], w, h, th); break; }
-      case "BE": field = { kind: "ean13", h: +a[1] || 100, hri: a[2] !== "N" }; break;
-      case "BC": field = { kind: "c128", h: +a[1] || 100, hri: a[2] !== "N", mode: a[5] }; break;
-      case "BX": field = { kind: "dm", mod: +a[1] || 4, esc: a[6] || "~" }; break;
-      case "BQ": field = { kind: "qr", mod: +a[2] || 4 }; break;
+      case "GB": {
+        const th = +a[2] || 1; const w = Math.max(+a[0] || 0, th), h = Math.max(+a[1] || 0, th);
+        const col = (a[3] || "B").toUpperCase(); let r = +a[4] || 0;
+        if (r > 8 || r < 0) { m.warn.push(`^GB corner rounding ${a[4]} is outside 0–8; printers use the default (square corners).`); r = 0; }
+        m.items.push({ k: "gbox", x: fo[0], y: anchor === "FT" ? fo[1] - h : fo[1], w, h, th, white: col === "W", r });
+        break;
+      }
+      case "BE": field = { kind: "ean13", rot: (a[0] || fw).toUpperCase(), h: +a[1] || 100, hri: a[2] !== "N" }; break;
+      case "BC": field = { kind: "c128", rot: (a[0] || fw).toUpperCase(), h: +a[1] || 100, hri: a[2] !== "N", mode: (a[5] || "").toUpperCase() }; break;
+      case "BX": field = { kind: "dm", rot: (a[0] || fw).toUpperCase(), mod: +a[1] || 4, esc: a[6] || "~" }; break;
+      case "BQ": field = { kind: "qr", rot: (a[0] || fw).toUpperCase(), mod: +a[2] || 4 }; break;
       case "FD": {
-        const data = rest;
-        if (!field) {
-          if (/^A/i.test(tok) === false) {}
-          m.items.push({ k: "text", x: fo[0], y: fo[1], em: font.h, s: data, cond: true });
-        } else if (field.kind === "ean13") m.items.push({ k: "bar", x: fo[0], y: fo[1], h: field.h, mod: by, bcid: "ean13", text: data, hri: field.hri, hriText: ean13Full(data) });
+        const data = rest, pos = { x: fo[0], y: fo[1], anchor };
+        if (!field) m.items.push({ k: "text", ...pos, em: font.h, sx: font.w ? font.w / font.h : 1, rot: font.rot || "N", s: data, cond: true, zpl: true });
+        else if (field.kind === "ean13") m.items.push({ k: "bar", ...pos, rot: field.rot, h: field.h, mod: by, bcid: "ean13", text: data, hri: field.hri, hriText: ean13Full(data) });
         else if (field.kind === "c128") {
           const gs1 = field.mode === "D" || data.startsWith(">;>8");
-          const txt = field.mode === "D" ? data : (gs1 ? gs1Paren("\x1d" + data.replace(/^>;>8/, "")) : data);
-          m.items.push({ k: "bar", x: fo[0], y: fo[1], h: field.h, mod: by, bcid: gs1 ? "gs1-128" : "code128", text: txt, hri: field.hri, hriText: txt });
+          const txt = field.mode === "D" ? data : (gs1 ? gs1Paren("\x1d" + data.replace(/^>;>8/, "")) : data.replace(/^>[0-9:;]/, ""));
+          m.items.push({ k: "bar", ...pos, rot: field.rot, h: field.h, mod: by, bcid: gs1 ? "gs1-128" : "code128", text: txt, hri: field.hri, hriText: txt });
         } else if (field.kind === "dm") {
           let d = data, gs1 = false; if (d.startsWith(field.esc + "1")) { gs1 = true; d = d.split(field.esc + "1").join("\x1d"); }
-          m.items.push({ k: "dm", x: fo[0], y: fo[1], mod: field.mod, gs1, text: gs1 ? gs1Paren(d) : d });
-        } else if (field.kind === "qr") m.items.push({ k: "qr", x: fo[0], y: fo[1], mod: field.mod, text: data.replace(/^[LMQH]A,/, "") });
+          m.items.push({ k: "dm", ...pos, rot: field.rot, mod: field.mod, gs1, text: gs1 ? gs1Paren(d) : d });
+        } else if (field.kind === "qr") m.items.push({ k: "qr", ...pos, rot: field.rot, mod: field.mod, text: data.replace(/^[LMQH]A,/, "") });
         field = null; break;
       }
       default:
-        if (cmd[0] === "A") { font = { h: +a[1] || cf.h, w: +a[2] || 0 }; }
-        else m.warn.push("ZPL command not previewed: ^" + cmd);
+        if (!ZPL_IGNORE.has(cmd)) m.warn.push("ZPL command not previewed: ^" + cmd);
     }
   }
   return m;
@@ -431,6 +471,11 @@ function bwipCanvas(opts) {
   try { bwipjs.toCanvas(c, Object.assign({ scale: 1, includetext: false }, opts)); return c; }
   catch (e) { return null; }
 }
+function qrModules(c) { // finder pattern is 7 modules wide: measure first dark run on row 0
+  const d = c.getContext("2d").getImageData(0, 0, c.width, 1).data; let run = 0;
+  for (let x = 0; x < c.width; x++) { if (d[x * 4 + 3] > 128 && d[x * 4] < 128) run++; else if (run) break; }
+  return run ? Math.round(c.width / (run / 7)) : c.width;
+}
 function dmModules(c) { // count runs along the top timing row
   const ctx = c.getContext("2d"); const d = ctx.getImageData(0, 0, c.width, 1).data;
   let runs = 0, prev = null;
@@ -445,14 +490,19 @@ function render(model, canvas, opts) {
     let mx = 0, my = 0; for (const it of model.items) { mx = Math.max(mx, (it.x || 0) + (it.w || 300)); my = Math.max(my, (it.y || 0) + (it.h || it.em || 40)); }
     W = W || mx + 16; H = H || my + 16;
   }
+  const view = opts.view || 0, swap = view === 90 || view === 270;
+  const VW = swap ? H : W, VH = swap ? W : H;
   const maxW = Math.min(620, canvas.parentElement.parentElement.clientWidth - 70);
   const maxH = 640;
-  const k = Math.min(maxW / W, maxH / H);
+  const k = Math.min(maxW / VW, maxH / VH);
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.round(W * k * dpr); canvas.height = Math.round(H * k * dpr);
-  canvas.style.width = Math.round(W * k) + "px"; canvas.style.height = Math.round(H * k) + "px";
+  canvas.width = Math.round(VW * k * dpr); canvas.height = Math.round(VH * k * dpr);
+  canvas.style.width = Math.round(VW * k) + "px"; canvas.style.height = Math.round(VH * k) + "px";
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
+  if (view === 90) { ctx.translate(H, 0); ctx.rotate(Math.PI / 2); }
+  else if (view === 180) { ctx.translate(W, H); ctx.rotate(Math.PI); }
+  else if (view === 270) { ctx.translate(0, W); ctx.rotate(-Math.PI / 2); }
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
   if (opts.grid) {
     const step = model.dpi / 25.4 * 5; ctx.strokeStyle = "rgba(210,78,18,.18)"; ctx.lineWidth = 1 / k;
@@ -461,41 +511,92 @@ function render(model, canvas, opts) {
   }
   ctx.fillStyle = "#000"; ctx.imageSmoothingEnabled = false;
   for (const it of model.items) {
-    if (it.k === "text") {
+    if (it.k === "text" && it.zpl) {
+      ctx.font = `700 ${it.em}px "Roboto Condensed", "Arial Narrow", sans-serif`;
+      const tw = ctx.measureText(it.s).width * it.sx, th = it.em;
+      ctx.save();
+      place(ctx, it, tw, th);
+      ctx.textBaseline = it.anchor === "FT" ? "alphabetic" : "top";
+      ctx.scale(it.sx, 1);
+      ctx.fillText(it.s, 0, it.anchor === "FT" ? 0 : it.em * 0.04);
+      ctx.restore();
+    } else if (it.k === "text" && it.tspl && !it.mono) {
+      ctx.font = `700 ${it.em}px "Roboto Condensed", "Arial Narrow", sans-serif`;
+      const tw = ctx.measureText(it.s).width * (it.sx || 1);
+      ctx.save(); ctx.translate(it.x, it.y); ctx.rotate((it.deg || 0) * Math.PI / 180);
+      const dx = it.align === 2 ? -tw / 2 : it.align === 3 ? -tw : 0;
+      ctx.textBaseline = "top"; ctx.translate(dx, 0); ctx.scale(it.sx || 1, 1);
+      ctx.fillText(it.s, 0, it.em * 0.04); ctx.restore();
+    } else if (it.k === "text") {
       ctx.textBaseline = "top";
       if (it.mono) {
         ctx.font = `600 ${it.em}px "IBM Plex Mono", monospace`;
         const natural = ctx.measureText("M").width || 1;
-        ctx.save(); ctx.translate(it.x, it.y); ctx.scale((it.cw || natural) / natural * 0.98, 1);
+        ctx.save(); ctx.translate(it.x, it.y); if (it.deg) ctx.rotate(it.deg * Math.PI / 180); ctx.scale((it.cw || natural) / natural * 0.98, 1);
         let x = 0; for (const ch of it.s) { ctx.fillText(ch, x, it.em * 0.08); x += natural; }
         ctx.restore();
       } else {
         ctx.font = `700 ${it.em}px "Roboto Condensed", "Arial Narrow", sans-serif`;
         ctx.fillText(it.s, it.x, it.y + it.em * 0.04);
       }
+    } else if (it.k === "gbox") {
+      ctx.save();
+      ctx.strokeStyle = ctx.fillStyle = it.white ? "#fff" : "#000";
+      const fill = it.th * 2 >= Math.min(it.w, it.h);
+      const rad = it.r ? it.r / 8 * Math.min(it.w, it.h) / 2 : 0;
+      if (fill) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(it.x, it.y, it.w, it.h, rad) : ctx.rect(it.x, it.y, it.w, it.h); ctx.fill(); }
+      else { ctx.lineWidth = it.th; ctx.beginPath(); const i = it.th / 2;
+        ctx.roundRect ? ctx.roundRect(it.x + i, it.y + i, it.w - it.th, it.h - it.th, Math.max(0, rad - i)) : ctx.rect(it.x + i, it.y + i, it.w - it.th, it.h - it.th); ctx.stroke(); }
+      ctx.restore();
     } else if (it.k === "rect") ctx.fillRect(it.x, it.y, it.w, it.h);
     else if (it.k === "bar") {
       const c = bwipCanvas({ bcid: it.bcid, text: it.text, height: 5 });
       if (!c) { drawError(ctx, it, "barcode data invalid"); continue; }
       const w = c.width * it.mod;
-      ctx.drawImage(c, 0, 0, c.width, Math.max(1, c.height - 1), it.x, it.y, w, it.h);
+      const fs = Math.max(14, it.mod * 7.5);
+      ctx.save();
+      if (it.tspl) { ctx.translate(it.x, it.y); ctx.rotate((it.deg || 0) * Math.PI / 180); }
+      else if (it.rot && it.rot !== "N" || it.anchor === "FT") { place(ctx, it, w, it.h); if (it.anchor === "FT") ctx.translate(0, -it.h); } else ctx.translate(it.x, it.y);
+      ctx.drawImage(c, 0, 0, c.width, Math.max(1, c.height - 1), 0, 0, w, it.h);
       if (it.hri) {
-        const fs = Math.max(14, it.mod * 7.5);
         ctx.font = `500 ${fs}px "IBM Plex Mono", monospace`; ctx.textBaseline = "top";
-        ctx.fillStyle = "#fff"; ctx.fillRect(it.x, it.y + it.h, w, fs * 1.2); ctx.fillStyle = "#000";
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, it.h, w, fs * 1.2); ctx.fillStyle = "#000";
         let txt = it.hriText;
         if (it.bcid === "ean13" && txt.length === 13) txt = txt[0] + "  " + txt.slice(1, 7) + "  " + txt.slice(7);
-        ctx.textAlign = "center"; ctx.fillText(txt, it.x + w / 2, it.y + it.h + 2); ctx.textAlign = "left";
+        ctx.textAlign = "center"; ctx.fillText(txt, w / 2, it.h + 2); ctx.textAlign = "left";
       }
+      ctx.restore();
     } else if (it.k === "dm" || it.k === "qr") {
       const c = bwipCanvas({ bcid: it.k === "qr" ? "qrcode" : (it.gs1 ? "gs1datamatrix" : "datamatrix"), text: it.text });
       if (!c) { drawError(ctx, it, "2D data invalid"); continue; }
-      const mods = it.k === "dm" ? dmModules(c) : c.width;
+      const mods = it.k === "dm" ? dmModules(c) : qrModules(c);
       const s = mods * it.mod;
-      ctx.drawImage(c, it.x, it.y, s, s);
+      ctx.save();
+      if (it.tspl) { ctx.translate(it.x, it.y); ctx.rotate((it.deg || 0) * Math.PI / 180); }
+      else { place(ctx, it, s, s); if (it.anchor === "FT") ctx.translate(0, -s); }
+      ctx.drawImage(c, 0, 0, s, s); ctx.restore();
     }
   }
-  return { W, H };
+  return { W, H, VW, VH };
+}
+// Position a w x h field box: ^FO = top-left of the rotated box, ^FT = baseline origin rotated about (x, y)
+function place(ctx, it, w, h) {
+  const r = it.rot || "N", deg = { N: 0, R: 90, I: 180, B: -90 }[r] || 0;
+  if (it.anchor === "FT") { ctx.translate(it.x, it.y); ctx.rotate(deg * Math.PI / 180); return; }
+  if (r === "R") ctx.translate(it.x + h, it.y);
+  else if (r === "I") ctx.translate(it.x + w, it.y + h);
+  else if (r === "B") ctx.translate(it.x, it.y + w);
+  else ctx.translate(it.x, it.y);
+  ctx.rotate(deg * Math.PI / 180);
+}
+function autoView(model) {
+  const tally = {};
+  for (const it of model.items) if (it.k === "text") {
+    const d = it.deg != null ? ((it.deg % 360) + 360) % 360 : ({ N: 0, R: 90, I: 180, B: 270 }[it.rot] || 0);
+    tally[d] = (tally[d] || 0) + it.s.length;
+  }
+  let best = 0, bn = -1; for (const d in tally) if (tally[d] > bn) { bn = tally[d]; best = +d; }
+  return (360 - best) % 360;
 }
 function drawError(ctx, it, msg) {
   ctx.save(); ctx.strokeStyle = "#d24e12"; ctx.lineWidth = 3; ctx.strokeRect(it.x, it.y, 200, 60);
@@ -504,7 +605,7 @@ function drawError(ctx, it, msg) {
 
 /* ---------------- UI ---------------- */
 const $ = id => document.getElementById(id);
-const state = { tpl: 0, lang: "TSPL", dpi: 203, edited: false };
+const state = { tpl: 0, lang: "TSPL", dpi: 203, edited: false, view: "auto" };
 
 function fileKey() { return state.lang === "EPL2" ? "EPL2_203" : `${state.lang}_${state.dpi}`; }
 function currentTpl() { return DATA[state.tpl]; }
@@ -547,18 +648,25 @@ function draw() {
   else if (lang === "PGL") model = parsePGL(text, dpi, state.edited ? 0 : t.w);
   else { model = { items: [], warn: ["Could not recognise the printer language. Paste TSPL, ZPL, EPL2 or PGL code."], dpi, w: 812, h: 406 }; }
   if (typeof bwipjs === "undefined") model.warn.push("Barcode engine did not load; barcodes are not drawn.");
-  const { W, H } = render(model, $("label"), { grid: $("grid").checked });
-  const mmW = (W / model.dpi * 25.4).toFixed(1), mmH = (H / model.dpi * 25.4).toFixed(1);
+  const view = state.view === "auto" ? autoView(model) : +state.view;
+  const { W, H, VW, VH } = render(model, $("label"), { grid: $("grid").checked, view });
+  const mmW = (VW / model.dpi * 25.4).toFixed(1), mmH = (VH / model.dpi * 25.4).toFixed(1);
   const names = { TSPL: "TSPL (TSC)", ZPL: "ZPL (Zebra / Honeywell / Printronix / TSC)", EPL2: "EPL2 (Zebra / Eltron)", PGL: "PGL (Printronix)" };
-  $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang];
+  $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang] + (model.meta && model.meta.dialect ? " · " + model.meta.dialect : "");
   $("detectBadge").className = "detect" + (lang === "UNKNOWN" ? " bad" : "");
   $("dimW").textContent = `${mmW} mm`; $("dimH").textContent = `${mmH} mm`;
-  const counts = { text: 0, bar: 0, dm: 0, rect: 0, qr: 0 }; model.items.forEach(i => counts[i.k]++);
+  const counts = { text: 0, bar: 0, dm: 0, rect: 0, qr: 0, gbox: 0 }; model.items.forEach(i => counts[i.k]++);
   $("facts").innerHTML = [
     ["Detected", lang], ["Resolution", model.dpi + " dpi"], ["Size", `${Math.round(W)} × ${Math.round(H)} dots`],
-    ["Text fields", counts.text], ["Barcodes", counts.bar + counts.dm + counts.qr], ["Lines", counts.rect]
+    ...(model.meta && model.meta.dialect ? [["Version", model.meta.dialect]] : []),
+    ...(view ? [["View", view + "° " + (state.view === "auto" ? "(auto, text upright)" : "")]] : []),
+    ...(model.meta && model.meta.formats > 1 ? [["Formats", model.meta.formats + " (^XA…^XZ)"]] : []),
+    ...(model.meta && model.meta.source ? [["Created by", model.meta.source]] : []),
+    ["Text fields", counts.text], ["Barcodes", counts.bar + counts.dm + counts.qr], ["Lines / boxes", counts.rect + counts.gbox]
   ].map(([a, b]) => `<span class="fact"><b>${a}:</b> ${b}</span>`).join("");
   const notes = [...new Set(model.warn)];
+  let maxX = 0; for (const it of model.items) maxX = Math.max(maxX, (it.x || 0) + (it.w || (it.k === "text" ? it.em : 0) || 0));
+  if (maxX && maxX < W * 0.55) notes.push(`The design uses about ${(maxX / model.dpi * 25.4).toFixed(0)} mm of the ${(W / model.dpi * 25.4).toFixed(1)} mm print width. Check the label width setting (^PW / SIZE) if the label is narrower.`);
   if (!state.edited && (state.lang === "EPL2" || state.lang === "PGL") && t.hasDM) notes.unshift("This language file omits the GS1 DataMatrix. Use the TSPL or ZPL file to print the 2D code.");
   $("notes").innerHTML = notes.map(n => `<div class="note">${n}</div>`).join("");
 }
@@ -566,6 +674,9 @@ function draw() {
 $("langSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.lang = b.dataset.lang; state.edited = false; syncButtons(); loadFile(); };
 $("dpiSeg").onclick = e => { const b = e.target.closest("button"); if (!b || b.disabled) return; state.dpi = +b.dataset.dpi; state.edited = false; syncButtons(); loadFile(); };
 $("grid").onchange = draw;
+$("viewSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.view;
+  [...$("viewSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); draw(); };
+$("redrawBtn").onclick = () => { draw(); toast("Label redrawn"); };
 let timer; $("prn").addEventListener("input", () => { state.edited = true; $("fileName").textContent = "Edited code"; clearTimeout(timer); timer = setTimeout(draw, 180); });
 $("resetBtn").onclick = () => { state.edited = false; loadFile(); };
 $("copyBtn").onclick = async () => { try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
