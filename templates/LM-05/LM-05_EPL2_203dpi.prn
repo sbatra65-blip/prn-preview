@@ -1,0 +1,23 @@
+
+N
+q799
+Q1199,24
+R0,0
+S3
+D8
+ZT
+A16,16,0,1,3,5,N,"WHOLESALE PACKAGE"
+LO16,90,767,2
+A16,96,0,1,2,4,N,"Commodity:"
+A16,153,0,1,3,5,N,"Basmati Rice Premium 500 g"
+A16,217,0,1,3,5,N,"Contains: 24 retail packs"
+A16,288,0,1,2,4,N,"Batch: B2611A   Mfg: 11/2026"
+LO16,348,767,2
+A16,353,0,1,2,4,N,"Mfd & Pkd by:"
+A16,410,0,1,2,4,N,"Sample Foods Pvt Ltd,"
+A16,467,0,1,2,4,N,"Plot 12, Okhla Phase-II,"
+A16,524,0,1,2,4,N,"New Delhi-110020"
+LO16,584,767,2
+A16,589,0,1,2,4,N,"Carton No: 0001 / 0120"
+B16,662,0,1E,3,3,200,B,"01189012345678973024"
+P1

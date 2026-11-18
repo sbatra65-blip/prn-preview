@@ -1,0 +1,27 @@
+SIZE 100 mm, 150 mm
+GAP 3 mm, 0 mm
+DIRECTION 1,0
+REFERENCE 0,0
+CODEPAGE 1252
+DENSITY 8
+SPEED 4
+CLS
+TEXT 16,16,"0",0,19.7,19.7,"BLUETOOTH SPEAKER"
+TEXT 16,87,"0",0,15.7,15.7,"Model: X5"
+TEXT 16,144,"0",0,17.7,17.7,"Net Quantity: 1 Unit"
+TEXT 16,208,"0",0,19.7,19.7,"MRP Rs. 2,499.00"
+TEXT 16,279,"0",0,15.7,15.7,"(incl. of all taxes)"
+TEXT 16,336,"0",0,15.7,15.7,"Month & Year of Mfg: 09/2026"
+TEXT 16,393,"0",0,15.7,15.7,"Dimensions: 18 x 7 x 7 cm"
+TEXT 16,449,"0",0,15.7,15.7,"Country of Origin: China"
+BAR 16,509,767,2
+TEXT 16,515,"0",0,15.7,15.7,"Imported & Marketed by:"
+TEXT 16,572,"0",0,15.7,15.7,"Sample Electronics Pvt Ltd,"
+TEXT 16,629,"0",0,15.7,15.7,"B-45, Sector 63, Noida,"
+TEXT 16,685,"0",0,15.7,15.7,"UP-201301"
+TEXT 16,742,"0",0,15.7,15.7,"Consumer Care: Manager,"
+TEXT 16,799,"0",0,15.7,15.7,"at above address"
+TEXT 16,856,"0",0,15.7,15.7,"Ph: 0120-4000000"
+TEXT 16,913,"0",0,15.7,15.7,"care@sampleelec.in"
+BARCODE 16,978,"EAN13",80,1,0,3,3,"890123456789"
+PRINT 1,1

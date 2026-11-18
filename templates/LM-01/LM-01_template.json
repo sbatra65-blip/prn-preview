@@ -1,0 +1,105 @@
+{
+  "template": "LM-01",
+  "title": "Compact retail label 50 x 38 mm (small packs, PDP up to 100 cm2)",
+  "size_mm": [
+    50,
+    38
+  ],
+  "lmpc": {
+    "rules": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended to Feb 2026",
+    "panel_class": "Panel area up to 100 cm2: min 1.5 mm numerals and letters",
+    "min_height_mm": 1.5
+  },
+  "elements": [
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 2.0,
+      "h": 2.2,
+      "em": 3.055555555555556,
+      "s": "BASMATI RICE PREMIUM",
+      "field": "common_name"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 5.911111111111111,
+      "h": 2.0,
+      "em": 2.7777777777777777,
+      "s": "Net Quantity: 100 g",
+      "field": "net_quantity"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 9.466666666666667,
+      "h": 2.0,
+      "em": 2.7777777777777777,
+      "s": "MRP Rs. 25.00 (incl. of all taxes)",
+      "field": "mrp"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 13.022222222222222,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Unit Sale Price: Rs. 0.25 per g",
+      "field": "unit_sale_price"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 15.68888888888889,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Mfg: 11/2026   Best Before: 10/05/2027",
+      "field": "dates"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 18.355555555555558,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Batch: B2611A",
+      "field": "batch"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 21.022222222222226,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Mfd & Pkd by: Sample Foods Pvt Ltd,",
+      "field": "manufacturer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 23.688888888888894,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Plot 12, Okhla Ph-II, New Delhi-110020",
+      "field": "manufacturer_address"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 26.35555555555556,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Consumer Care: Manager, at above address",
+      "field": "consumer_care"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 29.02222222222223,
+      "h": 1.5,
+      "em": 2.0833333333333335,
+      "s": "Ph: 011-40000000  care@samplefoods.in",
+      "field": "consumer_care_contact"
+    }
+  ]
+}

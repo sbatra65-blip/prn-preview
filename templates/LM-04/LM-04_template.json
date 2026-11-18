@@ -1,0 +1,174 @@
+{
+  "template": "LM-04",
+  "title": "Imported product label 100 x 150 mm (PDP 500-2500 cm2)",
+  "size_mm": [
+    100,
+    150
+  ],
+  "lmpc": {
+    "rules": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended to Feb 2026",
+    "panel_class": "Panel area 500-2500 cm2: min 4.0 mm numerals and letters",
+    "min_height_mm": 4.0
+  },
+  "elements": [
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 2.0,
+      "h": 5.0,
+      "em": 6.944444444444445,
+      "s": "BLUETOOTH SPEAKER",
+      "field": "common_name"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 10.88888888888889,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Model: X5",
+      "field": "model"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 18.0,
+      "h": 4.5,
+      "em": 6.25,
+      "s": "Net Quantity: 1 Unit",
+      "field": "net_quantity"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 26.0,
+      "h": 5.0,
+      "em": 6.944444444444445,
+      "s": "MRP Rs. 2,499.00",
+      "field": "mrp"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 34.888888888888886,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "(incl. of all taxes)",
+      "field": "mrp"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 42.0,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Month & Year of Mfg: 09/2026",
+      "field": "mfg_date"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 49.111111111111114,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Dimensions: 18 x 7 x 7 cm",
+      "field": "dimensions"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 56.22222222222223,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Country of Origin: China",
+      "field": "country_of_origin"
+    },
+    {
+      "t": "rule",
+      "x": 2.0,
+      "y": 63.73333333333334,
+      "w": 96.0,
+      "th": 0.3
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 64.43333333333334,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Imported & Marketed by:",
+      "field": "importer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 71.54444444444445,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Sample Electronics Pvt Ltd,",
+      "field": "importer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 78.65555555555557,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "B-45, Sector 63, Noida,",
+      "field": "importer_address"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 85.76666666666668,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "UP-201301",
+      "field": "importer_address"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 92.8777777777778,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Consumer Care: Manager,",
+      "field": "consumer_care"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 99.98888888888891,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "at above address",
+      "field": "consumer_care"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 107.10000000000002,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Ph: 0120-4000000",
+      "field": "consumer_care_contact"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 114.21111111111114,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "care@sampleelec.in",
+      "field": "consumer_care_contact"
+    },
+    {
+      "t": "ean13",
+      "x": 2.0,
+      "y": 122.32222222222225,
+      "mod": 0.375,
+      "bh": 10.0,
+      "data": "890123456789"
+    }
+  ]
+}

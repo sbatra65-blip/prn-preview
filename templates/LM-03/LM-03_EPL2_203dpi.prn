@@ -1,0 +1,21 @@
+
+N
+q799
+Q599,24
+R0,0
+S3
+D8
+ZT
+A16,16,0,1,2,4,N,"BASMATI RICE PREMIUM"
+A16,67,0,1,2,3,N,"Net Quantity: 1 kg"
+A16,110,0,1,2,3,N,"MRP Rs. 185.00 (incl. of all taxes)"
+A16,152,0,1,2,3,N,"Mfg: 11/2026   Best Before: 10/05/2027"
+A16,188,0,1,2,3,N,"Batch: B2611A"
+LO16,227,767,2
+A16,232,0,1,2,3,N,"Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,"
+A16,268,0,1,2,3,N,"Okhla Phase-II, New Delhi-110020"
+A16,303,0,1,2,3,N,"Consumer Care: Manager, at above address,"
+A16,339,0,1,2,3,N,"Ph: 011-40000000, care@samplefoods.in"
+B16,382,0,E30,3,3,96,B,"890123456789"
+; GS1 DataMatrix omitted: use the ZPL or TSPL file for 2D codes
+P1

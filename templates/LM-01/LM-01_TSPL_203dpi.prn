@@ -1,0 +1,19 @@
+SIZE 50 mm, 38 mm
+GAP 3 mm, 0 mm
+DIRECTION 1,0
+REFERENCE 0,0
+CODEPAGE 1252
+DENSITY 8
+SPEED 4
+CLS
+TEXT 16,16,"0",0,8.7,8.7,"BASMATI RICE PREMIUM"
+TEXT 16,47,"0",0,7.9,7.9,"Net Quantity: 100 g"
+TEXT 16,76,"0",0,7.9,7.9,"MRP Rs. 25.00 (incl. of all taxes)"
+TEXT 16,104,"0",0,5.9,5.9,"Unit Sale Price: Rs. 0.25 per g"
+TEXT 16,125,"0",0,5.9,5.9,"Mfg: 11/2026   Best Before: 10/05/2027"
+TEXT 16,147,"0",0,5.9,5.9,"Batch: B2611A"
+TEXT 16,168,"0",0,5.9,5.9,"Mfd & Pkd by: Sample Foods Pvt Ltd,"
+TEXT 16,189,"0",0,5.9,5.9,"Plot 12, Okhla Ph-II, New Delhi-110020"
+TEXT 16,211,"0",0,5.9,5.9,"Consumer Care: Manager, at above address"
+TEXT 16,232,"0",0,5.9,5.9,"Ph: 011-40000000  care@samplefoods.in"
+PRINT 1,1

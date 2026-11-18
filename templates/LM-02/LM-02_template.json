@@ -1,0 +1,138 @@
+{
+  "template": "LM-02",
+  "title": "Standard retail label 75 x 50 mm with EAN-13 (PDP up to 100 cm2)",
+  "size_mm": [
+    75,
+    50
+  ],
+  "lmpc": {
+    "rules": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended to Feb 2026",
+    "panel_class": "Panel area up to 100 cm2: min 1.5 mm numerals and letters",
+    "min_height_mm": 1.5
+  },
+  "elements": [
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 2.0,
+      "h": 3.0,
+      "em": 4.166666666666667,
+      "s": "BASMATI RICE PREMIUM",
+      "field": "common_name"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 7.333333333333334,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Net Quantity: 500 g",
+      "field": "net_quantity"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 11.777777777777779,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "MRP Rs. 99.00 (incl. of all taxes)",
+      "field": "mrp"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 16.22222222222222,
+      "h": 1.8,
+      "em": 2.5,
+      "s": "Unit Sale Price: Rs. 198.00 per kg",
+      "field": "unit_sale_price"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 19.42222222222222,
+      "h": 1.8,
+      "em": 2.5,
+      "s": "Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A",
+      "field": "dates_batch"
+    },
+    {
+      "t": "rule",
+      "x": 2.0,
+      "y": 23.02222222222222,
+      "w": 71.0,
+      "th": 0.3
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 23.722222222222218,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "Mfd & Pkd by:",
+      "field": "manufacturer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 26.566666666666663,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "Sample Foods Pvt Ltd, Plot 12,",
+      "field": "manufacturer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 29.411111111111108,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "Okhla Ph-II, New Delhi-110020",
+      "field": "manufacturer_address"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 32.25555555555555,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "Consumer Care: Manager,",
+      "field": "consumer_care"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 35.099999999999994,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "at above address",
+      "field": "consumer_care"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 37.944444444444436,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "Ph: 011-40000000",
+      "field": "consumer_care_contact"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 40.78888888888888,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "care@samplefoods.in",
+      "field": "consumer_care_contact"
+    },
+    {
+      "t": "ean13",
+      "x": 37.0,
+      "y": 24.222222222222218,
+      "mod": 0.375,
+      "bh": 15.0,
+      "data": "890123456789"
+    }
+  ]
+}

@@ -1,0 +1,140 @@
+{
+  "template": "LM-03",
+  "title": "Retail label 100 x 75 mm, EAN-13 + GS1 DataMatrix (PDP 100-500 cm2)",
+  "size_mm": [
+    100,
+    75
+  ],
+  "lmpc": {
+    "rules": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended to Feb 2026",
+    "panel_class": "Panel area 100-500 cm2: min 2.5 mm numerals and letters",
+    "min_height_mm": 2.5
+  },
+  "elements": [
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 2.0,
+      "h": 3.6,
+      "em": 5.0,
+      "s": "BASMATI RICE PREMIUM",
+      "field": "common_name"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 8.4,
+      "h": 3.0,
+      "em": 4.166666666666667,
+      "s": "Net Quantity: 1 kg",
+      "field": "net_quantity"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 13.733333333333334,
+      "h": 3.0,
+      "em": 4.166666666666667,
+      "s": "MRP Rs. 185.00 (incl. of all taxes)",
+      "field": "mrp"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 19.06666666666667,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Mfg: 11/2026   Best Before: 10/05/2027",
+      "field": "dates"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 23.511111111111113,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Batch: B2611A",
+      "field": "batch"
+    },
+    {
+      "t": "rule",
+      "x": 2.0,
+      "y": 28.355555555555554,
+      "w": 96.0,
+      "th": 0.3
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 29.055555555555554,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,",
+      "field": "manufacturer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 33.5,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Okhla Phase-II, New Delhi-110020",
+      "field": "manufacturer_address"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 37.94444444444444,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Consumer Care: Manager, at above address,",
+      "field": "consumer_care"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 42.388888888888886,
+      "h": 2.5,
+      "em": 3.4722222222222223,
+      "s": "Ph: 011-40000000, care@samplefoods.in",
+      "field": "consumer_care_contact"
+    },
+    {
+      "t": "ean13",
+      "x": 2.0,
+      "y": 47.83333333333333,
+      "mod": 0.375,
+      "bh": 12.0,
+      "data": "890123456789"
+    },
+    {
+      "t": "dm",
+      "x": 60.0,
+      "y": 47.83333333333333,
+      "mod": 0.5,
+      "ais": [
+        [
+          "01",
+          "08901234567890"
+        ],
+        [
+          "17",
+          "270510"
+        ],
+        [
+          "10",
+          "B2611A"
+        ]
+      ]
+    },
+    {
+      "t": "text",
+      "x": 48.0,
+      "y": 61.33333333333333,
+      "h": 1.6,
+      "em": 2.2222222222222223,
+      "s": "(01)08901234567890 (17)270510 (10)B2611A",
+      "field": "gs1_hri"
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "template": "LM-05",
+  "title": "Wholesale carton label 100 x 150 mm (Rule 24) with GS1-128",
+  "size_mm": [
+    100,
+    150
+  ],
+  "lmpc": {
+    "rules": "Legal Metrology (Packaged Commodities) Rules, 2011, as amended to Feb 2026",
+    "panel_class": "Wholesale package: Rule 24 declarations (no Table I size rule; 4 mm used)",
+    "min_height_mm": 4.0
+  },
+  "elements": [
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 2.0,
+      "h": 5.0,
+      "em": 6.944444444444445,
+      "s": "WHOLESALE PACKAGE",
+      "field": "header"
+    },
+    {
+      "t": "rule",
+      "x": 2.0,
+      "y": 11.28888888888889,
+      "w": 96.0,
+      "th": 0.3
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 11.988888888888889,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Commodity:",
+      "field": "identity"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 19.1,
+      "h": 4.5,
+      "em": 6.25,
+      "s": "Basmati Rice Premium 500 g",
+      "field": "identity"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 27.1,
+      "h": 5.0,
+      "em": 6.944444444444445,
+      "s": "Contains: 24 retail packs",
+      "field": "retail_pack_count"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 35.988888888888894,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Batch: B2611A   Mfg: 11/2026",
+      "field": "batch"
+    },
+    {
+      "t": "rule",
+      "x": 2.0,
+      "y": 43.50000000000001,
+      "w": 96.0,
+      "th": 0.3
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 44.20000000000001,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Mfd & Pkd by:",
+      "field": "manufacturer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 51.31111111111112,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Sample Foods Pvt Ltd,",
+      "field": "manufacturer"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 58.42222222222223,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Plot 12, Okhla Phase-II,",
+      "field": "manufacturer_address"
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 65.53333333333335,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "New Delhi-110020",
+      "field": "manufacturer_address"
+    },
+    {
+      "t": "rule",
+      "x": 2.0,
+      "y": 73.04444444444447,
+      "w": 96.0,
+      "th": 0.3
+    },
+    {
+      "t": "text",
+      "x": 2.0,
+      "y": 73.74444444444447,
+      "h": 4.0,
+      "em": 5.555555555555555,
+      "s": "Carton No: 0001 / 0120",
+      "field": "carton_no"
+    },
+    {
+      "t": "gs1128",
+      "x": 2.0,
+      "y": 82.85555555555558,
+      "mod": 0.375,
+      "bh": 25.0,
+      "ais": [
+        [
+          "01",
+          "18901234567897"
+        ],
+        [
+          "30",
+          "24"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+~CREATE;LM03;1772
+SCALE;DOT;600;600
+ALPHA
+POINT;47;47;14;0;*BASMATI RICE PREMIUM*
+POINT;198;47;12;0;*Net Quantity: 1 kg*
+POINT;324;47;12;0;*MRP Rs. 185.00 (incl. of all taxes)*
+POINT;450;47;10;0;*Mfg: 11/2026   Best Before: 10/05/2027*
+POINT;555;47;10;0;*Batch: B2611A*
+POINT;686;47;10;0;*Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,*
+POINT;791;47;10;0;*Okhla Phase-II, New Delhi-110020*
+POINT;896;47;10;0;*Consumer Care: Manager, at above address,*
+POINT;1001;47;10;0;*Ph: 011-40000000, care@samplefoods.in*
+STOP
+HORZ
+7;670;47;2315
+STOP
+BARCODE
+EAN13;H4.43;1130;47
+*890123456789*
+PDF
+STOP
+END
+~EXECUTE;LM03;1
+~NORMAL

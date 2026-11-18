@@ -1,0 +1,31 @@
+~CREATE;LM04;3543
+SCALE;DOT;600;600
+ALPHA
+POINT;47;47;20;0;*BLUETOOTH SPEAKER*
+POINT;257;47;16;0;*Model: X5*
+POINT;425;47;18;0;*Net Quantity: 1 Unit*
+POINT;614;47;20;0;*MRP Rs. 2,499.00*
+POINT;824;47;16;0;*(incl. of all taxes)*
+POINT;992;47;16;0;*Month & Year of Mfg: 09/2026*
+POINT;1160;47;16;0;*Dimensions: 18 x 7 x 7 cm*
+POINT;1328;47;16;0;*Country of Origin: China*
+POINT;1522;47;16;0;*Imported & Marketed by:*
+POINT;1690;47;16;0;*Sample Electronics Pvt Ltd,*
+POINT;1858;47;16;0;*B-45, Sector 63, Noida,*
+POINT;2026;47;16;0;*UP-201301*
+POINT;2194;47;16;0;*Consumer Care: Manager,*
+POINT;2362;47;16;0;*at above address*
+POINT;2530;47;16;0;*Ph: 0120-4000000*
+POINT;2698;47;16;0;*care@sampleelec.in*
+STOP
+HORZ
+7;1506;47;2315
+STOP
+BARCODE
+EAN13;H4;2890;47
+*890123456789*
+PDF
+STOP
+END
+~EXECUTE;LM04;1
+~NORMAL

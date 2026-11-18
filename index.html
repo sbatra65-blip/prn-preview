@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRN Label Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
+<style>
+/* Layout: three-column workbench (templates | label stage | PRN code), stacking on small screens.
+   Palette: printer-room slate with a thermal-ribbon orange accent; the label itself is always white. */
+:root {
+  --bg: #e9edf1;
+  --surface: #ffffff;
+  --ink: #15202b;
+  --muted: #5a6876;
+  --line: #d3dae1;
+  --accent: #d24e12;
+  --accent-soft: #fbe6da;
+  --good: #1f7a4d;
+  --good-soft: #dff1e7;
+  --warn: #9a6200;
+  --warn-soft: #fbefd5;
+  --stage: #2b3743;
+  --code-bg: #f4f6f8;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11181f; --surface: #18222c; --ink: #e6ecf1; --muted: #9aa8b5; --line: #2b3946;
+    --accent: #ff7a3d; --accent-soft: #3a2418; --good: #5fcf95; --good-soft: #17301f;
+    --warn: #f0b54a; --warn-soft: #33290f; --stage: #0b1117; --code-bg: #121a22;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11181f; --surface: #18222c; --ink: #e6ecf1; --muted: #9aa8b5; --line: #2b3946;
+  --accent: #ff7a3d; --accent-soft: #3a2418; --good: #5fcf95; --good-soft: #17301f;
+  --warn: #f0b54a; --warn-soft: #33290f; --stage: #0b1117; --code-bg: #121a22;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+header { padding: 20px 24px 12px; display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; }
+header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+header h1 span { color: var(--accent); }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+.printers { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 24px 16px; }
+.chip { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+main { display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(0, 420px); gap: 16px; padding: 0 24px 24px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.panel h2 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 12px 14px 8px; }
+.tpl-list { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 12px; }
+.tpl { text-align: left; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 9px 10px; cursor: pointer; font: inherit; display: grid; gap: 2px; }
+.tpl:hover { border-color: var(--accent); }
+.tpl:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tpl[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.tpl b { font-size: 14px; }
+.tpl small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.tpl .size { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.seg button:disabled { color: var(--muted); opacity: 0.45; cursor: not-allowed; }
+label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); }
+.stage { background: var(--stage); border-radius: 0 0 10px 10px; padding: 28px 20px; display: flex; justify-content: center; align-items: flex-start; min-height: 420px; overflow-x: auto; }
+.label-wrap { position: relative; display: inline-block; }
+canvas#label { display: block; background: #fff; border-radius: 3px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.dim { position: absolute; font-family: var(--font-mono); font-size: 11px; color: #c7d2dc; white-space: nowrap; }
+.dim.w { top: -20px; left: 0; right: 0; text-align: center; }
+.dim.h { top: 0; bottom: 0; left: -26px; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; }
+.detect { margin-left: auto; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 8px; background: var(--good-soft); color: var(--good); }
+.detect.bad { background: var(--warn-soft); color: var(--warn); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; }
+.fact { font-size: 12px; padding: 3px 9px; border-radius: 6px; background: var(--code-bg); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.fact b { font-weight: 600; }
+.notes { padding: 0 14px 12px; display: grid; gap: 6px; }
+.note { font-size: 13px; border-radius: 8px; padding: 8px 10px; background: var(--warn-soft); color: var(--warn); }
+.code-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.code-head .file { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 11px; border-radius: 8px; cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+textarea#prn { width: 100%; min-height: 360px; resize: vertical; border: 0; border-radius: 0 0 10px 10px; background: var(--code-bg); color: var(--ink); font-family: var(--font-mono); font-size: 12px; line-height: 1.55; padding: 12px 14px; white-space: pre; overflow: auto; }
+.file-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.checklist { list-style: none; margin: 0; padding: 0 14px 14px; display: grid; gap: 6px; }
+.checklist li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.mark.ok { background: var(--good-soft); color: var(--good); }
+.mark.na { background: var(--code-bg); color: var(--muted); border: 1px solid var(--line); }
+.checklist .rule { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.stack { display: grid; gap: 16px; }
+section.about { padding: 0 24px 32px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+section.about .panel { padding: 4px 0 12px; }
+section.about p, section.about li { margin: 0; padding: 0 14px; font-size: 14px; color: var(--ink); }
+section.about ul { margin: 0; padding: 0 14px 0 32px; display: grid; gap: 4px; }
+section.about li { padding: 0; }
+table.t1 { border-collapse: collapse; margin: 4px 14px 8px; font-size: 13px; font-variant-numeric: tabular-nums; width: calc(100% - 28px); }
+table.t1 th, table.t1 td { border-bottom: 1px solid var(--line); padding: 5px 6px; text-align: left; }
+table.t1 th { color: var(--muted); font-weight: 600; }
+.src { font-size: 12px; color: var(--muted); padding: 6px 14px 0; }
+.src a { color: var(--accent); }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+@media (max-width: 1150px) { main { grid-template-columns: 240px minmax(0, 1fr); } .code-col { grid-column: 1 / -1; } }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; } header, .printers, section.about { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>PRN Label Preview <span>· LMPC templates</span></h1>
+  <p>Paste a printer file, pick 203, 300 or 600 dpi, and see the label it prints. The printer language is detected automatically, and the preview is drawn from the PRN code itself.</p>
+</header>
+<div class="printers" aria-label="Supported printer languages">
+  <span class="chip">TSPL · TSC</span>
+  <span class="chip">ZPL · Zebra, Honeywell, Printronix, TSC emulation</span>
+  <span class="chip">EPL2 · older Zebra / Eltron</span>
+  <span class="chip">PGL · Printronix</span>
+</div>
+
+<main>
+  <aside class="panel">
+    <h2>LMPC templates</h2>
+    <div class="tpl-list" id="tplList"></div>
+  </aside>
+
+  <div class="stack">
+    <div class="panel">
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Printer language" id="langSeg">
+          <button type="button" data-lang="TSPL">TSPL</button>
+          <button type="button" data-lang="ZPL">ZPL</button>
+          <button type="button" data-lang="EPL2">EPL2</button>
+          <button type="button" data-lang="PGL">PGL</button>
+        </div>
+        <div class="seg" role="group" aria-label="Printer resolution" id="dpiSeg">
+          <button type="button" data-dpi="203">203 dpi</button>
+          <button type="button" data-dpi="300">300 dpi</button>
+          <button type="button" data-dpi="600">600 dpi</button>
+        </div>
+        <label class="check"><input type="checkbox" id="grid"> 5 mm grid</label>
+        <span class="detect" id="detectBadge" role="status" aria-live="polite"></span>
+      </div>
+      <div class="stage">
+        <div class="label-wrap" id="labelWrap">
+          <div class="dim w" id="dimW"></div>
+          <div class="dim h" id="dimH"></div>
+          <canvas id="label" width="10" height="10" aria-label="Rendered label preview"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="facts" id="facts"></div>
+      <div class="notes" id="notes"></div>
+    </div>
+    <div class="panel">
+      <h2>LMPC checklist for this template</h2>
+      <ul class="checklist" id="checklist"></ul>
+    </div>
+  </div>
+
+  <div class="panel code-col">
+    <div class="code-head">
+      <span class="file" id="fileName"></span>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="copyBtn">Copy code</button>
+        <label class="btn" for="fileIn">Open PRN file</label>
+        <input class="file-input" type="file" id="fileIn" accept=".prn,.txt,.zpl,.tspl,.epl,.pgl">
+        <button type="button" class="btn" id="resetBtn">Reset</button>
+      </div>
+    </div>
+    <label for="prn" class="src" style="display:block;padding-top:8px">Edit the code or paste your own; the preview redraws as you type.</label>
+    <textarea id="prn" spellcheck="false"></textarea>
+  </div>
+</main>
+
+<section class="about">
+  <div class="panel">
+    <h2>Minimum letter height (Rule 7, Table I)</h2>
+    <table class="t1">
+      <thead><tr><th>Display panel area</th><th>Printed</th><th>Moulded / blown</th></tr></thead>
+      <tbody>
+        <tr><td>up to 50 cm²</td><td>1.0 mm</td><td>2.0 mm</td></tr>
+        <tr><td>50 to 100 cm²</td><td>1.5 mm</td><td>3.0 mm</td></tr>
+        <tr><td>100 to 500 cm²</td><td>2.5 mm</td><td>4.0 mm</td></tr>
+        <tr><td>500 to 2,500 cm²</td><td>4.0 mm</td><td>6.0 mm</td></tr>
+        <tr><td>above 2,500 cm²</td><td>6.0 mm</td><td>6.0 mm</td></tr>
+      </tbody>
+    </table>
+    <p>Letter width must be at least one third of its height.</p>
+    <div class="src">Source: <a href="https://www.khaitanco.com/sites/default/files/2026-03/Legal%20Metrology%20%28Packaged%20Commodities%29%20Rules%202011.pdf">LMPC Rules 2011, as amended to 13 Feb 2026</a></div>
+  </div>
+  <div class="panel">
+    <h2>Declarations on every retail pack (Rule 6)</h2>
+    <ul>
+      <li>Name and address of manufacturer, packer or importer</li>
+      <li>Country of origin, for imported goods</li>
+      <li>Common or generic name of the commodity</li>
+      <li>Net quantity in standard units, or number of pieces</li>
+      <li>Month and year of manufacture; best before or use by for perishables</li>
+      <li>Retail sale price as MRP inclusive of all taxes</li>
+      <li>Unit sale price, unless it equals the MRP</li>
+      <li>Consumer care name, address, phone and email</li>
+      <li>Dimensions, where size matters</li>
+    </ul>
+    <div class="src">Wholesale cartons follow Rule 24: maker's name and address, identity of the goods, and number of retail packs or net quantity.</div>
+  </div>
+  <div class="panel">
+    <h2>About these files</h2>
+    <ul>
+      <li>Same design, generated for TSPL, ZPL and PGL at 203, 300 and 600 dpi, and EPL2 at 203 dpi.</li>
+      <li>Prices use "Rs." because built-in printer fonts lack the ₹ sign.</li>
+      <li>GS1 DataMatrix prints from TSPL and ZPL; EPL2 and PGL files omit it.</li>
+      <li>All data is sample data. Test-print every file before production use.</li>
+    </ul>
+  </div>
+</section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bwip-js@4.5.1/dist/bwip-js-min.js"></script>
+<script>
+const DATA = [{"code": "LM-01", "w": 50, "h": 38, "short": "Compact retail label for small packs; panel up to 100 cm\u00b2, 1.5 mm text.", "hasDM": false, "files": {"TSPL_203": "SIZE 50 mm, 38 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 16,16,\"0\",0,8.7,8.7,\"BASMATI RICE PREMIUM\"\nTEXT 16,47,\"0\",0,7.9,7.9,\"Net Quantity: 100 g\"\nTEXT 16,76,\"0\",0,7.9,7.9,\"MRP Rs. 25.00 (incl. of all taxes)\"\nTEXT 16,104,\"0\",0,5.9,5.9,\"Unit Sale Price: Rs. 0.25 per g\"\nTEXT 16,125,\"0\",0,5.9,5.9,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nTEXT 16,147,\"0\",0,5.9,5.9,\"Batch: B2611A\"\nTEXT 16,168,\"0\",0,5.9,5.9,\"Mfd & Pkd by: Sample Foods Pvt Ltd,\"\nTEXT 16,189,\"0\",0,5.9,5.9,\"Plot 12, Okhla Ph-II, New Delhi-110020\"\nTEXT 16,211,\"0\",0,5.9,5.9,\"Consumer Care: Manager, at above address\"\nTEXT 16,232,\"0\",0,5.9,5.9,\"Ph: 011-40000000  care@samplefoods.in\"\nPRINT 1,1\n", "TSPL_300": "SIZE 50 mm, 38 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 24,24,\"0\",0,8.7,8.7,\"BASMATI RICE PREMIUM\"\nTEXT 24,70,\"0\",0,7.9,7.9,\"Net Quantity: 100 g\"\nTEXT 24,112,\"0\",0,7.9,7.9,\"MRP Rs. 25.00 (incl. of all taxes)\"\nTEXT 24,154,\"0\",0,5.9,5.9,\"Unit Sale Price: Rs. 0.25 per g\"\nTEXT 24,185,\"0\",0,5.9,5.9,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nTEXT 24,217,\"0\",0,5.9,5.9,\"Batch: B2611A\"\nTEXT 24,248,\"0\",0,5.9,5.9,\"Mfd & Pkd by: Sample Foods Pvt Ltd,\"\nTEXT 24,280,\"0\",0,5.9,5.9,\"Plot 12, Okhla Ph-II, New Delhi-110020\"\nTEXT 24,311,\"0\",0,5.9,5.9,\"Consumer Care: Manager, at above address\"\nTEXT 24,343,\"0\",0,5.9,5.9,\"Ph: 011-40000000  care@samplefoods.in\"\nPRINT 1,1\n", "ZPL_203": "^XA\n^CI28\n^PW400\n^LL304\n^LH0,0\n^FO16,16^A0N,24,20^FDBASMATI RICE PREMIUM^FS\n^FO16,47^A0N,22,18^FDNet Quantity: 100 g^FS\n^FO16,76^A0N,22,18^FDMRP Rs. 25.00 (incl. of all taxes)^FS\n^FO16,104^A0N,17,14^FDUnit Sale Price: Rs. 0.25 per g^FS\n^FO16,125^A0N,17,14^FDMfg: 11/2026   Best Before: 10/05/2027^FS\n^FO16,147^A0N,17,14^FDBatch: B2611A^FS\n^FO16,168^A0N,17,14^FDMfd & Pkd by: Sample Foods Pvt Ltd,^FS\n^FO16,189^A0N,17,14^FDPlot 12, Okhla Ph-II, New Delhi-110020^FS\n^FO16,211^A0N,17,14^FDConsumer Care: Manager, at above address^FS\n^FO16,232^A0N,17,14^FDPh: 011-40000000  care@samplefoods.in^FS\n^PQ1\n^XZ\n", "ZPL_300": "^XA\n^CI28\n^PW591\n^LL449\n^LH0,0\n^FO24,24^A0N,36,30^FDBASMATI RICE PREMIUM^FS\n^FO24,70^A0N,33,28^FDNet Quantity: 100 g^FS\n^FO24,112^A0N,33,28^FDMRP Rs. 25.00 (incl. of all taxes)^FS\n^FO24,154^A0N,25,21^FDUnit Sale Price: Rs. 0.25 per g^FS\n^FO24,185^A0N,25,21^FDMfg: 11/2026   Best Before: 10/05/2027^FS\n^FO24,217^A0N,25,21^FDBatch: B2611A^FS\n^FO24,248^A0N,25,21^FDMfd & Pkd by: Sample Foods Pvt Ltd,^FS\n^FO24,280^A0N,25,21^FDPlot 12, Okhla Ph-II, New Delhi-110020^FS\n^FO24,311^A0N,25,21^FDConsumer Care: Manager, at above address^FS\n^FO24,343^A0N,25,21^FDPh: 011-40000000  care@samplefoods.in^FS\n^PQ1\n^XZ\n", "EPL2_203": "\nN\nq400\nQ304,24\nR0,0\nS3\nD8\nZT\nA16,16,0,1,2,3,N,\"BASMATI RICE PREMIUM\"\nA16,47,0,1,1,2,N,\"Net Quantity: 100 g\"\nA16,76,0,1,1,2,N,\"MRP Rs. 25.00 (incl. of all taxes)\"\nA16,104,0,1,1,2,N,\"Unit Sale Price: Rs. 0.25 per g\"\nA16,125,0,1,1,2,N,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nA16,147,0,1,1,2,N,\"Batch: B2611A\"\nA16,168,0,1,1,2,N,\"Mfd & Pkd by: Sample Foods Pvt Ltd,\"\nA16,189,0,1,1,2,N,\"Plot 12, Okhla Ph-II, New Delhi-110020\"\nA16,211,0,1,1,2,N,\"Consumer Care: Manager, at above address\"\nA16,232,0,1,1,2,N,\"Ph: 011-40000000  care@samplefoods.in\"\nP1\n", "PGL_203": "~CREATE;LM01;304\nSCALE;DOT;203;203\nALPHA\nPOINT;16;16;9;0;*BASMATI RICE PREMIUM*\nPOINT;47;16;8;0;*Net Quantity: 100 g*\nPOINT;76;16;8;0;*MRP Rs. 25.00 (incl. of all taxes)*\nPOINT;104;16;6;0;*Unit Sale Price: Rs. 0.25 per g*\nPOINT;125;16;6;0;*Mfg: 11/2026   Best Before: 10/05/2027*\nPOINT;147;16;6;0;*Batch: B2611A*\nPOINT;168;16;6;0;*Mfd & Pkd by: Sample Foods Pvt Ltd,*\nPOINT;189;16;6;0;*Plot 12, Okhla Ph-II, New Delhi-110020*\nPOINT;211;16;6;0;*Consumer Care: Manager, at above address*\nPOINT;232;16;6;0;*Ph: 011-40000000  care@samplefoods.in*\nSTOP\nEND\n~EXECUTE;LM01;1\n~NORMAL\n", "PGL_300": "~CREATE;LM01;449\nSCALE;DOT;300;300\nALPHA\nPOINT;24;24;9;0;*BASMATI RICE PREMIUM*\nPOINT;70;24;8;0;*Net Quantity: 100 g*\nPOINT;112;24;8;0;*MRP Rs. 25.00 (incl. of all taxes)*\nPOINT;154;24;6;0;*Unit Sale Price: Rs. 0.25 per g*\nPOINT;185;24;6;0;*Mfg: 11/2026   Best Before: 10/05/2027*\nPOINT;217;24;6;0;*Batch: B2611A*\nPOINT;248;24;6;0;*Mfd & Pkd by: Sample Foods Pvt Ltd,*\nPOINT;280;24;6;0;*Plot 12, Okhla Ph-II, New Delhi-110020*\nPOINT;311;24;6;0;*Consumer Care: Manager, at above address*\nPOINT;343;24;6;0;*Ph: 011-40000000  care@samplefoods.in*\nSTOP\nEND\n~EXECUTE;LM01;1\n~NORMAL\n", "TSPL_600": "SIZE 50 mm, 38 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 47,47,\"0\",0,8.7,8.7,\"BASMATI RICE PREMIUM\"\nTEXT 47,140,\"0\",0,7.9,7.9,\"Net Quantity: 100 g\"\nTEXT 47,224,\"0\",0,7.9,7.9,\"MRP Rs. 25.00 (incl. of all taxes)\"\nTEXT 47,308,\"0\",0,5.9,5.9,\"Unit Sale Price: Rs. 0.25 per g\"\nTEXT 47,371,\"0\",0,5.9,5.9,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nTEXT 47,434,\"0\",0,5.9,5.9,\"Batch: B2611A\"\nTEXT 47,497,\"0\",0,5.9,5.9,\"Mfd & Pkd by: Sample Foods Pvt Ltd,\"\nTEXT 47,560,\"0\",0,5.9,5.9,\"Plot 12, Okhla Ph-II, New Delhi-110020\"\nTEXT 47,623,\"0\",0,5.9,5.9,\"Consumer Care: Manager, at above address\"\nTEXT 47,686,\"0\",0,5.9,5.9,\"Ph: 011-40000000  care@samplefoods.in\"\nPRINT 1,1\n", "ZPL_600": "^XA\n^CI28\n^PW1181\n^LL898\n^LH0,0\n^FO47,47^A0N,72,61^FDBASMATI RICE PREMIUM^FS\n^FO47,140^A0N,66,56^FDNet Quantity: 100 g^FS\n^FO47,224^A0N,66,56^FDMRP Rs. 25.00 (incl. of all taxes)^FS\n^FO47,308^A0N,49,41^FDUnit Sale Price: Rs. 0.25 per g^FS\n^FO47,371^A0N,49,41^FDMfg: 11/2026   Best Before: 10/05/2027^FS\n^FO47,434^A0N,49,41^FDBatch: B2611A^FS\n^FO47,497^A0N,49,41^FDMfd & Pkd by: Sample Foods Pvt Ltd,^FS\n^FO47,560^A0N,49,41^FDPlot 12, Okhla Ph-II, New Delhi-110020^FS\n^FO47,623^A0N,49,41^FDConsumer Care: Manager, at above address^FS\n^FO47,686^A0N,49,41^FDPh: 011-40000000  care@samplefoods.in^FS\n^PQ1\n^XZ\n", "PGL_600": "~CREATE;LM01;898\nSCALE;DOT;600;600\nALPHA\nPOINT;47;47;9;0;*BASMATI RICE PREMIUM*\nPOINT;140;47;8;0;*Net Quantity: 100 g*\nPOINT;224;47;8;0;*MRP Rs. 25.00 (incl. of all taxes)*\nPOINT;308;47;6;0;*Unit Sale Price: Rs. 0.25 per g*\nPOINT;371;47;6;0;*Mfg: 11/2026   Best Before: 10/05/2027*\nPOINT;434;47;6;0;*Batch: B2611A*\nPOINT;497;47;6;0;*Mfd & Pkd by: Sample Foods Pvt Ltd,*\nPOINT;560;47;6;0;*Plot 12, Okhla Ph-II, New Delhi-110020*\nPOINT;623;47;6;0;*Consumer Care: Manager, at above address*\nPOINT;686;47;6;0;*Ph: 011-40000000  care@samplefoods.in*\nSTOP\nEND\n~EXECUTE;LM01;1\n~NORMAL\n"}, "checklist": [["Name and address of manufacturer / packer", 1, "Rule 6(1)(a)", ""], ["Common or generic name", 1, "Rule 6(1)(b)", ""], ["Net quantity in standard units", 1, "Rule 6(1)(c)", "100 g"], ["Month and year of manufacture", 1, "Rule 6(1)(d)", ""], ["Best before date (perishable food)", 1, "Rule 6(1)(da)", ""], ["MRP inclusive of all taxes", 1, "Rule 6(1)(e)", ""], ["Unit sale price", 1, "Rule 6(11)", "Rs. 0.25 per g"], ["Consumer care name, address, phone, email", 1, "Rule 6(2)", ""], ["Country of origin", 0, "Rule 6(1)(aa)", "made in India, not required"], ["Letters at least 1.5 mm (panel 50\u2013100 cm\u00b2)", 1, "Rule 7, Table I", ""]]}, {"code": "LM-02", "w": 75, "h": 50, "short": "Standard retail label with EAN-13; panel up to 100 cm\u00b2.", "hasDM": false, "files": {"TSPL_203": "SIZE 75 mm, 50 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 16,16,\"0\",0,11.8,11.8,\"BASMATI RICE PREMIUM\"\nTEXT 16,59,\"0\",0,9.8,9.8,\"Net Quantity: 500 g\"\nTEXT 16,94,\"0\",0,9.8,9.8,\"MRP Rs. 99.00 (incl. of all taxes)\"\nTEXT 16,130,\"0\",0,7.1,7.1,\"Unit Sale Price: Rs. 198.00 per kg\"\nTEXT 16,155,\"0\",0,7.1,7.1,\"Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A\"\nBAR 16,184,567,2\nTEXT 16,190,\"0\",0,6.3,6.3,\"Mfd & Pkd by:\"\nTEXT 16,212,\"0\",0,6.3,6.3,\"Sample Foods Pvt Ltd, Plot 12,\"\nTEXT 16,235,\"0\",0,6.3,6.3,\"Okhla Ph-II, New Delhi-110020\"\nTEXT 16,258,\"0\",0,6.3,6.3,\"Consumer Care: Manager,\"\nTEXT 16,281,\"0\",0,6.3,6.3,\"at above address\"\nTEXT 16,303,\"0\",0,6.3,6.3,\"Ph: 011-40000000\"\nTEXT 16,326,\"0\",0,6.3,6.3,\"care@samplefoods.in\"\nBARCODE 296,194,\"EAN13\",120,1,0,3,3,\"890123456789\"\nPRINT 1,1\n", "TSPL_300": "SIZE 75 mm, 50 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 24,24,\"0\",0,11.8,11.8,\"BASMATI RICE PREMIUM\"\nTEXT 24,87,\"0\",0,9.8,9.8,\"Net Quantity: 500 g\"\nTEXT 24,139,\"0\",0,9.8,9.8,\"MRP Rs. 99.00 (incl. of all taxes)\"\nTEXT 24,192,\"0\",0,7.1,7.1,\"Unit Sale Price: Rs. 198.00 per kg\"\nTEXT 24,229,\"0\",0,7.1,7.1,\"Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A\"\nBAR 24,272,839,4\nTEXT 24,280,\"0\",0,6.3,6.3,\"Mfd & Pkd by:\"\nTEXT 24,314,\"0\",0,6.3,6.3,\"Sample Foods Pvt Ltd, Plot 12,\"\nTEXT 24,347,\"0\",0,6.3,6.3,\"Okhla Ph-II, New Delhi-110020\"\nTEXT 24,381,\"0\",0,6.3,6.3,\"Consumer Care: Manager,\"\nTEXT 24,415,\"0\",0,6.3,6.3,\"at above address\"\nTEXT 24,448,\"0\",0,6.3,6.3,\"Ph: 011-40000000\"\nTEXT 24,482,\"0\",0,6.3,6.3,\"care@samplefoods.in\"\nBARCODE 437,286,\"EAN13\",177,1,0,4,4,\"890123456789\"\nPRINT 1,1\n", "ZPL_203": "^XA\n^CI28\n^PW599\n^LL400\n^LH0,0\n^FO16,16^A0N,33,28^FDBASMATI RICE PREMIUM^FS\n^FO16,59^A0N,28,23^FDNet Quantity: 500 g^FS\n^FO16,94^A0N,28,23^FDMRP Rs. 99.00 (incl. of all taxes)^FS\n^FO16,130^A0N,20,17^FDUnit Sale Price: Rs. 198.00 per kg^FS\n^FO16,155^A0N,20,17^FDMfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A^FS\n^FO16,184^GB567,2,2^FS\n^FO16,190^A0N,18,15^FDMfd & Pkd by:^FS\n^FO16,212^A0N,18,15^FDSample Foods Pvt Ltd, Plot 12,^FS\n^FO16,235^A0N,18,15^FDOkhla Ph-II, New Delhi-110020^FS\n^FO16,258^A0N,18,15^FDConsumer Care: Manager,^FS\n^FO16,281^A0N,18,15^FDat above address^FS\n^FO16,303^A0N,18,15^FDPh: 011-40000000^FS\n^FO16,326^A0N,18,15^FDcare@samplefoods.in^FS\n^BY3^FO296,194^BEN,120,Y,N^FD890123456789^FS\n^PQ1\n^XZ\n", "ZPL_300": "^XA\n^CI28\n^PW886\n^LL591\n^LH0,0\n^FO24,24^A0N,49,41^FDBASMATI RICE PREMIUM^FS\n^FO24,87^A0N,41,34^FDNet Quantity: 500 g^FS\n^FO24,139^A0N,41,34^FDMRP Rs. 99.00 (incl. of all taxes)^FS\n^FO24,192^A0N,30,25^FDUnit Sale Price: Rs. 198.00 per kg^FS\n^FO24,229^A0N,30,25^FDMfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A^FS\n^FO24,272^GB839,4,4^FS\n^FO24,280^A0N,26,22^FDMfd & Pkd by:^FS\n^FO24,314^A0N,26,22^FDSample Foods Pvt Ltd, Plot 12,^FS\n^FO24,347^A0N,26,22^FDOkhla Ph-II, New Delhi-110020^FS\n^FO24,381^A0N,26,22^FDConsumer Care: Manager,^FS\n^FO24,415^A0N,26,22^FDat above address^FS\n^FO24,448^A0N,26,22^FDPh: 011-40000000^FS\n^FO24,482^A0N,26,22^FDcare@samplefoods.in^FS\n^BY4^FO437,286^BEN,177,Y,N^FD890123456789^FS\n^PQ1\n^XZ\n", "EPL2_203": "\nN\nq599\nQ400,24\nR0,0\nS3\nD8\nZT\nA16,16,0,1,2,3,N,\"BASMATI RICE PREMIUM\"\nA16,59,0,1,2,3,N,\"Net Quantity: 500 g\"\nA16,94,0,1,2,3,N,\"MRP Rs. 99.00 (incl. of all taxes)\"\nA16,130,0,1,1,2,N,\"Unit Sale Price: Rs. 198.00 per kg\"\nA16,155,0,1,1,2,N,\"Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A\"\nLO16,184,567,2\nA16,190,0,1,1,2,N,\"Mfd & Pkd by:\"\nA16,212,0,1,1,2,N,\"Sample Foods Pvt Ltd, Plot 12,\"\nA16,235,0,1,1,2,N,\"Okhla Ph-II, New Delhi-110020\"\nA16,258,0,1,1,2,N,\"Consumer Care: Manager,\"\nA16,281,0,1,1,2,N,\"at above address\"\nA16,303,0,1,1,2,N,\"Ph: 011-40000000\"\nA16,326,0,1,1,2,N,\"care@samplefoods.in\"\nB296,194,0,E30,3,3,120,B,\"890123456789\"\nP1\n", "PGL_203": "~CREATE;LM02;400\nSCALE;DOT;203;203\nALPHA\nPOINT;16;16;12;0;*BASMATI RICE PREMIUM*\nPOINT;59;16;10;0;*Net Quantity: 500 g*\nPOINT;94;16;10;0;*MRP Rs. 99.00 (incl. of all taxes)*\nPOINT;130;16;7;0;*Unit Sale Price: Rs. 198.00 per kg*\nPOINT;155;16;7;0;*Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A*\nPOINT;190;16;6;0;*Mfd & Pkd by:*\nPOINT;212;16;6;0;*Sample Foods Pvt Ltd, Plot 12,*\nPOINT;235;16;6;0;*Okhla Ph-II, New Delhi-110020*\nPOINT;258;16;6;0;*Consumer Care: Manager,*\nPOINT;281;16;6;0;*at above address*\nPOINT;303;16;6;0;*Ph: 011-40000000*\nPOINT;326;16;6;0;*care@samplefoods.in*\nSTOP\nHORZ\n2;184;16;583\nSTOP\nBARCODE\nEAN13;H5.19;194;296\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM02;1\n~NORMAL\n", "PGL_300": "~CREATE;LM02;591\nSCALE;DOT;300;300\nALPHA\nPOINT;24;24;12;0;*BASMATI RICE PREMIUM*\nPOINT;87;24;10;0;*Net Quantity: 500 g*\nPOINT;139;24;10;0;*MRP Rs. 99.00 (incl. of all taxes)*\nPOINT;192;24;7;0;*Unit Sale Price: Rs. 198.00 per kg*\nPOINT;229;24;7;0;*Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A*\nPOINT;280;24;6;0;*Mfd & Pkd by:*\nPOINT;314;24;6;0;*Sample Foods Pvt Ltd, Plot 12,*\nPOINT;347;24;6;0;*Okhla Ph-II, New Delhi-110020*\nPOINT;381;24;6;0;*Consumer Care: Manager,*\nPOINT;415;24;6;0;*at above address*\nPOINT;448;24;6;0;*Ph: 011-40000000*\nPOINT;482;24;6;0;*care@samplefoods.in*\nSTOP\nHORZ\n4;272;24;863\nSTOP\nBARCODE\nEAN13;H5.27;286;437\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM02;1\n~NORMAL\n", "TSPL_600": "SIZE 75 mm, 50 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 47,47,\"0\",0,11.8,11.8,\"BASMATI RICE PREMIUM\"\nTEXT 47,173,\"0\",0,9.8,9.8,\"Net Quantity: 500 g\"\nTEXT 47,278,\"0\",0,9.8,9.8,\"MRP Rs. 99.00 (incl. of all taxes)\"\nTEXT 47,383,\"0\",0,7.1,7.1,\"Unit Sale Price: Rs. 198.00 per kg\"\nTEXT 47,459,\"0\",0,7.1,7.1,\"Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A\"\nBAR 47,544,1677,7\nTEXT 47,560,\"0\",0,6.3,6.3,\"Mfd & Pkd by:\"\nTEXT 47,628,\"0\",0,6.3,6.3,\"Sample Foods Pvt Ltd, Plot 12,\"\nTEXT 47,695,\"0\",0,6.3,6.3,\"Okhla Ph-II, New Delhi-110020\"\nTEXT 47,762,\"0\",0,6.3,6.3,\"Consumer Care: Manager,\"\nTEXT 47,829,\"0\",0,6.3,6.3,\"at above address\"\nTEXT 47,896,\"0\",0,6.3,6.3,\"Ph: 011-40000000\"\nTEXT 47,964,\"0\",0,6.3,6.3,\"care@samplefoods.in\"\nBARCODE 874,572,\"EAN13\",354,1,0,9,9,\"890123456789\"\nPRINT 1,1\n", "ZPL_600": "^XA\n^CI28\n^PW1772\n^LL1181\n^LH0,0\n^FO47,47^A0N,98,83^FDBASMATI RICE PREMIUM^FS\n^FO47,173^A0N,82,69^FDNet Quantity: 500 g^FS\n^FO47,278^A0N,82,69^FDMRP Rs. 99.00 (incl. of all taxes)^FS\n^FO47,383^A0N,59,50^FDUnit Sale Price: Rs. 198.00 per kg^FS\n^FO47,459^A0N,59,50^FDMfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A^FS\n^FO47,544^GB1677,7,7^FS\n^FO47,560^A0N,52,44^FDMfd & Pkd by:^FS\n^FO47,628^A0N,52,44^FDSample Foods Pvt Ltd, Plot 12,^FS\n^FO47,695^A0N,52,44^FDOkhla Ph-II, New Delhi-110020^FS\n^FO47,762^A0N,52,44^FDConsumer Care: Manager,^FS\n^FO47,829^A0N,52,44^FDat above address^FS\n^FO47,896^A0N,52,44^FDPh: 011-40000000^FS\n^FO47,964^A0N,52,44^FDcare@samplefoods.in^FS\n^BY9^FO874,572^BEN,354,Y,N^FD890123456789^FS\n^PQ1\n^XZ\n", "PGL_600": "~CREATE;LM02;1181\nSCALE;DOT;600;600\nALPHA\nPOINT;47;47;12;0;*BASMATI RICE PREMIUM*\nPOINT;173;47;10;0;*Net Quantity: 500 g*\nPOINT;278;47;10;0;*MRP Rs. 99.00 (incl. of all taxes)*\nPOINT;383;47;7;0;*Unit Sale Price: Rs. 198.00 per kg*\nPOINT;459;47;7;0;*Mfg: 11/2026    Best Before: 10/05/2027    Batch: B2611A*\nPOINT;560;47;6;0;*Mfd & Pkd by:*\nPOINT;628;47;6;0;*Sample Foods Pvt Ltd, Plot 12,*\nPOINT;695;47;6;0;*Okhla Ph-II, New Delhi-110020*\nPOINT;762;47;6;0;*Consumer Care: Manager,*\nPOINT;829;47;6;0;*at above address*\nPOINT;896;47;6;0;*Ph: 011-40000000*\nPOINT;964;47;6;0;*care@samplefoods.in*\nSTOP\nHORZ\n7;544;47;1724\nSTOP\nBARCODE\nEAN13;H5.54;572;874\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM02;1\n~NORMAL\n"}, "checklist": [["Name and address of manufacturer / packer", 1, "Rule 6(1)(a)", ""], ["Common or generic name", 1, "Rule 6(1)(b)", ""], ["Net quantity in standard units", 1, "Rule 6(1)(c)", "500 g"], ["Month and year of manufacture", 1, "Rule 6(1)(d)", ""], ["Best before date (perishable food)", 1, "Rule 6(1)(da)", ""], ["MRP inclusive of all taxes", 1, "Rule 6(1)(e)", ""], ["Unit sale price", 1, "Rule 6(11)", "Rs. 198.00 per kg"], ["Consumer care name, address, phone, email", 1, "Rule 6(2)", ""], ["Country of origin", 0, "Rule 6(1)(aa)", "made in India, not required"], ["Letters at least 1.5 mm (panel up to 100 cm\u00b2)", 1, "Rule 7, Table I", ""]]}, {"code": "LM-03", "w": 100, "h": 75, "short": "Retail label with EAN-13 and GS1 DataMatrix for Sunrise 2027 dual marking.", "hasDM": true, "files": {"TSPL_203": "SIZE 100 mm, 75 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 16,16,\"0\",0,14.2,14.2,\"BASMATI RICE PREMIUM\"\nTEXT 16,67,\"0\",0,11.8,11.8,\"Net Quantity: 1 kg\"\nTEXT 16,110,\"0\",0,11.8,11.8,\"MRP Rs. 185.00 (incl. of all taxes)\"\nTEXT 16,152,\"0\",0,9.8,9.8,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nTEXT 16,188,\"0\",0,9.8,9.8,\"Batch: B2611A\"\nBAR 16,227,767,2\nTEXT 16,232,\"0\",0,9.8,9.8,\"Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,\"\nTEXT 16,268,\"0\",0,9.8,9.8,\"Okhla Phase-II, New Delhi-110020\"\nTEXT 16,303,\"0\",0,9.8,9.8,\"Consumer Care: Manager, at above address,\"\nTEXT 16,339,\"0\",0,9.8,9.8,\"Ph: 011-40000000, care@samplefoods.in\"\nBARCODE 16,382,\"EAN13\",96,1,0,3,3,\"890123456789\"\nDMATRIX 480,382,96,96,c126,x4,\"~101089012345678901727051010B2611A\"\nTEXT 384,490,\"0\",0,6.3,6.3,\"(01)08901234567890 (17)270510 (10)B2611A\"\nPRINT 1,1\n", "TSPL_300": "SIZE 100 mm, 75 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 24,24,\"0\",0,14.2,14.2,\"BASMATI RICE PREMIUM\"\nTEXT 24,99,\"0\",0,11.8,11.8,\"Net Quantity: 1 kg\"\nTEXT 24,162,\"0\",0,11.8,11.8,\"MRP Rs. 185.00 (incl. of all taxes)\"\nTEXT 24,225,\"0\",0,9.8,9.8,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nTEXT 24,278,\"0\",0,9.8,9.8,\"Batch: B2611A\"\nBAR 24,335,1134,4\nTEXT 24,343,\"0\",0,9.8,9.8,\"Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,\"\nTEXT 24,396,\"0\",0,9.8,9.8,\"Okhla Phase-II, New Delhi-110020\"\nTEXT 24,448,\"0\",0,9.8,9.8,\"Consumer Care: Manager, at above address,\"\nTEXT 24,501,\"0\",0,9.8,9.8,\"Ph: 011-40000000, care@samplefoods.in\"\nBARCODE 24,565,\"EAN13\",142,1,0,4,4,\"890123456789\"\nDMATRIX 709,565,144,144,c126,x6,\"~101089012345678901727051010B2611A\"\nTEXT 567,724,\"0\",0,6.3,6.3,\"(01)08901234567890 (17)270510 (10)B2611A\"\nPRINT 1,1\n", "ZPL_203": "^XA\n^CI28\n^PW799\n^LL599\n^LH0,0\n^FO16,16^A0N,40,34^FDBASMATI RICE PREMIUM^FS\n^FO16,67^A0N,33,28^FDNet Quantity: 1 kg^FS\n^FO16,110^A0N,33,28^FDMRP Rs. 185.00 (incl. of all taxes)^FS\n^FO16,152^A0N,28,23^FDMfg: 11/2026   Best Before: 10/05/2027^FS\n^FO16,188^A0N,28,23^FDBatch: B2611A^FS\n^FO16,227^GB767,2,2^FS\n^FO16,232^A0N,28,23^FDMfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,^FS\n^FO16,268^A0N,28,23^FDOkhla Phase-II, New Delhi-110020^FS\n^FO16,303^A0N,28,23^FDConsumer Care: Manager, at above address,^FS\n^FO16,339^A0N,28,23^FDPh: 011-40000000, care@samplefoods.in^FS\n^BY3^FO16,382^BEN,96,Y,N^FD890123456789^FS\n^FO480,382^BXN,4,200,0,0,6,_^FD_101089012345678901727051010B2611A^FS\n^FO384,490^A0N,18,15^FD(01)08901234567890 (17)270510 (10)B2611A^FS\n^PQ1\n^XZ\n", "ZPL_300": "^XA\n^CI28\n^PW1181\n^LL886\n^LH0,0\n^FO24,24^A0N,59,50^FDBASMATI RICE PREMIUM^FS\n^FO24,99^A0N,49,41^FDNet Quantity: 1 kg^FS\n^FO24,162^A0N,49,41^FDMRP Rs. 185.00 (incl. of all taxes)^FS\n^FO24,225^A0N,41,34^FDMfg: 11/2026   Best Before: 10/05/2027^FS\n^FO24,278^A0N,41,34^FDBatch: B2611A^FS\n^FO24,335^GB1134,4,4^FS\n^FO24,343^A0N,41,34^FDMfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,^FS\n^FO24,396^A0N,41,34^FDOkhla Phase-II, New Delhi-110020^FS\n^FO24,448^A0N,41,34^FDConsumer Care: Manager, at above address,^FS\n^FO24,501^A0N,41,34^FDPh: 011-40000000, care@samplefoods.in^FS\n^BY4^FO24,565^BEN,142,Y,N^FD890123456789^FS\n^FO709,565^BXN,6,200,0,0,6,_^FD_101089012345678901727051010B2611A^FS\n^FO567,724^A0N,26,22^FD(01)08901234567890 (17)270510 (10)B2611A^FS\n^PQ1\n^XZ\n", "EPL2_203": "\nN\nq799\nQ599,24\nR0,0\nS3\nD8\nZT\nA16,16,0,1,2,4,N,\"BASMATI RICE PREMIUM\"\nA16,67,0,1,2,3,N,\"Net Quantity: 1 kg\"\nA16,110,0,1,2,3,N,\"MRP Rs. 185.00 (incl. of all taxes)\"\nA16,152,0,1,2,3,N,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nA16,188,0,1,2,3,N,\"Batch: B2611A\"\nLO16,227,767,2\nA16,232,0,1,2,3,N,\"Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,\"\nA16,268,0,1,2,3,N,\"Okhla Phase-II, New Delhi-110020\"\nA16,303,0,1,2,3,N,\"Consumer Care: Manager, at above address,\"\nA16,339,0,1,2,3,N,\"Ph: 011-40000000, care@samplefoods.in\"\nB16,382,0,E30,3,3,96,B,\"890123456789\"\n; GS1 DataMatrix omitted: use the ZPL or TSPL file for 2D codes\nP1\n", "PGL_203": "~CREATE;LM03;599\nSCALE;DOT;203;203\nALPHA\nPOINT;16;16;14;0;*BASMATI RICE PREMIUM*\nPOINT;67;16;12;0;*Net Quantity: 1 kg*\nPOINT;110;16;12;0;*MRP Rs. 185.00 (incl. of all taxes)*\nPOINT;152;16;10;0;*Mfg: 11/2026   Best Before: 10/05/2027*\nPOINT;188;16;10;0;*Batch: B2611A*\nPOINT;232;16;10;0;*Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,*\nPOINT;268;16;10;0;*Okhla Phase-II, New Delhi-110020*\nPOINT;303;16;10;0;*Consumer Care: Manager, at above address,*\nPOINT;339;16;10;0;*Ph: 011-40000000, care@samplefoods.in*\nSTOP\nHORZ\n2;227;16;783\nSTOP\nBARCODE\nEAN13;H4.15;382;16\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM03;1\n~NORMAL\n", "PGL_300": "~CREATE;LM03;886\nSCALE;DOT;300;300\nALPHA\nPOINT;24;24;14;0;*BASMATI RICE PREMIUM*\nPOINT;99;24;12;0;*Net Quantity: 1 kg*\nPOINT;162;24;12;0;*MRP Rs. 185.00 (incl. of all taxes)*\nPOINT;225;24;10;0;*Mfg: 11/2026   Best Before: 10/05/2027*\nPOINT;278;24;10;0;*Batch: B2611A*\nPOINT;343;24;10;0;*Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,*\nPOINT;396;24;10;0;*Okhla Phase-II, New Delhi-110020*\nPOINT;448;24;10;0;*Consumer Care: Manager, at above address,*\nPOINT;501;24;10;0;*Ph: 011-40000000, care@samplefoods.in*\nSTOP\nHORZ\n4;335;24;1158\nSTOP\nBARCODE\nEAN13;H4.22;565;24\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM03;1\n~NORMAL\n", "TSPL_600": "SIZE 100 mm, 75 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 47,47,\"0\",0,14.2,14.2,\"BASMATI RICE PREMIUM\"\nTEXT 47,198,\"0\",0,11.8,11.8,\"Net Quantity: 1 kg\"\nTEXT 47,324,\"0\",0,11.8,11.8,\"MRP Rs. 185.00 (incl. of all taxes)\"\nTEXT 47,450,\"0\",0,9.8,9.8,\"Mfg: 11/2026   Best Before: 10/05/2027\"\nTEXT 47,555,\"0\",0,9.8,9.8,\"Batch: B2611A\"\nBAR 47,670,2268,7\nTEXT 47,686,\"0\",0,9.8,9.8,\"Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,\"\nTEXT 47,791,\"0\",0,9.8,9.8,\"Okhla Phase-II, New Delhi-110020\"\nTEXT 47,896,\"0\",0,9.8,9.8,\"Consumer Care: Manager, at above address,\"\nTEXT 47,1001,\"0\",0,9.8,9.8,\"Ph: 011-40000000, care@samplefoods.in\"\nBARCODE 47,1130,\"EAN13\",283,1,0,9,9,\"890123456789\"\nDMATRIX 1417,1130,288,288,c126,x12,\"~101089012345678901727051010B2611A\"\nTEXT 1134,1449,\"0\",0,6.3,6.3,\"(01)08901234567890 (17)270510 (10)B2611A\"\nPRINT 1,1\n", "ZPL_600": "^XA\n^CI28\n^PW2362\n^LL1772\n^LH0,0\n^FO47,47^A0N,118,100^FDBASMATI RICE PREMIUM^FS\n^FO47,198^A0N,98,83^FDNet Quantity: 1 kg^FS\n^FO47,324^A0N,98,83^FDMRP Rs. 185.00 (incl. of all taxes)^FS\n^FO47,450^A0N,82,69^FDMfg: 11/2026   Best Before: 10/05/2027^FS\n^FO47,555^A0N,82,69^FDBatch: B2611A^FS\n^FO47,670^GB2268,7,7^FS\n^FO47,686^A0N,82,69^FDMfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,^FS\n^FO47,791^A0N,82,69^FDOkhla Phase-II, New Delhi-110020^FS\n^FO47,896^A0N,82,69^FDConsumer Care: Manager, at above address,^FS\n^FO47,1001^A0N,82,69^FDPh: 011-40000000, care@samplefoods.in^FS\n^BY9^FO47,1130^BEN,283,Y,N^FD890123456789^FS\n^FO1417,1130^BXN,12,200,0,0,6,_^FD_101089012345678901727051010B2611A^FS\n^FO1134,1449^A0N,52,44^FD(01)08901234567890 (17)270510 (10)B2611A^FS\n^PQ1\n^XZ\n", "PGL_600": "~CREATE;LM03;1772\nSCALE;DOT;600;600\nALPHA\nPOINT;47;47;14;0;*BASMATI RICE PREMIUM*\nPOINT;198;47;12;0;*Net Quantity: 1 kg*\nPOINT;324;47;12;0;*MRP Rs. 185.00 (incl. of all taxes)*\nPOINT;450;47;10;0;*Mfg: 11/2026   Best Before: 10/05/2027*\nPOINT;555;47;10;0;*Batch: B2611A*\nPOINT;686;47;10;0;*Mfd & Pkd by: Sample Foods Pvt Ltd, Plot 12,*\nPOINT;791;47;10;0;*Okhla Phase-II, New Delhi-110020*\nPOINT;896;47;10;0;*Consumer Care: Manager, at above address,*\nPOINT;1001;47;10;0;*Ph: 011-40000000, care@samplefoods.in*\nSTOP\nHORZ\n7;670;47;2315\nSTOP\nBARCODE\nEAN13;H4.43;1130;47\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM03;1\n~NORMAL\n"}, "checklist": [["Name and address of manufacturer / packer", 1, "Rule 6(1)(a)", ""], ["Common or generic name", 1, "Rule 6(1)(b)", ""], ["Net quantity in standard units", 1, "Rule 6(1)(c)", "1 kg"], ["Month and year of manufacture", 1, "Rule 6(1)(d)", ""], ["Best before date (perishable food)", 1, "Rule 6(1)(da)", ""], ["MRP inclusive of all taxes", 1, "Rule 6(1)(e)", ""], ["Unit sale price", 0, "Rule 6(11)", "1 kg pack: equals MRP per kg, not required"], ["Consumer care name, address, phone, email", 1, "Rule 6(2)", ""], ["Letters at least 2.5 mm (panel 100\u2013500 cm\u00b2)", 1, "Rule 7, Table I", ""], ["GTIN in EAN-13 and GS1 DataMatrix (same GTIN)", 1, "GS1 Sunrise 2027", "not a legal requirement"]]}, {"code": "LM-04", "w": 100, "h": 150, "short": "Imported product label, sold by number, with dimensions; 4 mm text.", "hasDM": false, "files": {"TSPL_203": "SIZE 100 mm, 150 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 16,16,\"0\",0,19.7,19.7,\"BLUETOOTH SPEAKER\"\nTEXT 16,87,\"0\",0,15.7,15.7,\"Model: X5\"\nTEXT 16,144,\"0\",0,17.7,17.7,\"Net Quantity: 1 Unit\"\nTEXT 16,208,\"0\",0,19.7,19.7,\"MRP Rs. 2,499.00\"\nTEXT 16,279,\"0\",0,15.7,15.7,\"(incl. of all taxes)\"\nTEXT 16,336,\"0\",0,15.7,15.7,\"Month & Year of Mfg: 09/2026\"\nTEXT 16,393,\"0\",0,15.7,15.7,\"Dimensions: 18 x 7 x 7 cm\"\nTEXT 16,449,\"0\",0,15.7,15.7,\"Country of Origin: China\"\nBAR 16,509,767,2\nTEXT 16,515,\"0\",0,15.7,15.7,\"Imported & Marketed by:\"\nTEXT 16,572,\"0\",0,15.7,15.7,\"Sample Electronics Pvt Ltd,\"\nTEXT 16,629,\"0\",0,15.7,15.7,\"B-45, Sector 63, Noida,\"\nTEXT 16,685,\"0\",0,15.7,15.7,\"UP-201301\"\nTEXT 16,742,\"0\",0,15.7,15.7,\"Consumer Care: Manager,\"\nTEXT 16,799,\"0\",0,15.7,15.7,\"at above address\"\nTEXT 16,856,\"0\",0,15.7,15.7,\"Ph: 0120-4000000\"\nTEXT 16,913,\"0\",0,15.7,15.7,\"care@sampleelec.in\"\nBARCODE 16,978,\"EAN13\",80,1,0,3,3,\"890123456789\"\nPRINT 1,1\n", "TSPL_300": "SIZE 100 mm, 150 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 24,24,\"0\",0,19.7,19.7,\"BLUETOOTH SPEAKER\"\nTEXT 24,129,\"0\",0,15.7,15.7,\"Model: X5\"\nTEXT 24,213,\"0\",0,17.7,17.7,\"Net Quantity: 1 Unit\"\nTEXT 24,307,\"0\",0,19.7,19.7,\"MRP Rs. 2,499.00\"\nTEXT 24,412,\"0\",0,15.7,15.7,\"(incl. of all taxes)\"\nTEXT 24,496,\"0\",0,15.7,15.7,\"Month & Year of Mfg: 09/2026\"\nTEXT 24,580,\"0\",0,15.7,15.7,\"Dimensions: 18 x 7 x 7 cm\"\nTEXT 24,664,\"0\",0,15.7,15.7,\"Country of Origin: China\"\nBAR 24,753,1134,4\nTEXT 24,761,\"0\",0,15.7,15.7,\"Imported & Marketed by:\"\nTEXT 24,845,\"0\",0,15.7,15.7,\"Sample Electronics Pvt Ltd,\"\nTEXT 24,929,\"0\",0,15.7,15.7,\"B-45, Sector 63, Noida,\"\nTEXT 24,1013,\"0\",0,15.7,15.7,\"UP-201301\"\nTEXT 24,1097,\"0\",0,15.7,15.7,\"Consumer Care: Manager,\"\nTEXT 24,1181,\"0\",0,15.7,15.7,\"at above address\"\nTEXT 24,1265,\"0\",0,15.7,15.7,\"Ph: 0120-4000000\"\nTEXT 24,1349,\"0\",0,15.7,15.7,\"care@sampleelec.in\"\nBARCODE 24,1445,\"EAN13\",118,1,0,4,4,\"890123456789\"\nPRINT 1,1\n", "ZPL_203": "^XA\n^CI28\n^PW799\n^LL1199\n^LH0,0\n^FO16,16^A0N,56,47^FDBLUETOOTH SPEAKER^FS\n^FO16,87^A0N,44,37^FDModel: X5^FS\n^FO16,144^A0N,50,42^FDNet Quantity: 1 Unit^FS\n^FO16,208^A0N,56,47^FDMRP Rs. 2,499.00^FS\n^FO16,279^A0N,44,37^FD(incl. of all taxes)^FS\n^FO16,336^A0N,44,37^FDMonth & Year of Mfg: 09/2026^FS\n^FO16,393^A0N,44,37^FDDimensions: 18 x 7 x 7 cm^FS\n^FO16,449^A0N,44,37^FDCountry of Origin: China^FS\n^FO16,509^GB767,2,2^FS\n^FO16,515^A0N,44,37^FDImported & Marketed by:^FS\n^FO16,572^A0N,44,37^FDSample Electronics Pvt Ltd,^FS\n^FO16,629^A0N,44,37^FDB-45, Sector 63, Noida,^FS\n^FO16,685^A0N,44,37^FDUP-201301^FS\n^FO16,742^A0N,44,37^FDConsumer Care: Manager,^FS\n^FO16,799^A0N,44,37^FDat above address^FS\n^FO16,856^A0N,44,37^FDPh: 0120-4000000^FS\n^FO16,913^A0N,44,37^FDcare@sampleelec.in^FS\n^BY3^FO16,978^BEN,80,Y,N^FD890123456789^FS\n^PQ1\n^XZ\n", "ZPL_300": "^XA\n^CI28\n^PW1181\n^LL1772\n^LH0,0\n^FO24,24^A0N,82,69^FDBLUETOOTH SPEAKER^FS\n^FO24,129^A0N,66,56^FDModel: X5^FS\n^FO24,213^A0N,74,62^FDNet Quantity: 1 Unit^FS\n^FO24,307^A0N,82,69^FDMRP Rs. 2,499.00^FS\n^FO24,412^A0N,66,56^FD(incl. of all taxes)^FS\n^FO24,496^A0N,66,56^FDMonth & Year of Mfg: 09/2026^FS\n^FO24,580^A0N,66,56^FDDimensions: 18 x 7 x 7 cm^FS\n^FO24,664^A0N,66,56^FDCountry of Origin: China^FS\n^FO24,753^GB1134,4,4^FS\n^FO24,761^A0N,66,56^FDImported & Marketed by:^FS\n^FO24,845^A0N,66,56^FDSample Electronics Pvt Ltd,^FS\n^FO24,929^A0N,66,56^FDB-45, Sector 63, Noida,^FS\n^FO24,1013^A0N,66,56^FDUP-201301^FS\n^FO24,1097^A0N,66,56^FDConsumer Care: Manager,^FS\n^FO24,1181^A0N,66,56^FDat above address^FS\n^FO24,1265^A0N,66,56^FDPh: 0120-4000000^FS\n^FO24,1349^A0N,66,56^FDcare@sampleelec.in^FS\n^BY4^FO24,1445^BEN,118,Y,N^FD890123456789^FS\n^PQ1\n^XZ\n", "EPL2_203": "\nN\nq799\nQ1199,24\nR0,0\nS3\nD8\nZT\nA16,16,0,1,3,5,N,\"BLUETOOTH SPEAKER\"\nA16,87,0,1,2,4,N,\"Model: X5\"\nA16,144,0,1,3,5,N,\"Net Quantity: 1 Unit\"\nA16,208,0,1,3,5,N,\"MRP Rs. 2,499.00\"\nA16,279,0,1,2,4,N,\"(incl. of all taxes)\"\nA16,336,0,1,2,4,N,\"Month & Year of Mfg: 09/2026\"\nA16,393,0,1,2,4,N,\"Dimensions: 18 x 7 x 7 cm\"\nA16,449,0,1,2,4,N,\"Country of Origin: China\"\nLO16,509,767,2\nA16,515,0,1,2,4,N,\"Imported & Marketed by:\"\nA16,572,0,1,2,4,N,\"Sample Electronics Pvt Ltd,\"\nA16,629,0,1,2,4,N,\"B-45, Sector 63, Noida,\"\nA16,685,0,1,2,4,N,\"UP-201301\"\nA16,742,0,1,2,4,N,\"Consumer Care: Manager,\"\nA16,799,0,1,2,4,N,\"at above address\"\nA16,856,0,1,2,4,N,\"Ph: 0120-4000000\"\nA16,913,0,1,2,4,N,\"care@sampleelec.in\"\nB16,978,0,E30,3,3,80,B,\"890123456789\"\nP1\n", "PGL_203": "~CREATE;LM04;1199\nSCALE;DOT;203;203\nALPHA\nPOINT;16;16;20;0;*BLUETOOTH SPEAKER*\nPOINT;87;16;16;0;*Model: X5*\nPOINT;144;16;18;0;*Net Quantity: 1 Unit*\nPOINT;208;16;20;0;*MRP Rs. 2,499.00*\nPOINT;279;16;16;0;*(incl. of all taxes)*\nPOINT;336;16;16;0;*Month & Year of Mfg: 09/2026*\nPOINT;393;16;16;0;*Dimensions: 18 x 7 x 7 cm*\nPOINT;449;16;16;0;*Country of Origin: China*\nPOINT;515;16;16;0;*Imported & Marketed by:*\nPOINT;572;16;16;0;*Sample Electronics Pvt Ltd,*\nPOINT;629;16;16;0;*B-45, Sector 63, Noida,*\nPOINT;685;16;16;0;*UP-201301*\nPOINT;742;16;16;0;*Consumer Care: Manager,*\nPOINT;799;16;16;0;*at above address*\nPOINT;856;16;16;0;*Ph: 0120-4000000*\nPOINT;913;16;16;0;*care@sampleelec.in*\nSTOP\nHORZ\n2;509;16;783\nSTOP\nBARCODE\nEAN13;H4;978;16\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM04;1\n~NORMAL\n", "PGL_300": "~CREATE;LM04;1772\nSCALE;DOT;300;300\nALPHA\nPOINT;24;24;20;0;*BLUETOOTH SPEAKER*\nPOINT;129;24;16;0;*Model: X5*\nPOINT;213;24;18;0;*Net Quantity: 1 Unit*\nPOINT;307;24;20;0;*MRP Rs. 2,499.00*\nPOINT;412;24;16;0;*(incl. of all taxes)*\nPOINT;496;24;16;0;*Month & Year of Mfg: 09/2026*\nPOINT;580;24;16;0;*Dimensions: 18 x 7 x 7 cm*\nPOINT;664;24;16;0;*Country of Origin: China*\nPOINT;761;24;16;0;*Imported & Marketed by:*\nPOINT;845;24;16;0;*Sample Electronics Pvt Ltd,*\nPOINT;929;24;16;0;*B-45, Sector 63, Noida,*\nPOINT;1013;24;16;0;*UP-201301*\nPOINT;1097;24;16;0;*Consumer Care: Manager,*\nPOINT;1181;24;16;0;*at above address*\nPOINT;1265;24;16;0;*Ph: 0120-4000000*\nPOINT;1349;24;16;0;*care@sampleelec.in*\nSTOP\nHORZ\n4;753;24;1158\nSTOP\nBARCODE\nEAN13;H4;1445;24\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM04;1\n~NORMAL\n", "TSPL_600": "SIZE 100 mm, 150 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 47,47,\"0\",0,19.7,19.7,\"BLUETOOTH SPEAKER\"\nTEXT 47,257,\"0\",0,15.7,15.7,\"Model: X5\"\nTEXT 47,425,\"0\",0,17.7,17.7,\"Net Quantity: 1 Unit\"\nTEXT 47,614,\"0\",0,19.7,19.7,\"MRP Rs. 2,499.00\"\nTEXT 47,824,\"0\",0,15.7,15.7,\"(incl. of all taxes)\"\nTEXT 47,992,\"0\",0,15.7,15.7,\"Month & Year of Mfg: 09/2026\"\nTEXT 47,1160,\"0\",0,15.7,15.7,\"Dimensions: 18 x 7 x 7 cm\"\nTEXT 47,1328,\"0\",0,15.7,15.7,\"Country of Origin: China\"\nBAR 47,1506,2268,7\nTEXT 47,1522,\"0\",0,15.7,15.7,\"Imported & Marketed by:\"\nTEXT 47,1690,\"0\",0,15.7,15.7,\"Sample Electronics Pvt Ltd,\"\nTEXT 47,1858,\"0\",0,15.7,15.7,\"B-45, Sector 63, Noida,\"\nTEXT 47,2026,\"0\",0,15.7,15.7,\"UP-201301\"\nTEXT 47,2194,\"0\",0,15.7,15.7,\"Consumer Care: Manager,\"\nTEXT 47,2362,\"0\",0,15.7,15.7,\"at above address\"\nTEXT 47,2530,\"0\",0,15.7,15.7,\"Ph: 0120-4000000\"\nTEXT 47,2698,\"0\",0,15.7,15.7,\"care@sampleelec.in\"\nBARCODE 47,2890,\"EAN13\",236,1,0,9,9,\"890123456789\"\nPRINT 1,1\n", "ZPL_600": "^XA\n^CI28\n^PW2362\n^LL3543\n^LH0,0\n^FO47,47^A0N,164,139^FDBLUETOOTH SPEAKER^FS\n^FO47,257^A0N,131,111^FDModel: X5^FS\n^FO47,425^A0N,148,125^FDNet Quantity: 1 Unit^FS\n^FO47,614^A0N,164,139^FDMRP Rs. 2,499.00^FS\n^FO47,824^A0N,131,111^FD(incl. of all taxes)^FS\n^FO47,992^A0N,131,111^FDMonth & Year of Mfg: 09/2026^FS\n^FO47,1160^A0N,131,111^FDDimensions: 18 x 7 x 7 cm^FS\n^FO47,1328^A0N,131,111^FDCountry of Origin: China^FS\n^FO47,1506^GB2268,7,7^FS\n^FO47,1522^A0N,131,111^FDImported & Marketed by:^FS\n^FO47,1690^A0N,131,111^FDSample Electronics Pvt Ltd,^FS\n^FO47,1858^A0N,131,111^FDB-45, Sector 63, Noida,^FS\n^FO47,2026^A0N,131,111^FDUP-201301^FS\n^FO47,2194^A0N,131,111^FDConsumer Care: Manager,^FS\n^FO47,2362^A0N,131,111^FDat above address^FS\n^FO47,2530^A0N,131,111^FDPh: 0120-4000000^FS\n^FO47,2698^A0N,131,111^FDcare@sampleelec.in^FS\n^BY9^FO47,2890^BEN,236,Y,N^FD890123456789^FS\n^PQ1\n^XZ\n", "PGL_600": "~CREATE;LM04;3543\nSCALE;DOT;600;600\nALPHA\nPOINT;47;47;20;0;*BLUETOOTH SPEAKER*\nPOINT;257;47;16;0;*Model: X5*\nPOINT;425;47;18;0;*Net Quantity: 1 Unit*\nPOINT;614;47;20;0;*MRP Rs. 2,499.00*\nPOINT;824;47;16;0;*(incl. of all taxes)*\nPOINT;992;47;16;0;*Month & Year of Mfg: 09/2026*\nPOINT;1160;47;16;0;*Dimensions: 18 x 7 x 7 cm*\nPOINT;1328;47;16;0;*Country of Origin: China*\nPOINT;1522;47;16;0;*Imported & Marketed by:*\nPOINT;1690;47;16;0;*Sample Electronics Pvt Ltd,*\nPOINT;1858;47;16;0;*B-45, Sector 63, Noida,*\nPOINT;2026;47;16;0;*UP-201301*\nPOINT;2194;47;16;0;*Consumer Care: Manager,*\nPOINT;2362;47;16;0;*at above address*\nPOINT;2530;47;16;0;*Ph: 0120-4000000*\nPOINT;2698;47;16;0;*care@sampleelec.in*\nSTOP\nHORZ\n7;1506;47;2315\nSTOP\nBARCODE\nEAN13;H4;2890;47\n*890123456789*\nPDF\nSTOP\nEND\n~EXECUTE;LM04;1\n~NORMAL\n"}, "checklist": [["Name and address of importer", 1, "Rule 6(1)(a)", ""], ["Country of origin", 1, "Rule 6(1)(aa)", "China"], ["Common or generic name", 1, "Rule 6(1)(b)", ""], ["Net quantity by number", 1, "Rule 6(1)(c), 13(5)", "1 Unit"], ["Month and year of manufacture", 1, "Rule 6(1)(d)", ""], ["MRP inclusive of all taxes", 1, "Rule 6(1)(e)", ""], ["Unit sale price", 0, "Rule 6(11)", "single unit: equals MRP, not required"], ["Dimensions of the commodity", 1, "Rule 6(1)(f)", ""], ["Consumer care name, address, phone, email", 1, "Rule 6(2)", ""], ["Letters at least 4 mm (panel 500\u20132,500 cm\u00b2)", 1, "Rule 7, Table I", ""]]}, {"code": "LM-05", "w": 100, "h": 150, "short": "Wholesale carton label under Rule 24 with GS1-128 carton code.", "hasDM": false, "files": {"TSPL_203": "SIZE 100 mm, 150 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 16,16,\"0\",0,19.7,19.7,\"WHOLESALE PACKAGE\"\nBAR 16,90,767,2\nTEXT 16,96,\"0\",0,15.7,15.7,\"Commodity:\"\nTEXT 16,153,\"0\",0,17.7,17.7,\"Basmati Rice Premium 500 g\"\nTEXT 16,217,\"0\",0,19.7,19.7,\"Contains: 24 retail packs\"\nTEXT 16,288,\"0\",0,15.7,15.7,\"Batch: B2611A   Mfg: 11/2026\"\nBAR 16,348,767,2\nTEXT 16,353,\"0\",0,15.7,15.7,\"Mfd & Pkd by:\"\nTEXT 16,410,\"0\",0,15.7,15.7,\"Sample Foods Pvt Ltd,\"\nTEXT 16,467,\"0\",0,15.7,15.7,\"Plot 12, Okhla Phase-II,\"\nTEXT 16,524,\"0\",0,15.7,15.7,\"New Delhi-110020\"\nBAR 16,584,767,2\nTEXT 16,589,\"0\",0,15.7,15.7,\"Carton No: 0001 / 0120\"\nBARCODE 16,662,\"EAN128\",200,2,0,3,3,\"01189012345678973024\"\nPRINT 1,1\n", "TSPL_300": "SIZE 100 mm, 150 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 24,24,\"0\",0,19.7,19.7,\"WHOLESALE PACKAGE\"\nBAR 24,133,1134,4\nTEXT 24,142,\"0\",0,15.7,15.7,\"Commodity:\"\nTEXT 24,226,\"0\",0,17.7,17.7,\"Basmati Rice Premium 500 g\"\nTEXT 24,320,\"0\",0,19.7,19.7,\"Contains: 24 retail packs\"\nTEXT 24,425,\"0\",0,15.7,15.7,\"Batch: B2611A   Mfg: 11/2026\"\nBAR 24,514,1134,4\nTEXT 24,522,\"0\",0,15.7,15.7,\"Mfd & Pkd by:\"\nTEXT 24,606,\"0\",0,15.7,15.7,\"Sample Foods Pvt Ltd,\"\nTEXT 24,690,\"0\",0,15.7,15.7,\"Plot 12, Okhla Phase-II,\"\nTEXT 24,774,\"0\",0,15.7,15.7,\"New Delhi-110020\"\nBAR 24,863,1134,4\nTEXT 24,871,\"0\",0,15.7,15.7,\"Carton No: 0001 / 0120\"\nBARCODE 24,979,\"EAN128\",295,2,0,4,4,\"01189012345678973024\"\nPRINT 1,1\n", "ZPL_203": "^XA\n^CI28\n^PW799\n^LL1199\n^LH0,0\n^FO16,16^A0N,56,47^FDWHOLESALE PACKAGE^FS\n^FO16,90^GB767,2,2^FS\n^FO16,96^A0N,44,37^FDCommodity:^FS\n^FO16,153^A0N,50,42^FDBasmati Rice Premium 500 g^FS\n^FO16,217^A0N,56,47^FDContains: 24 retail packs^FS\n^FO16,288^A0N,44,37^FDBatch: B2611A   Mfg: 11/2026^FS\n^FO16,348^GB767,2,2^FS\n^FO16,353^A0N,44,37^FDMfd & Pkd by:^FS\n^FO16,410^A0N,44,37^FDSample Foods Pvt Ltd,^FS\n^FO16,467^A0N,44,37^FDPlot 12, Okhla Phase-II,^FS\n^FO16,524^A0N,44,37^FDNew Delhi-110020^FS\n^FO16,584^GB767,2,2^FS\n^FO16,589^A0N,44,37^FDCarton No: 0001 / 0120^FS\n^BY3^FO16,662^BCN,200,Y,N,N,D^FD(01)18901234567897(30)24^FS\n^PQ1\n^XZ\n", "ZPL_300": "^XA\n^CI28\n^PW1181\n^LL1772\n^LH0,0\n^FO24,24^A0N,82,69^FDWHOLESALE PACKAGE^FS\n^FO24,133^GB1134,4,4^FS\n^FO24,142^A0N,66,56^FDCommodity:^FS\n^FO24,226^A0N,74,62^FDBasmati Rice Premium 500 g^FS\n^FO24,320^A0N,82,69^FDContains: 24 retail packs^FS\n^FO24,425^A0N,66,56^FDBatch: B2611A   Mfg: 11/2026^FS\n^FO24,514^GB1134,4,4^FS\n^FO24,522^A0N,66,56^FDMfd & Pkd by:^FS\n^FO24,606^A0N,66,56^FDSample Foods Pvt Ltd,^FS\n^FO24,690^A0N,66,56^FDPlot 12, Okhla Phase-II,^FS\n^FO24,774^A0N,66,56^FDNew Delhi-110020^FS\n^FO24,863^GB1134,4,4^FS\n^FO24,871^A0N,66,56^FDCarton No: 0001 / 0120^FS\n^BY4^FO24,979^BCN,295,Y,N,N,D^FD(01)18901234567897(30)24^FS\n^PQ1\n^XZ\n", "EPL2_203": "\nN\nq799\nQ1199,24\nR0,0\nS3\nD8\nZT\nA16,16,0,1,3,5,N,\"WHOLESALE PACKAGE\"\nLO16,90,767,2\nA16,96,0,1,2,4,N,\"Commodity:\"\nA16,153,0,1,3,5,N,\"Basmati Rice Premium 500 g\"\nA16,217,0,1,3,5,N,\"Contains: 24 retail packs\"\nA16,288,0,1,2,4,N,\"Batch: B2611A   Mfg: 11/2026\"\nLO16,348,767,2\nA16,353,0,1,2,4,N,\"Mfd & Pkd by:\"\nA16,410,0,1,2,4,N,\"Sample Foods Pvt Ltd,\"\nA16,467,0,1,2,4,N,\"Plot 12, Okhla Phase-II,\"\nA16,524,0,1,2,4,N,\"New Delhi-110020\"\nLO16,584,767,2\nA16,589,0,1,2,4,N,\"Carton No: 0001 / 0120\"\nB16,662,0,1E,3,3,200,B,\"01189012345678973024\"\nP1\n", "PGL_203": "~CREATE;LM05;1199\nSCALE;DOT;203;203\nALPHA\nPOINT;16;16;20;0;*WHOLESALE PACKAGE*\nPOINT;96;16;16;0;*Commodity:*\nPOINT;153;16;18;0;*Basmati Rice Premium 500 g*\nPOINT;217;16;20;0;*Contains: 24 retail packs*\nPOINT;288;16;16;0;*Batch: B2611A   Mfg: 11/2026*\nPOINT;353;16;16;0;*Mfd & Pkd by:*\nPOINT;410;16;16;0;*Sample Foods Pvt Ltd,*\nPOINT;467;16;16;0;*Plot 12, Okhla Phase-II,*\nPOINT;524;16;16;0;*New Delhi-110020*\nPOINT;589;16;16;0;*Carton No: 0001 / 0120*\nSTOP\nHORZ\n2;90;16;783\n2;348;16;783\n2;584;16;783\nSTOP\nBARCODE\nUCC-128;H9.18;662;16\n*01189012345678973024*\nPDF\nSTOP\nEND\n~EXECUTE;LM05;1\n~NORMAL\n", "PGL_300": "~CREATE;LM05;1772\nSCALE;DOT;300;300\nALPHA\nPOINT;24;24;20;0;*WHOLESALE PACKAGE*\nPOINT;142;24;16;0;*Commodity:*\nPOINT;226;24;18;0;*Basmati Rice Premium 500 g*\nPOINT;320;24;20;0;*Contains: 24 retail packs*\nPOINT;425;24;16;0;*Batch: B2611A   Mfg: 11/2026*\nPOINT;522;24;16;0;*Mfd & Pkd by:*\nPOINT;606;24;16;0;*Sample Foods Pvt Ltd,*\nPOINT;690;24;16;0;*Plot 12, Okhla Phase-II,*\nPOINT;774;24;16;0;*New Delhi-110020*\nPOINT;871;24;16;0;*Carton No: 0001 / 0120*\nSTOP\nHORZ\n4;133;24;1158\n4;514;24;1158\n4;863;24;1158\nSTOP\nBARCODE\nUCC-128;H9.25;979;24\n*01189012345678973024*\nPDF\nSTOP\nEND\n~EXECUTE;LM05;1\n~NORMAL\n", "TSPL_600": "SIZE 100 mm, 150 mm\nGAP 3 mm, 0 mm\nDIRECTION 1,0\nREFERENCE 0,0\nCODEPAGE 1252\nDENSITY 8\nSPEED 4\nCLS\nTEXT 47,47,\"0\",0,19.7,19.7,\"WHOLESALE PACKAGE\"\nBAR 47,267,2268,7\nTEXT 47,283,\"0\",0,15.7,15.7,\"Commodity:\"\nTEXT 47,451,\"0\",0,17.7,17.7,\"Basmati Rice Premium 500 g\"\nTEXT 47,640,\"0\",0,19.7,19.7,\"Contains: 24 retail packs\"\nTEXT 47,850,\"0\",0,15.7,15.7,\"Batch: B2611A   Mfg: 11/2026\"\nBAR 47,1028,2268,7\nTEXT 47,1044,\"0\",0,15.7,15.7,\"Mfd & Pkd by:\"\nTEXT 47,1212,\"0\",0,15.7,15.7,\"Sample Foods Pvt Ltd,\"\nTEXT 47,1380,\"0\",0,15.7,15.7,\"Plot 12, Okhla Phase-II,\"\nTEXT 47,1548,\"0\",0,15.7,15.7,\"New Delhi-110020\"\nBAR 47,1725,2268,7\nTEXT 47,1742,\"0\",0,15.7,15.7,\"Carton No: 0001 / 0120\"\nBARCODE 47,1957,\"EAN128\",591,2,0,9,9,\"01189012345678973024\"\nPRINT 1,1\n", "ZPL_600": "^XA\n^CI28\n^PW2362\n^LL3543\n^LH0,0\n^FO47,47^A0N,164,139^FDWHOLESALE PACKAGE^FS\n^FO47,267^GB2268,7,7^FS\n^FO47,283^A0N,131,111^FDCommodity:^FS\n^FO47,451^A0N,148,125^FDBasmati Rice Premium 500 g^FS\n^FO47,640^A0N,164,139^FDContains: 24 retail packs^FS\n^FO47,850^A0N,131,111^FDBatch: B2611A   Mfg: 11/2026^FS\n^FO47,1028^GB2268,7,7^FS\n^FO47,1044^A0N,131,111^FDMfd & Pkd by:^FS\n^FO47,1212^A0N,131,111^FDSample Foods Pvt Ltd,^FS\n^FO47,1380^A0N,131,111^FDPlot 12, Okhla Phase-II,^FS\n^FO47,1548^A0N,131,111^FDNew Delhi-110020^FS\n^FO47,1725^GB2268,7,7^FS\n^FO47,1742^A0N,131,111^FDCarton No: 0001 / 0120^FS\n^BY9^FO47,1957^BCN,591,Y,N,N,D^FD(01)18901234567897(30)24^FS\n^PQ1\n^XZ\n", "PGL_600": "~CREATE;LM05;3543\nSCALE;DOT;600;600\nALPHA\nPOINT;47;47;20;0;*WHOLESALE PACKAGE*\nPOINT;283;47;16;0;*Commodity:*\nPOINT;451;47;18;0;*Basmati Rice Premium 500 g*\nPOINT;640;47;20;0;*Contains: 24 retail packs*\nPOINT;850;47;16;0;*Batch: B2611A   Mfg: 11/2026*\nPOINT;1044;47;16;0;*Mfd & Pkd by:*\nPOINT;1212;47;16;0;*Sample Foods Pvt Ltd,*\nPOINT;1380;47;16;0;*Plot 12, Okhla Phase-II,*\nPOINT;1548;47;16;0;*New Delhi-110020*\nPOINT;1742;47;16;0;*Carton No: 0001 / 0120*\nSTOP\nHORZ\n7;267;47;2315\n7;1028;47;2315\n7;1725;47;2315\nSTOP\nBARCODE\nUCC-128;H9.51;1957;47\n*01189012345678973024*\nPDF\nSTOP\nEND\n~EXECUTE;LM05;1\n~NORMAL\n"}, "checklist": [["Name and address of manufacturer / packer", 1, "Rule 24(a)", ""], ["Identity of the commodity", 1, "Rule 24(b)", ""], ["Number of retail packages inside", 1, "Rule 24(c)", "24 packs"], ["Carton GTIN and count in GS1-128", 1, "GS1", "optional, for scanning"], ["Retail declarations on each inner pack", 0, "Rule 6", "printed on the retail packs"]]}];
+
+/* ---------------- GS1 helpers ---------------- */
+const FIXED = { "00":18,"01":14,"02":14,"11":6,"12":6,"13":6,"15":6,"16":6,"17":6,"20":2 };
+function gs1Paren(raw) {
+  // raw: element string with optional leading FNC1 (\x1d) and \x1d separators
+  let s = raw.replace(/^\x1d/, ""), out = "", i = 0;
+  while (i < s.length) {
+    if (s[i] === "\x1d") { i++; continue; }
+    const ai2 = s.substr(i, 2);
+    if (FIXED[ai2]) { out += "(" + ai2 + ")" + s.substr(i + 2, FIXED[ai2]); i += 2 + FIXED[ai2]; continue; }
+    let ai = /^(10|21|22|30|37|90|91|92|93|94|95|96|97|98|99)/.test(s.substr(i)) ? ai2 : s.substr(i, s.substr(i,1) === "4" ? 3 : 4);
+    let j = s.indexOf("\x1d", i + ai.length); if (j < 0) j = s.length;
+    out += "(" + ai + ")" + s.slice(i + ai.length, j); i = j;
+  }
+  return out;
+}
+function ean13Full(d) {
+  d = d.replace(/\D/g, "").slice(0, 12);
+  if (d.length < 12) return d;
+  let sum = 0; for (let i = 0; i < 12; i++) sum += (+d[i]) * (i % 2 ? 3 : 1);
+  return d + ((10 - sum % 10) % 10);
+}
+
+/* ---------------- parsers -> common model ---------------- */
+function detect(t) {
+  if (/\^XA/i.test(t)) return "ZPL";
+  if (/~CREATE;/i.test(t)) return "PGL";
+  if (/^\s*SIZE\s+[\d.]/mi.test(t) || /^\s*(CLS|PRINT\s+\d)/mi.test(t)) return "TSPL";
+  if (/^\s*q\d+/m.test(t) || /^\s*A\d+,\d+,\d/m.test(t)) return "EPL2";
+  return "UNKNOWN";
+}
+function csv(str) { // split by commas outside quotes
+  const out = []; let cur = "", q = false;
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (c === '"' ) { q = !q; cur += c; continue; }
+    if (c === "," && !q) { out.push(cur.trim()); cur = ""; continue; }
+    cur += c;
+  }
+  out.push(cur.trim()); return out;
+}
+const unq = s => (s || "").replace(/^"|"$/g, "");
+const TSPL_BMP = { 203: {1:[8,12],2:[12,20],3:[16,24],4:[24,32],5:[32,48],6:[14,19],7:[21,27],8:[14,25]},
+                   300: {1:[12,20],2:[16,28],3:[24,32],4:[32,48],5:[48,64],6:[19,27],7:[27,39],8:[19,35]},
+                   600: {1:[24,40],2:[32,56],3:[48,64],4:[64,96],5:[96,128],6:[38,54],7:[54,78],8:[38,70]} };
+
+function parseTSPL(t, dpi) {
+  const m = { items: [], warn: [], dpi, w: 0, h: 0 };
+  const dpmm = dpi / 25.4;
+  for (const raw of t.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) continue;
+    const sp = line.indexOf(" "); const cmd = (sp < 0 ? line : line.slice(0, sp)).toUpperCase(); const a = sp < 0 ? [] : csv(line.slice(sp + 1));
+    if (cmd === "SIZE") {
+      const conv = v => /mm/i.test(v) ? parseFloat(v) * dpmm : (/dot/i.test(v) ? parseFloat(v) : parseFloat(v) * dpi);
+      m.w = conv(a[0]); m.h = conv(a[1]);
+    } else if (cmd === "TEXT") {
+      const font = unq(a[2]); const xm = parseFloat(a[4]), ym = parseFloat(a[5]); const s = unq(a[a.length - 1]).replace(/\\\["\]/g, '"');
+      if (font === "0" || /\.TTF$/i.test(font)) m.items.push({ k: "text", x: +a[0], y: +a[1], em: ym / 72 * dpi, s, cond: true });
+      else { const f = (TSPL_BMP[dpi] || TSPL_BMP[203])[font] || [12, 20]; m.items.push({ k: "text", x: +a[0], y: +a[1], em: f[1] * ym, cw: f[0] * xm, s, mono: true }); }
+    } else if (cmd === "BAR") m.items.push({ k: "rect", x: +a[0], y: +a[1], w: +a[2], h: +a[3] });
+    else if (cmd === "BOX") { const [x, y, x2, y2, th] = a.map(Number); boxRects(m, x, y, x2 - x, y2 - y, th || 1); }
+    else if (cmd === "BARCODE") {
+      const type = unq(a[2]).toUpperCase(), data = unq(a[a.length - 1]);
+      const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[3], mod: +a[6], hri: a[4] !== "0" };
+      if (type.startsWith("EAN13")) Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
+      else if (type.startsWith("EAN128")) { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
+      else if (type === "128" || type === "128M") Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+      else { m.warn.push("Barcode type " + type + " not previewed"); continue; }
+      m.items.push(bc);
+    } else if (cmd === "DMATRIX") {
+      let esc = null, mod = 4; for (const p of a.slice(4, -1)) { if (/^c\d+/i.test(p)) esc = String.fromCharCode(+p.slice(1)); if (/^x\d+/i.test(p)) mod = +p.slice(1); }
+      let data = unq(a[a.length - 1]); let gs1 = false;
+      if (esc && data.startsWith(esc + "1")) { gs1 = true; data = data.split(esc + "1").join("\x1d"); }
+      m.items.push({ k: "dm", x: +a[0], y: +a[1], mod, gs1, text: gs1 ? gs1Paren(data) : data });
+    } else if (cmd === "QRCODE") {
+      m.items.push({ k: "qr", x: +a[0], y: +a[1], mod: +a[3] || 4, text: unq(a[a.length - 1]) });
+    } else if (!["GAP","DIRECTION","REFERENCE","CODEPAGE","DENSITY","SPEED","CLS","PRINT","OFFSET","SET","SHIFT","BLINE","CODEPAGE"].includes(cmd)) {
+      m.warn.push("TSPL command not previewed: " + cmd);
+    }
+  }
+  return m;
+}
+function boxRects(m, x, y, w, h, t) {
+  m.items.push({ k: "rect", x, y, w, h: t }, { k: "rect", x, y: y + h - t, w, h: t }, { k: "rect", x, y, w: t, h }, { k: "rect", x: x + w - t, y, w: t, h });
+}
+
+function parseZPL(t, dpi) {
+  const m = { items: [], warn: [], dpi, w: 0, h: 0 };
+  let fo = [0, 0], lh = [0, 0], font = { h: 30, w: 0 }, by = 2, field = null, cf = { h: 30 };
+  const toks = t.replace(/\r?\n/g, "").split("^").slice(1);
+  for (const tok of toks) {
+    const cmd = tok.slice(0, 2).toUpperCase(), rest = tok.slice(2);
+    const a = rest.split(",");
+    switch (cmd) {
+      case "XA": case "XZ": case "CI": case "PQ": case "FS": case "MM": case "PR": case "MD": case "PO": break;
+      case "PW": m.w = +a[0]; break;
+      case "LL": m.h = +a[0]; break;
+      case "LH": lh = [+a[0] || 0, +a[1] || 0]; break;
+      case "FO": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1]]; field = null; break;
+      case "FT": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1] - font.h]; field = null; break;
+      case "CF": cf = { h: +a[1] || 30 }; font = { h: cf.h, w: 0 }; break;
+      case "BY": by = +a[0] || 2; break;
+      case "GB": { const w = +a[0] || 1, h = +a[1] || 1, th = +a[2] || 1;
+        if (th >= Math.min(w, h)) m.items.push({ k: "rect", x: fo[0], y: fo[1], w, h }); else boxRects(m, fo[0], fo[1], w, h, th); break; }
+      case "BE": field = { kind: "ean13", h: +a[1] || 100, hri: a[2] !== "N" }; break;
+      case "BC": field = { kind: "c128", h: +a[1] || 100, hri: a[2] !== "N", mode: a[5] }; break;
+      case "BX": field = { kind: "dm", mod: +a[1] || 4, esc: a[6] || "~" }; break;
+      case "BQ": field = { kind: "qr", mod: +a[2] || 4 }; break;
+      case "FD": {
+        const data = rest;
+        if (!field) {
+          if (/^A/i.test(tok) === false) {}
+          m.items.push({ k: "text", x: fo[0], y: fo[1], em: font.h, s: data, cond: true });
+        } else if (field.kind === "ean13") m.items.push({ k: "bar", x: fo[0], y: fo[1], h: field.h, mod: by, bcid: "ean13", text: data, hri: field.hri, hriText: ean13Full(data) });
+        else if (field.kind === "c128") {
+          const gs1 = field.mode === "D" || data.startsWith(">;>8");
+          const txt = field.mode === "D" ? data : (gs1 ? gs1Paren("\x1d" + data.replace(/^>;>8/, "")) : data);
+          m.items.push({ k: "bar", x: fo[0], y: fo[1], h: field.h, mod: by, bcid: gs1 ? "gs1-128" : "code128", text: txt, hri: field.hri, hriText: txt });
+        } else if (field.kind === "dm") {
+          let d = data, gs1 = false; if (d.startsWith(field.esc + "1")) { gs1 = true; d = d.split(field.esc + "1").join("\x1d"); }
+          m.items.push({ k: "dm", x: fo[0], y: fo[1], mod: field.mod, gs1, text: gs1 ? gs1Paren(d) : d });
+        } else if (field.kind === "qr") m.items.push({ k: "qr", x: fo[0], y: fo[1], mod: field.mod, text: data.replace(/^[LMQH]A,/, "") });
+        field = null; break;
+      }
+      default:
+        if (cmd[0] === "A") { font = { h: +a[1] || cf.h, w: +a[2] || 0 }; }
+        else m.warn.push("ZPL command not previewed: ^" + cmd);
+    }
+  }
+  return m;
+}
+
+const EPL_F = { 1: [8, 12], 2: [10, 16], 3: [12, 20], 4: [14, 24], 5: [32, 48] };
+function parseEPL(t, dpi) {
+  const m = { items: [], warn: [], dpi, w: 0, h: 0 };
+  for (const raw of t.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line || line.startsWith(";")) continue;
+    if (/^q\d/.test(line)) m.w = +line.slice(1);
+    else if (/^Q\d/.test(line)) m.h = +line.slice(1).split(",")[0];
+    else if (/^A\d/.test(line)) { const a = csv(line.slice(1)); const f = EPL_F[+a[3]] || [10, 16];
+      m.items.push({ k: "text", x: +a[0], y: +a[1], em: f[1] * +a[5], cw: f[0] * +a[4], s: unq(a[a.length - 1]), mono: true }); }
+    else if (/^LO\d/.test(line)) { const a = line.slice(2).split(",").map(Number); m.items.push({ k: "rect", x: a[0], y: a[1], w: a[2], h: a[3] }); }
+    else if (/^B\d/.test(line)) { const a = csv(line.slice(1)); const type = a[3].toUpperCase(), data = unq(a[a.length - 1]);
+      const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[6], mod: +a[4], hri: a[7] === "B" };
+      if (type === "E30") Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
+      else if (type === "1E") { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
+      else if (type === "1") Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+      else { m.warn.push("EPL barcode type " + type + " not previewed"); continue; }
+      m.items.push(bc); }
+    else if (!/^(N|R\d|S\d|D\d|Z[TB]|P\d|I\d|O)/.test(line)) m.warn.push("EPL command not previewed: " + line.slice(0, 12));
+  }
+  return m;
+}
+
+function parsePGL(t, dpi, fallbackW) {
+  const m = { items: [], warn: [], dpi, w: 0, h: 0 };
+  const lines = t.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  let block = null, bc = null;
+  for (const line of lines) {
+    const up = line.toUpperCase();
+    if (up.startsWith("~CREATE")) { const p = line.split(";"); if (p[2] && /^\d+$/.test(p[2])) m.h = +p[2]; continue; }
+    if (up.startsWith("SCALE;DOT")) { const p = line.split(";"); if (p[2]) m.dpi = +p[2]; continue; }
+    if (up.startsWith("~")) continue;
+    if (["ALPHA", "HORZ", "VERT", "BOX"].includes(up)) { block = up; continue; }
+    if (up === "BARCODE") { block = "BARCODE"; bc = null; continue; }
+    if (up === "STOP") { if (bc) m.items.push(bc); block = null; bc = null; continue; }
+    if (up === "END") continue;
+    if (block === "ALPHA") {
+      const mm = line.match(/^(.*?)(\d+(?:\.\d+)?);(\d+(?:\.\d+)?);(\d+);(\d+);(.)(.*)\6$/);
+      if (!mm) { m.warn.push("PGL ALPHA line not previewed"); continue; }
+      const point = /POINT/i.test(mm[1]);
+      const ve = +mm[4];
+      const em = point ? ve / 72 * m.dpi : 12 * Math.max(1, ve);
+      m.items.push({ k: "text", x: +mm[3], y: +mm[2], em, s: mm[7], cond: true });
+    } else if (block === "HORZ") { const [lt, r, sc, ec] = line.split(";").map(Number); m.items.push({ k: "rect", x: sc, y: r, w: ec - sc, h: lt }); }
+    else if (block === "VERT") { const [lt, c, sr, er] = line.split(";").map(Number); m.items.push({ k: "rect", x: c, y: sr, w: lt, h: er - sr }); }
+    else if (block === "BOX") { const [lt, sr, sc, er, ec] = line.split(";").map(Number); boxRects(m, sc, sr, ec - sc, er - sr, lt); }
+    else if (block === "BARCODE") {
+      if (!bc) {
+        const p = line.split(";"); const type = p[0].toUpperCase();
+        const sr = +p[p.length - 2], sc = +p[p.length - 1];
+        const hp = p.find(x => /^H\d/i.test(x)); let h = 1.3 * m.dpi;
+        if (hp) { const [n, extra] = hp.slice(1).split("."); h = (+n / 10) * m.dpi + (+extra || 0); }
+        bc = { k: "bar", x: sc, y: sr, h, mod: Math.round(m.dpi / 203 * 3), hri: false, ptype: type };
+      } else if (/^PDF/i.test(line)) bc.hri = true;
+      else if (/^(.).*\1$/.test(line)) {
+        const data = line.slice(1, -1);
+        if (bc.ptype.startsWith("EAN13")) Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
+        else if (bc.ptype.startsWith("UCC-128") || bc.ptype.startsWith("EAN128")) { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
+        else if (bc.ptype.startsWith("C128")) Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+        else { m.warn.push("PGL barcode " + bc.ptype + " not previewed"); bc = null; }
+      }
+    }
+  }
+  m.w = fallbackW ? fallbackW * m.dpi / 25.4 : 0;
+  return m;
+}
+
+/* ---------------- renderer ---------------- */
+function bwipCanvas(opts) {
+  const c = document.createElement("canvas");
+  try { bwipjs.toCanvas(c, Object.assign({ scale: 1, includetext: false }, opts)); return c; }
+  catch (e) { return null; }
+}
+function dmModules(c) { // count runs along the top timing row
+  const ctx = c.getContext("2d"); const d = ctx.getImageData(0, 0, c.width, 1).data;
+  let runs = 0, prev = null;
+  for (let x = 0; x < c.width; x++) { const dark = d[x * 4 + 3] > 128 && d[x * 4] < 128; if (dark !== prev) { runs++; prev = dark; } }
+  return runs || 1;
+}
+
+function render(model, canvas, opts) {
+  const pad = 0;
+  let W = model.w, H = model.h;
+  if (!W || !H) { // derive from content
+    let mx = 0, my = 0; for (const it of model.items) { mx = Math.max(mx, (it.x || 0) + (it.w || 300)); my = Math.max(my, (it.y || 0) + (it.h || it.em || 40)); }
+    W = W || mx + 16; H = H || my + 16;
+  }
+  const maxW = Math.min(620, canvas.parentElement.parentElement.clientWidth - 70);
+  const maxH = 640;
+  const k = Math.min(maxW / W, maxH / H);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W * k * dpr); canvas.height = Math.round(H * k * dpr);
+  canvas.style.width = Math.round(W * k) + "px"; canvas.style.height = Math.round(H * k) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, 0, 0);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  if (opts.grid) {
+    const step = model.dpi / 25.4 * 5; ctx.strokeStyle = "rgba(210,78,18,.18)"; ctx.lineWidth = 1 / k;
+    for (let x = step; x < W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = step; y < H; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  }
+  ctx.fillStyle = "#000"; ctx.imageSmoothingEnabled = false;
+  for (const it of model.items) {
+    if (it.k === "text") {
+      ctx.textBaseline = "top";
+      if (it.mono) {
+        ctx.font = `600 ${it.em}px "IBM Plex Mono", monospace`;
+        const natural = ctx.measureText("M").width || 1;
+        ctx.save(); ctx.translate(it.x, it.y); ctx.scale((it.cw || natural) / natural * 0.98, 1);
+        let x = 0; for (const ch of it.s) { ctx.fillText(ch, x, it.em * 0.08); x += natural; }
+        ctx.restore();
+      } else {
+        ctx.font = `700 ${it.em}px "Roboto Condensed", "Arial Narrow", sans-serif`;
+        ctx.fillText(it.s, it.x, it.y + it.em * 0.04);
+      }
+    } else if (it.k === "rect") ctx.fillRect(it.x, it.y, it.w, it.h);
+    else if (it.k === "bar") {
+      const c = bwipCanvas({ bcid: it.bcid, text: it.text, height: 5 });
+      if (!c) { drawError(ctx, it, "barcode data invalid"); continue; }
+      const w = c.width * it.mod;
+      ctx.drawImage(c, 0, 0, c.width, Math.max(1, c.height - 1), it.x, it.y, w, it.h);
+      if (it.hri) {
+        const fs = Math.max(14, it.mod * 7.5);
+        ctx.font = `500 ${fs}px "IBM Plex Mono", monospace`; ctx.textBaseline = "top";
+        ctx.fillStyle = "#fff"; ctx.fillRect(it.x, it.y + it.h, w, fs * 1.2); ctx.fillStyle = "#000";
+        let txt = it.hriText;
+        if (it.bcid === "ean13" && txt.length === 13) txt = txt[0] + "  " + txt.slice(1, 7) + "  " + txt.slice(7);
+        ctx.textAlign = "center"; ctx.fillText(txt, it.x + w / 2, it.y + it.h + 2); ctx.textAlign = "left";
+      }
+    } else if (it.k === "dm" || it.k === "qr") {
+      const c = bwipCanvas({ bcid: it.k === "qr" ? "qrcode" : (it.gs1 ? "gs1datamatrix" : "datamatrix"), text: it.text });
+      if (!c) { drawError(ctx, it, "2D data invalid"); continue; }
+      const mods = it.k === "dm" ? dmModules(c) : c.width;
+      const s = mods * it.mod;
+      ctx.drawImage(c, it.x, it.y, s, s);
+    }
+  }
+  return { W, H };
+}
+function drawError(ctx, it, msg) {
+  ctx.save(); ctx.strokeStyle = "#d24e12"; ctx.lineWidth = 3; ctx.strokeRect(it.x, it.y, 200, 60);
+  ctx.fillStyle = "#d24e12"; ctx.font = "600 18px sans-serif"; ctx.fillText(msg, it.x + 6, it.y + 20); ctx.restore();
+}
+
+/* ---------------- UI ---------------- */
+const $ = id => document.getElementById(id);
+const state = { tpl: 0, lang: "TSPL", dpi: 203, edited: false };
+
+function fileKey() { return state.lang === "EPL2" ? "EPL2_203" : `${state.lang}_${state.dpi}`; }
+function currentTpl() { return DATA[state.tpl]; }
+
+function buildList() {
+  $("tplList").innerHTML = "";
+  DATA.forEach((t, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tpl"; b.setAttribute("aria-pressed", i === state.tpl);
+    b.innerHTML = `<b>${t.code}</b><span class="size">${t.w} × ${t.h} mm</span><small>${t.short}</small>`;
+    b.onclick = () => { state.tpl = i; state.edited = false; loadFile(); syncButtons(); };
+    $("tplList").appendChild(b);
+  });
+}
+function syncButtons() {
+  [...$("tplList").children].forEach((b, i) => b.setAttribute("aria-pressed", i === state.tpl));
+  [...$("langSeg").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === state.lang));
+  [...$("dpiSeg").children].forEach(b => { b.setAttribute("aria-pressed", +b.dataset.dpi === (state.lang === "EPL2" ? 203 : state.dpi)); b.disabled = state.lang === "EPL2" && b.dataset.dpi !== "203"; });
+}
+function loadFile() {
+  const t = currentTpl();
+  $("prn").value = t.files[fileKey()];
+  $("fileName").textContent = `${t.code}_${fileKey().replace("_", "_")}dpi.prn`.replace("PGL_", "PGL-Printronix_");
+  renderChecklist(); draw();
+}
+function renderChecklist() {
+  const t = currentTpl();
+  $("checklist").innerHTML = t.checklist.map(([item, ok, rule, note]) =>
+    `<li><span class="mark ${ok ? "ok" : "na"}" aria-label="${ok ? "Included" : "Not required"}">${ok ? "✓" : "–"}</span><span>${item}${note ? ` <span class="rule">· ${note}</span>` : ""}<br><span class="rule">${rule}</span></span></li>`).join("");
+}
+function draw() {
+  const text = $("prn").value;
+  const lang = detect(text);
+  const t = currentTpl();
+  const dpi = lang === "EPL2" ? 203 : state.dpi;
+  let model;
+  if (lang === "TSPL") model = parseTSPL(text, dpi);
+  else if (lang === "ZPL") model = parseZPL(text, dpi);
+  else if (lang === "EPL2") model = parseEPL(text, dpi);
+  else if (lang === "PGL") model = parsePGL(text, dpi, state.edited ? 0 : t.w);
+  else { model = { items: [], warn: ["Could not recognise the printer language. Paste TSPL, ZPL, EPL2 or PGL code."], dpi, w: 812, h: 406 }; }
+  if (typeof bwipjs === "undefined") model.warn.push("Barcode engine did not load; barcodes are not drawn.");
+  const { W, H } = render(model, $("label"), { grid: $("grid").checked });
+  const mmW = (W / model.dpi * 25.4).toFixed(1), mmH = (H / model.dpi * 25.4).toFixed(1);
+  const names = { TSPL: "TSPL (TSC)", ZPL: "ZPL (Zebra / Honeywell / Printronix / TSC)", EPL2: "EPL2 (Zebra / Eltron)", PGL: "PGL (Printronix)" };
+  $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang];
+  $("detectBadge").className = "detect" + (lang === "UNKNOWN" ? " bad" : "");
+  $("dimW").textContent = `${mmW} mm`; $("dimH").textContent = `${mmH} mm`;
+  const counts = { text: 0, bar: 0, dm: 0, rect: 0, qr: 0 }; model.items.forEach(i => counts[i.k]++);
+  $("facts").innerHTML = [
+    ["Detected", lang], ["Resolution", model.dpi + " dpi"], ["Size", `${Math.round(W)} × ${Math.round(H)} dots`],
+    ["Text fields", counts.text], ["Barcodes", counts.bar + counts.dm + counts.qr], ["Lines", counts.rect]
+  ].map(([a, b]) => `<span class="fact"><b>${a}:</b> ${b}</span>`).join("");
+  const notes = [...new Set(model.warn)];
+  if (!state.edited && (state.lang === "EPL2" || state.lang === "PGL") && t.hasDM) notes.unshift("This language file omits the GS1 DataMatrix. Use the TSPL or ZPL file to print the 2D code.");
+  $("notes").innerHTML = notes.map(n => `<div class="note">${n}</div>`).join("");
+}
+
+$("langSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.lang = b.dataset.lang; state.edited = false; syncButtons(); loadFile(); };
+$("dpiSeg").onclick = e => { const b = e.target.closest("button"); if (!b || b.disabled) return; state.dpi = +b.dataset.dpi; state.edited = false; syncButtons(); loadFile(); };
+$("grid").onchange = draw;
+let timer; $("prn").addEventListener("input", () => { state.edited = true; $("fileName").textContent = "Edited code"; clearTimeout(timer); timer = setTimeout(draw, 180); });
+$("resetBtn").onclick = () => { state.edited = false; loadFile(); };
+$("copyBtn").onclick = async () => { try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
+$("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("prn").value = await f.text(); state.edited = true; $("fileName").textContent = f.name;
+  const d = f.name.match(/(203|300)/); if (d) { state.dpi = +d[1]; syncButtons(); } draw(); };
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
+window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
+
+buildList(); syncButtons(); loadFile();
+if (document.fonts) document.fonts.ready.then(draw);
+</script>
+</body>
+</html>
