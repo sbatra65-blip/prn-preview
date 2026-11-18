@@ -991,7 +991,7 @@ function layoutPRN(L, lang, dpi) {
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
       const em = Math.max(8, Math.round(h * 1.05));
-      const sx = w ? Math.min(1.5, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
+      const sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
       if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)); out.push(`TEXT ${x},${y},"0",0,${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
       else if (lang === "ZPL") out.push(`^FO${x},${y}^A0N,${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`);
       else if (lang === "EPL2") {
@@ -1114,7 +1114,7 @@ $("aiFile").onchange = async e => {
 $("aiGo").onclick = async () => {
   if (!p2l.photo) return;
   const lang = segVal("aiLang"), dpi = lang === "EPL2" ? 203 : state.dpi, wmm = +$("aiW").value || 0, hmm = +$("aiH").value || 0;
-  $("aiGo").disabled = true; $("aiStatus").textContent = "Reading the label… this takes 10–30 seconds.";
+  $("aiGo").disabled = true; $("aiStatus").textContent = "Reading the label… this can take up to a minute.";
   try {
     const barcodes = await detectBarcodes(p2l.photo);
     const res = await fetch(P2L_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: downscale(p2l.photo), width_mm: wmm || null, height_mm: hmm || null, barcodes }) });
