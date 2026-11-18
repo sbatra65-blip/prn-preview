@@ -75,6 +75,10 @@ canvas#label { display: block; background: #fff; border-radius: 3px; box-shadow:
 .dim { position: absolute; font-family: var(--font-mono); font-size: 11px; color: #c7d2dc; white-space: nowrap; }
 .dim.w { top: -20px; left: 0; right: 0; text-align: center; }
 .dim.h { top: 0; bottom: 0; left: -26px; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; }
+.sizebar { border-top: 1px solid var(--line); padding-top: 10px; }
+.sizebar .lbl { font-size: 13px; font-weight: 600; color: var(--muted); }
+label.num { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+label.num input { width: 84px; font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-variant-numeric: tabular-nums; }
 .detect { margin-left: auto; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 8px; background: var(--good-soft); color: var(--good); }
 .detect.bad { background: var(--warn-soft); color: var(--warn); }
 .facts { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; }
@@ -154,6 +158,13 @@ table.t1 th { color: var(--muted); font-weight: 600; }
         </div>
         <label class="check"><input type="checkbox" id="grid"> 5 mm grid</label>
         <button type="button" class="btn" id="redrawBtn">Redraw</button>
+      </div>
+      <div class="controls sizebar">
+        <span class="lbl">Label size</span>
+        <label class="num" for="ovW">W <input type="number" id="ovW" min="5" max="300" step="0.5" placeholder="from file"> mm</label>
+        <label class="num" for="ovH">H <input type="number" id="ovH" min="5" max="500" step="0.5" placeholder="from file"> mm</label>
+        <button type="button" class="btn" id="fitBtn">Fit to content</button>
+        <button type="button" class="btn" id="sizeReset">Use file size</button>
         <span class="detect" id="detectBadge" role="status" aria-live="polite"></span>
       </div>
       <div class="stage">
@@ -490,6 +501,8 @@ function render(model, canvas, opts) {
     let mx = 0, my = 0; for (const it of model.items) { mx = Math.max(mx, (it.x || 0) + (it.w || 300)); my = Math.max(my, (it.y || 0) + (it.h || it.em || 40)); }
     W = W || mx + 16; H = H || my + 16;
   }
+  const ov = opts.ov || {}, dpmm = model.dpi / 25.4;
+  if (ov.w) W = ov.w * dpmm; if (ov.h) H = ov.h * dpmm;
   const view = opts.view || 0, swap = view === 90 || view === 270;
   const VW = swap ? H : W, VH = swap ? W : H;
   const maxW = Math.min(620, canvas.parentElement.parentElement.clientWidth - 70);
@@ -503,7 +516,17 @@ function render(model, canvas, opts) {
   if (view === 90) { ctx.translate(H, 0); ctx.rotate(Math.PI / 2); }
   else if (view === 180) { ctx.translate(W, H); ctx.rotate(Math.PI); }
   else if (view === 270) { ctx.translate(0, W); ctx.rotate(-Math.PI / 2); }
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+  ctx.translate(-(ov.ox || 0), -(ov.oy || 0));
+  const base = ctx.getTransform(), baseInv = base.inverse();
+  const bb = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  const track = (lw, lh, lx = 0, ly = 0) => { // local box -> label coords
+    const M = baseInv.multiply(ctx.getTransform());
+    for (const [u, v] of [[lx, ly], [lx + lw, ly], [lx, ly + lh], [lx + lw, ly + lh]]) {
+      const p = new DOMPoint(u, v).matrixTransform(M); const X = p.x + (ov.ox || 0), Y = p.y + (ov.oy || 0);
+      bb.x0 = Math.min(bb.x0, X); bb.y0 = Math.min(bb.y0, Y); bb.x1 = Math.max(bb.x1, X); bb.y1 = Math.max(bb.y1, Y);
+    }
+  };
+  ctx.fillStyle = "#fff"; ctx.fillRect(ov.ox || 0, ov.oy || 0, W, H);
   if (opts.grid) {
     const step = model.dpi / 25.4 * 5; ctx.strokeStyle = "rgba(210,78,18,.18)"; ctx.lineWidth = 1 / k;
     for (let x = step; x < W; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
@@ -517,6 +540,7 @@ function render(model, canvas, opts) {
       ctx.save();
       place(ctx, it, tw, th);
       ctx.textBaseline = it.anchor === "FT" ? "alphabetic" : "top";
+      if (it.anchor === "FT") track(tw, th * 0.8, 0, -th * 0.8); else track(tw, th);
       ctx.scale(it.sx, 1);
       ctx.fillText(it.s, 0, it.anchor === "FT" ? 0 : it.em * 0.04);
       ctx.restore();
@@ -525,7 +549,7 @@ function render(model, canvas, opts) {
       const tw = ctx.measureText(it.s).width * (it.sx || 1);
       ctx.save(); ctx.translate(it.x, it.y); ctx.rotate((it.deg || 0) * Math.PI / 180);
       const dx = it.align === 2 ? -tw / 2 : it.align === 3 ? -tw : 0;
-      ctx.textBaseline = "top"; ctx.translate(dx, 0); ctx.scale(it.sx || 1, 1);
+      ctx.textBaseline = "top"; ctx.translate(dx, 0); track(tw, it.em * 0.85); ctx.scale(it.sx || 1, 1);
       ctx.fillText(it.s, 0, it.em * 0.04); ctx.restore();
     } else if (it.k === "text") {
       ctx.textBaseline = "top";
@@ -533,22 +557,24 @@ function render(model, canvas, opts) {
         ctx.font = `600 ${it.em}px "IBM Plex Mono", monospace`;
         const natural = ctx.measureText("M").width || 1;
         ctx.save(); ctx.translate(it.x, it.y); if (it.deg) ctx.rotate(it.deg * Math.PI / 180); ctx.scale((it.cw || natural) / natural * 0.98, 1);
+        track(natural * it.s.length, it.em);
         let x = 0; for (const ch of it.s) { ctx.fillText(ch, x, it.em * 0.08); x += natural; }
         ctx.restore();
       } else {
         ctx.font = `700 ${it.em}px "Roboto Condensed", "Arial Narrow", sans-serif`;
+        ctx.save(); ctx.translate(it.x, it.y); track(ctx.measureText(it.s).width, it.em * 0.85); ctx.restore();
         ctx.fillText(it.s, it.x, it.y + it.em * 0.04);
       }
     } else if (it.k === "gbox") {
       ctx.save();
-      ctx.strokeStyle = ctx.fillStyle = it.white ? "#fff" : "#000";
+      ctx.strokeStyle = ctx.fillStyle = it.white ? "#fff" : "#000"; if (!it.white) track(it.w, it.h, it.x, it.y);
       const fill = it.th * 2 >= Math.min(it.w, it.h);
       const rad = it.r ? it.r / 8 * Math.min(it.w, it.h) / 2 : 0;
       if (fill) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(it.x, it.y, it.w, it.h, rad) : ctx.rect(it.x, it.y, it.w, it.h); ctx.fill(); }
       else { ctx.lineWidth = it.th; ctx.beginPath(); const i = it.th / 2;
         ctx.roundRect ? ctx.roundRect(it.x + i, it.y + i, it.w - it.th, it.h - it.th, Math.max(0, rad - i)) : ctx.rect(it.x + i, it.y + i, it.w - it.th, it.h - it.th); ctx.stroke(); }
       ctx.restore();
-    } else if (it.k === "rect") ctx.fillRect(it.x, it.y, it.w, it.h);
+    } else if (it.k === "rect") { track(it.w, it.h, it.x, it.y); ctx.fillRect(it.x, it.y, it.w, it.h); }
     else if (it.k === "bar") {
       const c = bwipCanvas({ bcid: it.bcid, text: it.text, height: 5 });
       if (!c) { drawError(ctx, it, "barcode data invalid"); continue; }
@@ -557,6 +583,7 @@ function render(model, canvas, opts) {
       ctx.save();
       if (it.tspl) { ctx.translate(it.x, it.y); ctx.rotate((it.deg || 0) * Math.PI / 180); }
       else if (it.rot && it.rot !== "N" || it.anchor === "FT") { place(ctx, it, w, it.h); if (it.anchor === "FT") ctx.translate(0, -it.h); } else ctx.translate(it.x, it.y);
+      track(w, it.h + (it.hri ? fs * 1.2 : 0));
       ctx.drawImage(c, 0, 0, c.width, Math.max(1, c.height - 1), 0, 0, w, it.h);
       if (it.hri) {
         ctx.font = `500 ${fs}px "IBM Plex Mono", monospace`; ctx.textBaseline = "top";
@@ -574,10 +601,10 @@ function render(model, canvas, opts) {
       ctx.save();
       if (it.tspl) { ctx.translate(it.x, it.y); ctx.rotate((it.deg || 0) * Math.PI / 180); }
       else { place(ctx, it, s, s); if (it.anchor === "FT") ctx.translate(0, -s); }
-      ctx.drawImage(c, 0, 0, s, s); ctx.restore();
+      track(s, s); ctx.drawImage(c, 0, 0, s, s); ctx.restore();
     }
   }
-  return { W, H, VW, VH };
+  return { W, H, VW, VH, bb };
 }
 // Position a w x h field box: ^FO = top-left of the rotated box, ^FT = baseline origin rotated about (x, y)
 function place(ctx, it, w, h) {
@@ -605,7 +632,7 @@ function drawError(ctx, it, msg) {
 
 /* ---------------- UI ---------------- */
 const $ = id => document.getElementById(id);
-const state = { tpl: 0, lang: "TSPL", dpi: 203, edited: false, view: "auto" };
+const state = { tpl: 0, lang: "TSPL", dpi: 203, edited: false, view: "auto", ov: { w: null, h: null, ox: 0, oy: 0 } };
 
 function fileKey() { return state.lang === "EPL2" ? "EPL2_203" : `${state.lang}_${state.dpi}`; }
 function currentTpl() { return DATA[state.tpl]; }
@@ -625,7 +652,9 @@ function syncButtons() {
   [...$("langSeg").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === state.lang));
   [...$("dpiSeg").children].forEach(b => { b.setAttribute("aria-pressed", +b.dataset.dpi === (state.lang === "EPL2" ? 203 : state.dpi)); b.disabled = state.lang === "EPL2" && b.dataset.dpi !== "203"; });
 }
+function clearOv() { state.ov = { w: null, h: null, ox: 0, oy: 0 }; if ($("ovW")) { $("ovW").value = ""; $("ovH").value = ""; } }
 function loadFile() {
+  clearOv();
   const t = currentTpl();
   $("prn").value = t.files[fileKey()];
   $("fileName").textContent = `${t.code}_${fileKey().replace("_", "_")}dpi.prn`.replace("PGL_", "PGL-Printronix_");
@@ -649,7 +678,9 @@ function draw() {
   else { model = { items: [], warn: ["Could not recognise the printer language. Paste TSPL, ZPL, EPL2 or PGL code."], dpi, w: 812, h: 406 }; }
   if (typeof bwipjs === "undefined") model.warn.push("Barcode engine did not load; barcodes are not drawn.");
   const view = state.view === "auto" ? autoView(model) : +state.view;
-  const { W, H, VW, VH } = render(model, $("label"), { grid: $("grid").checked, view });
+  if (state.fileSize && (state.fileSize[0] !== model.w || state.fileSize[1] !== model.h)) clearOv();
+  const { W, H, VW, VH, bb } = render(model, $("label"), { grid: $("grid").checked, view, ov: state.ov });
+  state.lastBB = bb; state.lastDpi = model.dpi; state.fileSize = [model.w, model.h];
   const mmW = (VW / model.dpi * 25.4).toFixed(1), mmH = (VH / model.dpi * 25.4).toFixed(1);
   const names = { TSPL: "TSPL (TSC)", ZPL: "ZPL (Zebra / Honeywell / Printronix / TSC)", EPL2: "EPL2 (Zebra / Eltron)", PGL: "PGL (Printronix)" };
   $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang] + (model.meta && model.meta.dialect ? " · " + model.meta.dialect : "");
@@ -665,8 +696,13 @@ function draw() {
     ["Text fields", counts.text], ["Barcodes", counts.bar + counts.dm + counts.qr], ["Lines / boxes", counts.rect + counts.gbox]
   ].map(([a, b]) => `<span class="fact"><b>${a}:</b> ${b}</span>`).join("");
   const notes = [...new Set(model.warn)];
-  let maxX = 0; for (const it of model.items) maxX = Math.max(maxX, (it.x || 0) + (it.w || (it.k === "text" ? it.em : 0) || 0));
-  if (maxX && maxX < W * 0.55) notes.push(`The design uses about ${(maxX / model.dpi * 25.4).toFixed(0)} mm of the ${(W / model.dpi * 25.4).toFixed(1)} mm print width. Check the label width setting (^PW / SIZE) if the label is narrower.`);
+  const mm = d => (d / model.dpi * 25.4);
+  if (bb && isFinite(bb.x0)) {
+    const off = bb.x0 < -2 || bb.y0 < -2 || bb.x1 > W + 2 || bb.y1 > H + 2;
+    if (off) notes.push(`Some content falls outside the ${mm(W).toFixed(1)} × ${mm(H).toFixed(1)} mm label and will be cut off when printed.`);
+    if (!state.ov.w && (bb.x1 - bb.x0) < W * 0.55) notes.push(`The design covers about ${mm(bb.x1 - bb.x0).toFixed(0)} × ${mm(bb.y1 - bb.y0).toFixed(0)} mm of a ${mm(W).toFixed(1)} mm print width. The file's width is probably the roll or printer width; use Fit to content or enter the real label size.`);
+  }
+  if (state.ov.w || state.ov.h) notes.unshift(`Showing a ${state.ov.w ? state.ov.w + " mm" : "file"} × ${state.ov.h ? state.ov.h + " mm" : "file"} label (size override). File size: ${mm(model.w || W).toFixed(1)} × ${mm(model.h || H).toFixed(1)} mm.`);
   if (!state.edited && (state.lang === "EPL2" || state.lang === "PGL") && t.hasDM) notes.unshift("This language file omits the GS1 DataMatrix. Use the TSPL or ZPL file to print the 2D code.");
   $("notes").innerHTML = notes.map(n => `<div class="note">${n}</div>`).join("");
 }
@@ -676,11 +712,20 @@ $("dpiSeg").onclick = e => { const b = e.target.closest("button"); if (!b || b.d
 $("grid").onchange = draw;
 $("viewSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.view;
   [...$("viewSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); draw(); };
+const setOv = () => { state.ov.w = parseFloat($("ovW").value) || null; state.ov.h = parseFloat($("ovH").value) || null; draw(); };
+$("ovW").addEventListener("change", setOv); $("ovH").addEventListener("change", setOv);
+$("fitBtn").onclick = () => {
+  const bb = state.lastBB; if (!bb || !isFinite(bb.x0)) return;
+  const k = 25.4 / state.lastDpi, margin = 1.5 / k;
+  state.ov = { w: +(((bb.x1 - bb.x0) + 2 * margin) * k).toFixed(1), h: +(((bb.y1 - bb.y0) + 2 * margin) * k).toFixed(1), ox: bb.x0 - margin, oy: bb.y0 - margin };
+  $("ovW").value = state.ov.w; $("ovH").value = state.ov.h; draw(); toast("Trimmed to printed area");
+};
+$("sizeReset").onclick = () => { state.ov = { w: null, h: null, ox: 0, oy: 0 }; $("ovW").value = ""; $("ovH").value = ""; draw(); };
 $("redrawBtn").onclick = () => { draw(); toast("Label redrawn"); };
 let timer; $("prn").addEventListener("input", () => { state.edited = true; $("fileName").textContent = "Edited code"; clearTimeout(timer); timer = setTimeout(draw, 180); });
 $("resetBtn").onclick = () => { state.edited = false; loadFile(); };
 $("copyBtn").onclick = async () => { try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
-$("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("prn").value = await f.text(); state.edited = true; $("fileName").textContent = f.name;
+$("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("prn").value = await f.text(); state.edited = true; clearOv(); $("fileName").textContent = f.name;
   const d = f.name.match(/(203|300)/); if (d) { state.dpi = +d[1]; syncButtons(); } draw(); };
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
 window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
