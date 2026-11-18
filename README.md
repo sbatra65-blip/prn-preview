@@ -7,16 +7,16 @@ Free web tool to preview thermal-printer label files (PRN) in the browser.
 - Draws the label from the PRN code itself; edit the code and the preview updates live.
 - Includes five label templates compliant with India's Legal Metrology (Packaged Commodities) Rules, 2011 (as amended to Feb 2026), with an LMPC checklist for each.
 
-The whole site is one static file, `index.html`. No build step.
+The site is one static file, `public/index.html`, served as Worker static assets (`wrangler.jsonc`). No build step.
 
 ## Hosting
 
-**Cloudflare Pages:** Workers & Pages → Create → Pages → Connect to Git → this repo. Framework preset: None. Build command: empty. Output directory: `/`.
+**Cloudflare Workers:** Workers & Pages → Create → Import a repository → this repo. Build command: empty. Deploy command: `npx wrangler deploy`.
 
-**GitHub Pages:** Settings → Pages → Deploy from branch `main`, folder `/ (root)`.
+**GitHub Pages:** Settings → Pages → Deploy from branch `main`, folder `/public` is not offered by GitHub Pages; use Cloudflare, or move `public/` contents to the root.
 
 ## Templates
 
-`templates/` holds the LMPC label files for each printer language and resolution, previews, JSON design specs and `gen.py`, which regenerates them all. Sample data only: test-print before production use.
+`public/templates/` holds the LMPC label files for each printer language and resolution, previews, JSON design specs and `gen.py`, which regenerates them all. Sample data only: test-print before production use.
 
 Prices print as "Rs." because built-in printer fonts lack the ₹ sign.
