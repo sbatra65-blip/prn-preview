@@ -110,17 +110,28 @@ table.t1 th, table.t1 td { border-bottom: 1px solid var(--line); padding: 5px 6p
 table.t1 th { color: var(--muted); font-weight: 600; }
 .src { font-size: 12px; color: var(--muted); padding: 6px 14px 0; }
 .src a { color: var(--accent); }
+section.create { padding: 0 24px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; }
+.hint { margin: 0; padding: 0 14px 10px; font-size: 13px; color: var(--muted); max-width: 75ch; }
+.form { display: grid; gap: 10px; padding: 0 14px 14px; }
+.form .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.form .lbl { font-size: 13px; font-weight: 600; color: var(--muted); }
+.form select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.form input[type=range] { width: 130px; accent-color: var(--accent); }
+.thumb { height: 40px; max-width: 90px; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.status { font-size: 13px; color: var(--muted); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 3ch; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 @media (max-width: 1150px) { main { grid-template-columns: 240px minmax(0, 1fr); } .code-col { grid-column: 1 / -1; } }
-@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; } header, .printers, section.about { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; } header, .printers, section.about, section.create { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1>PRN Label Preview <span>· LMPC templates</span></h1>
-  <p>Paste a printer file, pick 203, 300 or 600 dpi, and see the label it prints. The printer language is detected automatically, and the preview is drawn from the PRN code itself.</p>
+  <h1>PRN Label Preview <span>· Pic2Label</span></h1>
+  <p>Paste a printer file, pick 203, 300 or 600 dpi, and see the label it prints. The printer language is detected automatically, and the preview is drawn from the PRN code itself. Or start from a picture: turn a logo into a printer bitmap, or a photo of a label into editable PRN code.</p>
 </header>
 <div class="printers" aria-label="Supported printer languages">
   <span class="chip">TSPL · TSC</span>
@@ -128,6 +139,66 @@ table.t1 th { color: var(--muted); font-weight: 600; }
   <span class="chip">EPL2 · older Zebra / Eltron</span>
   <span class="chip">PGL · Printronix</span>
 </div>
+
+<section class="create" aria-label="Pic2Label: make PRN from a picture">
+  <div class="panel">
+    <h2>Picture → PRN · bitmap</h2>
+    <p class="hint">Logo, picture or artwork as a black-and-white printer graphic. Runs in your browser; the image is not uploaded. Resolution follows the dpi selector below.</p>
+    <div class="form">
+      <div class="row">
+        <label class="btn" for="bmFile">Choose image</label>
+        <input class="file-input" type="file" id="bmFile" accept="image/*">
+        <img id="bmThumb" class="thumb" alt="Selected image" hidden>
+        <div class="seg" role="group" aria-label="Bitmap output language" id="bmLang">
+          <button type="button" data-v="ZPL" aria-pressed="true">ZPL ^GFA</button>
+          <button type="button" data-v="TSPL">TSPL BITMAP</button>
+          <button type="button" data-v="EPL2">EPL2 GW</button>
+        </div>
+      </div>
+      <div class="row">
+        <label class="num" for="bmW">Label W <input type="number" id="bmW" value="50" min="5" max="300" step="0.5"> mm</label>
+        <label class="num" for="bmH">H <input type="number" id="bmH" value="25" min="5" max="500" step="0.5"> mm</label>
+        <label class="num" for="bmIW">Image width <input type="number" id="bmIW" min="2" max="300" step="0.5" placeholder="fit"> mm</label>
+        <label class="num" for="bmPos">Place <select id="bmPos"><option value="center">Centre</option><option value="tl">Top left</option></select></label>
+      </div>
+      <div class="row">
+        <label class="num" for="bmMethod">Method <select id="bmMethod"><option value="threshold">Threshold (logos, text)</option><option value="fs">Floyd–Steinberg dither (photos)</option><option value="atkinson">Atkinson dither (photos, crisper)</option></select></label>
+        <label class="num" for="bmThr">Threshold <input type="range" id="bmThr" min="10" max="245" value="128"> <span id="bmThrV" class="mono">128</span></label>
+        <label class="check"><input type="checkbox" id="bmInv"> Invert</label>
+      </div>
+      <div class="row">
+        <button type="button" class="btn primary" id="bmGo">Make PRN</button>
+        <span class="status" id="bmStatus" role="status" aria-live="polite">No image yet.</span>
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Photo → PRN · AI</h2>
+    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. The photo is sent to Cloudflare Workers AI to read it and is not stored.</p>
+    <div class="form">
+      <div class="row">
+        <label class="btn" for="aiFile">Choose photo</label>
+        <input class="file-input" type="file" id="aiFile" accept="image/*">
+        <img id="aiThumb" class="thumb" alt="Selected label photo" hidden>
+        <div class="seg" role="group" aria-label="AI output language" id="aiLang">
+          <button type="button" data-v="TSPL" aria-pressed="true">TSPL</button>
+          <button type="button" data-v="ZPL">ZPL</button>
+          <button type="button" data-v="EPL2">EPL2</button>
+          <button type="button" data-v="PGL">PGL</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="lbl">Real label size</span>
+        <label class="num" for="aiW">W <input type="number" id="aiW" min="5" max="300" step="0.5" placeholder="auto"> mm</label>
+        <label class="num" for="aiH">H <input type="number" id="aiH" min="5" max="500" step="0.5" placeholder="auto"> mm</label>
+      </div>
+      <div class="row">
+        <button type="button" class="btn primary" id="aiGo" disabled>Convert with AI</button>
+        <span class="status" id="aiStatus" role="status" aria-live="polite">No photo yet.</span>
+      </div>
+    </div>
+  </div>
+</section>
 
 <main>
   <aside class="panel">
@@ -192,6 +263,7 @@ table.t1 th { color: var(--muted); font-weight: 600; }
         <button type="button" class="btn primary" id="copyBtn">Copy code</button>
         <label class="btn" for="fileIn">Open PRN file</label>
         <input class="file-input" type="file" id="fileIn" accept=".prn,.txt,.zpl,.tspl,.epl,.pgl">
+        <button type="button" class="btn" id="dlBtn">Download .prn</button>
         <button type="button" class="btn" id="resetBtn">Reset</button>
       </div>
     </div>
@@ -310,6 +382,7 @@ function parseTSPL(t, dpi) {
   const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
   if (/<xpml>/i.test(t)) m.meta.source = "BarTender / Seagull driver (XPML wrapper)";
   const dpmm = dpi / 25.4;
+  if (/BITMAP/i.test(t)) t = extractBinaries(t);
   for (const line of tsplStatements(t)) {
     const sp = line.search(/\s/); const cmd = (sp < 0 ? line : line.slice(0, sp)).toUpperCase(); const a = sp < 0 ? [] : csv(line.slice(sp + 1));
     if (cmd === "SIZE") {
@@ -337,6 +410,10 @@ function parseTSPL(t, dpi) {
       let data = unesc(a[a.length - 1]); let gs1 = false;
       if (esc && data.startsWith(esc + "1")) { gs1 = true; data = data.split(esc + "1").join("\x1d"); }
       m.items.push({ k: "dm", x: +a[0], y: +a[1], mod, gs1, text: gs1 ? gs1Paren(data) : data, deg, tspl: true });
+    } else if (cmd === "BITMAP") {
+      const bits = BIN[(a[5] || "").trim()];
+      if (bits) m.items.push({ k: "bmp", x: +a[0], y: +a[1], wb: +a[2], h: +a[3], bits, zeroBlack: true, opaque: +a[4] === 0 });
+      else m.warn.push("BITMAP data missing or not readable");
     } else if (cmd === "QRCODE") {
       m.items.push({ k: "qr", x: +a[0], y: +a[1], mod: +a[3] || 4, deg: +a[5] || 0, ecc: (a[2] || "M").trim().toUpperCase(), text: unesc(a[a.length - 1]), tspl: true });
     } else if (!TSPL_IGNORE.has(cmd)) {
@@ -349,13 +426,15 @@ function boxRects(m, x, y, w, h, t) {
   m.items.push({ k: "rect", x, y, w, h: t }, { k: "rect", x, y: y + h - t, w, h: t }, { k: "rect", x, y, w: t, h }, { k: "rect", x: x + w - t, y, w: t, h });
 }
 
-const ZPL_IGNORE = new Set(["XA","XZ","CI","PQ","FS","MM","PR","MD","PO","SZ","JM","MC","PM","JZ","LR","LT","LS","MN","MT","JU","FX","FH","FR","PF","ID","IL","IS","JB","JW","KD","KN","SS","ST","TO","XG","DF","XF","FN","EG","HH","WD"]);
+const ZPL_IGNORE = new Set(["XA","XZ","CI","PQ","FS","MM","PR","MD","PO","SZ","JM","MC","PM","JZ","LR","LT","LS","MN","MT","JU","FX","FH","FR","PF","ID","IL","IS","JB","JW","KD","KN","SS","ST","TO","DF","XF","FN","EG","HH","WD"]);
 function parseZPL(t, dpi) {
   const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
   const pitch = t.match(/pitch='([\d.]+)\s*mm'/i);
   if (/<xpml>/i.test(t)) m.meta.source = "BarTender / Seagull driver (XPML wrapper)";
   if (pitch) m.h = Math.round(+pitch[1] * dpi / 25.4);
   let s = t.replace(/<xpml>[\s\S]*?<\/xpml>/gi, "").replace(/\r?\n/g, "");
+  const graphics = {}, gname = n => (n || "").trim().replace(/^[A-Z]:/i, "").replace(/\.[A-Z]{3}$/i, "").toUpperCase();
+  s = s.replace(/~DG([^,~^]+),(\d+),(\d+),([^~^]*)/gi, (_, n, tot, wb, data) => { graphics[gname(n)] = { tot: +tot, wb: +wb, data }; return ""; });
   s = s.replace(/~[A-Z]{2}[^\^~]*/gi, "");            // strip ~ control commands (~JSN, ~SD...)
   m.meta.formats = (s.match(/\^XA/gi) || []).length;
   m.meta.dialect = /\^SZ1/i.test(s) ? "ZPL I (^SZ1)" : (/\^SZ2/i.test(s) ? "ZPL II (^SZ2)" : "ZPL II");
@@ -378,6 +457,22 @@ function parseZPL(t, dpi) {
       case "FT": fo = [(+a[0] || 0) + lh[0], (+a[1] || 0) + lh[1]]; anchor = "FT"; field = null; break;
       case "CF": cf = +a[1] || 30; font = { h: cf, w: +a[2] || 0, rot: fw }; break;
       case "BY": by = +a[0] || 2; break;
+      case "GF": {
+        const p = rest.split(","), type = p[0], tot = +p[2] || +p[1], wb = +p[3], data = p.slice(4).join(",");
+        if (!wb) { m.warn.push("^GF graphic has no row width"); break; }
+        const bits = gfData(type, data, tot, wb), h = Math.ceil(tot / wb);
+        if (bits) m.items.push({ k: "bmp", x: fo[0], y: anchor === "FT" ? fo[1] - h : fo[1], wb, h, bits });
+        else m.warn.push("Decoding compressed graphic…");
+        break;
+      }
+      case "XG": {
+        const g = graphics[gname(a[0])], mx = +a[1] || 1, my = +a[2] || 1;
+        if (!g) { m.warn.push("^XG graphic " + a[0] + " was not downloaded in this file"); break; }
+        const bits = gfData("A", g.data, g.tot, g.wb), h = Math.ceil(g.tot / g.wb);
+        if (bits) m.items.push({ k: "bmp", x: fo[0], y: anchor === "FT" ? fo[1] - h * my : fo[1], wb: g.wb, h, bits, mx, my });
+        break;
+      }
+      case "B3": field = { kind: "c39", rot: (a[0] || fw).toUpperCase(), h: +a[2] || 100, hri: a[3] !== "N" }; break;
       case "GB": {
         const th = +a[2] || 1; const w = Math.max(+a[0] || 0, th), h = Math.max(+a[1] || 0, th);
         const col = (a[3] || "B").toUpperCase(); let r = +a[4] || 0;
@@ -393,6 +488,7 @@ function parseZPL(t, dpi) {
         const data = rest, pos = { x: fo[0], y: fo[1], anchor };
         if (!field) m.items.push({ k: "text", ...pos, em: font.h, sx: font.w ? font.w / font.h : 1, rot: font.rot || "N", s: data, cond: true, zpl: true });
         else if (field.kind === "ean13") m.items.push({ k: "bar", ...pos, rot: field.rot, h: field.h, mod: by, bcid: "ean13", text: data, hri: field.hri, hriText: ean13Full(data) });
+        else if (field.kind === "c39") m.items.push({ k: "bar", ...pos, rot: field.rot, h: field.h, mod: by, bcid: "code39", text: data, hri: field.hri, hriText: data });
         else if (field.kind === "c128") {
           const gs1 = field.mode === "D" || data.startsWith(">;>8");
           const txt = field.mode === "D" ? data : (gs1 ? gs1Paren("\x1d" + data.replace(/^>;>8/, "")) : data.replace(/^>[0-9:;]/, ""));
@@ -413,8 +509,11 @@ function parseZPL(t, dpi) {
 const EPL_F = { 1: [8, 12], 2: [10, 16], 3: [12, 20], 4: [14, 24], 5: [32, 48] };
 function parseEPL(t, dpi) {
   const m = { items: [], warn: [], dpi, w: 0, h: 0 };
+  if (/(^|\n)GW/.test(t)) t = extractBinaries(t);
   for (const raw of t.split(/\r?\n/)) {
     const line = raw.trim(); if (!line || line.startsWith(";")) continue;
+    if (/^GW\d/.test(line)) { const a = line.slice(2).split(","); const bits = BIN[(a[4] || "").trim()];
+      if (bits) m.items.push({ k: "bmp", x: +a[0], y: +a[1], wb: +a[2], h: +a[3], bits, zeroBlack: true }); else m.warn.push("GW graphic data missing"); continue; }
     if (/^q\d/.test(line)) m.w = +line.slice(1);
     else if (/^Q\d/.test(line)) m.h = +line.slice(1).split(",")[0];
     else if (/^A\d/.test(line)) { const a = csv(line.slice(1)); const f = EPL_F[+a[3]] || [10, 16];
@@ -425,6 +524,7 @@ function parseEPL(t, dpi) {
       if (type === "E30") Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
       else if (type === "1E") { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
       else if (type === "1") Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+      else if (type === "3") Object.assign(bc, { bcid: "code39", text: data, hriText: data });
       else { m.warn.push("EPL barcode type " + type + " not previewed"); continue; }
       m.items.push(bc); }
     else if (!/^(N|R\d|S\d|D\d|Z[TB]|P\d|I\d|O)/.test(line)) m.warn.push("EPL command not previewed: " + line.slice(0, 12));
@@ -474,6 +574,100 @@ function parsePGL(t, dpi, fallbackW) {
   }
   m.w = fallbackW ? fallbackW * m.dpi / 25.4 : 0;
   return m;
+}
+
+/* ---------------- bitmap graphics (ZPL ^GF / ~DG / ^XG, TSPL BITMAP, EPL2 GW) ---------------- */
+// Binary bitmap payloads never live in the textarea: they are kept here and referenced by @bmpN tokens.
+const BIN = {}; let binSeq = 0;
+function putBin(bytes) { const id = "@bmp" + (++binSeq); BIN[id] = bytes; return id; }
+const latin1Bytes = s => { const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 255; return u; };
+// Replace raw binary payloads (TSPL BITMAP, EPL2 GW, ZPL ^GFB) in a latin1-decoded file with @bmp tokens.
+function extractBinaries(t) {
+  const pats = [
+    [/BITMAP\s+\d+\s*,\s*\d+\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*\d+\s*,/gi, m => +m[1] * +m[2]],
+    [/(^|\n)GW\s*\d+\s*,\s*\d+\s*,\s*(\d+)\s*,\s*(\d+)\s*,/g, m => +m[2] * +m[3]],
+    [/\^GFB\s*,\s*(\d+)\s*,\s*\d+\s*,\s*\d+\s*,/gi, m => +m[1]],
+  ];
+  for (const [re, len] of pats) {
+    let out = "", last = 0, m; re.lastIndex = 0;
+    while ((m = re.exec(t))) {
+      const start = m.index + m[0].length;
+      if (t.startsWith("@bmp", start)) continue;
+      const n = len(m); out += t.slice(last, start) + putBin(latin1Bytes(t.substr(start, n)));
+      last = start + n; re.lastIndex = last;
+    }
+    t = out + t.slice(last);
+  }
+  return t;
+}
+// ZPL compressed-ASCII hex (G–Y, g–z repeat counts, ',' ! ':' row shortcuts) -> bytes
+function zplHexDecode(data, total, wb) {
+  const rowHex = wb * 2, out = new Uint8Array(total); let row = "", prev = "", n = 0, p = 0;
+  const commit = r => { r = r.padEnd(rowHex, "0").slice(0, rowHex); for (let i = 0; i < wb && p < total; i++) out[p++] = parseInt(r.substr(i * 2, 2), 16) || 0; prev = r; row = ""; };
+  for (const ch of data) {
+    if (p >= total) break;
+    const c = ch.charCodeAt(0);
+    if (c >= 71 && c <= 89) { n += c - 70; continue; }            // G..Y = 1..19
+    if (c >= 103 && c <= 122) { n += (c - 102) * 20; continue; }  // g..z = 20..400
+    if (ch === ",") { commit(row.padEnd(rowHex, "0")); n = 0; continue; }
+    if (ch === "!") { commit(row.padEnd(rowHex, "F")); n = 0; continue; }
+    if (ch === ":") { commit(prev || "0".repeat(rowHex)); n = 0; continue; }
+    if (!/[0-9A-Fa-f]/.test(ch)) continue;
+    row += ch.repeat(n || 1); n = 0;
+    while (row.length >= rowHex) { const rest = row.slice(rowHex); commit(row.slice(0, rowHex)); row = rest; }
+  }
+  if (row) commit(row);
+  return out;
+}
+// bytes -> ZPL compressed-ASCII hex (rows repeat with ':', trailing zeros with ',', runs with count letters)
+function zplHexEncode(bytes, wb, h) {
+  const cnt = n => { let s = ""; const hi = Math.floor(n / 20), lo = n % 20; if (hi) s += String.fromCharCode(102 + hi); if (lo) s += String.fromCharCode(70 + lo); return s; };
+  let out = "", prev = null;
+  for (let y = 0; y < h; y++) {
+    let hex = ""; for (let i = 0; i < wb; i++) hex += bytes[y * wb + i].toString(16).padStart(2, "0").toUpperCase();
+    if (hex === prev) { out += ":"; continue; }
+    prev = hex;
+    const body = hex.replace(/0+$/, ""), tail = body.length < hex.length;
+    let r = "";
+    for (let i = 0; i < body.length;) {
+      let j = i; while (j < body.length && body[j] === body[i]) j++;
+      let n = j - i;
+      while (n > 0) { const k = Math.min(n, 400); r += (k > 1 ? cnt(k) : "") + body[i]; n -= k; }
+      i = j;
+    }
+    out += r + (tail ? "," : "");
+  }
+  return out;
+}
+const GF_CACHE = new Map();
+const b64Bytes = s => latin1Bytes(atob(s.replace(/[^A-Za-z0-9+/=]/g, "")));
+// Decode a ^GF / ~DG data block. Z64 is inflated asynchronously; returns null until ready, then redraws.
+function gfData(type, data, total, wb) {
+  data = data.trim();
+  const z = data.match(/^:(Z64|B64):([^:]*)/i);
+  if (z) {
+    const key = data.slice(0, 200) + data.length;
+    if (GF_CACHE.has(key)) return GF_CACHE.get(key);
+    if (z[1].toUpperCase() === "B64") { const b = b64Bytes(z[2]); GF_CACHE.set(key, b); return b; }
+    GF_CACHE.set(key, null);
+    if (typeof DecompressionStream !== "undefined") {
+      new Response(new Blob([b64Bytes(z[2])]).stream().pipeThrough(new DecompressionStream("deflate"))).arrayBuffer()
+        .then(ab => { GF_CACHE.set(key, new Uint8Array(ab)); draw(); }).catch(() => {});
+    }
+    return null;
+  }
+  if ((type || "A").toUpperCase() === "B") return BIN[data] || null;
+  return zplHexDecode(data, total, wb);
+}
+function bitmapCanvas(it) {
+  const w = it.wb * 8, c = document.createElement("canvas"); c.width = w; c.height = it.h;
+  const ctx = c.getContext("2d"), img = ctx.createImageData(w, it.h), d = img.data;
+  for (let y = 0; y < it.h; y++) for (let x = 0; x < w; x++) {
+    const byte = it.bits[y * it.wb + (x >> 3)] || 0, bit = (byte >> (7 - (x & 7))) & 1;
+    const black = it.zeroBlack ? !bit : !!bit, p = (y * w + x) * 4;
+    if (black) { d[p + 3] = 255; } else if (it.opaque) { d[p] = d[p + 1] = d[p + 2] = 255; d[p + 3] = 255; }
+  }
+  ctx.putImageData(img, 0, 0); return c;
 }
 
 /* ---------------- renderer ---------------- */
@@ -593,6 +787,9 @@ function render(model, canvas, opts) {
         ctx.textAlign = "center"; ctx.fillText(txt, w / 2, it.h + 2); ctx.textAlign = "left";
       }
       ctx.restore();
+    } else if (it.k === "bmp") {
+      const c = bitmapCanvas(it), w = it.wb * 8 * (it.mx || 1), h = it.h * (it.my || 1);
+      track(w, h, it.x, it.y); ctx.drawImage(c, it.x, it.y, w, h);
     } else if (it.k === "dm" || it.k === "qr") {
       const c = bwipCanvas({ bcid: it.k === "qr" ? "qrcode" : (it.gs1 ? "gs1datamatrix" : "datamatrix"), text: it.text, ...(it.k === "qr" ? { eclevel: /^[LMQH]$/.test(it.ecc) ? it.ecc : "M" } : {}) });
       if (!c) { drawError(ctx, it, "2D data invalid"); continue; }
@@ -654,7 +851,7 @@ function syncButtons() {
 }
 function clearOv() { state.ov = { w: null, h: null, ox: 0, oy: 0 }; if ($("ovW")) { $("ovW").value = ""; $("ovH").value = ""; } }
 function loadFile() {
-  clearOv();
+  clearOv(); state.genNotes = [];
   const t = currentTpl();
   $("prn").value = t.files[fileKey()];
   $("fileName").textContent = `${t.code}_${fileKey().replace("_", "_")}dpi.prn`.replace("PGL_", "PGL-Printronix_");
@@ -686,16 +883,16 @@ function draw() {
   $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang] + (model.meta && model.meta.dialect ? " · " + model.meta.dialect : "");
   $("detectBadge").className = "detect" + (lang === "UNKNOWN" ? " bad" : "");
   $("dimW").textContent = `${mmW} mm`; $("dimH").textContent = `${mmH} mm`;
-  const counts = { text: 0, bar: 0, dm: 0, rect: 0, qr: 0, gbox: 0 }; model.items.forEach(i => counts[i.k]++);
+  const counts = { text: 0, bar: 0, dm: 0, rect: 0, qr: 0, gbox: 0, bmp: 0 }; model.items.forEach(i => counts[i.k]++);
   $("facts").innerHTML = [
     ["Detected", lang], ["Resolution", model.dpi + " dpi"], ["Size", `${Math.round(W)} × ${Math.round(H)} dots`],
     ...(model.meta && model.meta.dialect ? [["Version", model.meta.dialect]] : []),
     ...(view ? [["View", view + "° " + (state.view === "auto" ? "(auto, text upright)" : "")]] : []),
     ...(model.meta && model.meta.formats > 1 ? [["Formats", model.meta.formats + " (^XA…^XZ)"]] : []),
     ...(model.meta && model.meta.source ? [["Created by", model.meta.source]] : []),
-    ["Text fields", counts.text], ["Barcodes", counts.bar + counts.dm + counts.qr], ["Lines / boxes", counts.rect + counts.gbox]
+    ["Text fields", counts.text], ["Barcodes", counts.bar + counts.dm + counts.qr], ["Lines / boxes", counts.rect + counts.gbox], ...(counts.bmp ? [["Graphics", counts.bmp]] : [])
   ].map(([a, b]) => `<span class="fact"><b>${a}:</b> ${b}</span>`).join("");
-  const notes = [...new Set(model.warn)];
+  const notes = [...(state.genNotes || []), ...new Set(model.warn)];
   const mm = d => (d / model.dpi * 25.4);
   if (bb && isFinite(bb.x0)) {
     const off = bb.x0 < -2 || bb.y0 < -2 || bb.x1 > W + 2 || bb.y1 > H + 2;
@@ -724,11 +921,229 @@ $("sizeReset").onclick = () => { state.ov = { w: null, h: null, ox: 0, oy: 0 }; 
 $("redrawBtn").onclick = () => { draw(); toast("Label redrawn"); };
 let timer; $("prn").addEventListener("input", () => { state.edited = true; $("fileName").textContent = "Edited code"; clearTimeout(timer); timer = setTimeout(draw, 180); });
 $("resetBtn").onclick = () => { state.edited = false; loadFile(); };
-$("copyBtn").onclick = async () => { try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
-$("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; $("prn").value = await f.text(); state.edited = true; clearOv(); $("fileName").textContent = f.name;
+$("copyBtn").onclick = async () => { if (/@bmp\d+/.test($("prn").value)) { toast("This file has binary graphics: use Download .prn"); return; } try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
+$("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; const buf = await f.arrayBuffer(); let txt;
+  try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { txt = new TextDecoder("latin1").decode(buf); }
+  state.genNotes = []; $("prn").value = extractBinaries(txt); state.edited = true; clearOv(); $("fileName").textContent = f.name;
   const d = f.name.match(/(203|300)/); if (d) { state.dpi = +d[1]; syncButtons(); } draw(); };
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
 window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
+
+/* ---------------- Pic2Label: picture -> PRN ---------------- */
+const P2L_API = (location.hostname.endsWith("infinitesolutions.co.in") ? "" : "https://labels.infinitesolutions.co.in") + "/api/pic2label";
+const dotsOf = (mm, dpi) => Math.max(0, Math.round(mm * dpi / 25.4));
+const p2l = { img: null, photo: null, gen: false };
+
+async function loadImage(file) {
+  const url = URL.createObjectURL(file);
+  try { const im = new Image(); im.src = url; await im.decode(); return im; } finally { setTimeout(() => URL.revokeObjectURL(url), 2000); }
+}
+// image -> 1-bit rows (1 = black), packed MSB first
+function rasterize(img, wd, hd, method, threshold, invert) {
+  const c = document.createElement("canvas"); c.width = wd; c.height = hd;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, wd, hd); ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, wd, hd);
+  const px = ctx.getImageData(0, 0, wd, hd).data, g = new Float32Array(wd * hd);
+  for (let i = 0; i < wd * hd; i++) { const a = px[i * 4 + 3] / 255; const l = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]; g[i] = 255 - a * (255 - l); }
+  const black = new Uint8Array(wd * hd);
+  const spread = (x, y, e, list) => { for (const [dx, dy, f] of list) { const X = x + dx, Y = y + dy; if (X >= 0 && X < wd && Y < hd) g[Y * wd + X] += e * f; } };
+  const FS = [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]];
+  const AT = [[1, 0, 1 / 8], [2, 0, 1 / 8], [-1, 1, 1 / 8], [0, 1, 1 / 8], [1, 1, 1 / 8], [0, 2, 1 / 8]];
+  for (let y = 0; y < hd; y++) for (let x = 0; x < wd; x++) {
+    const i = y * wd + x, v = g[i], b = v < threshold; black[i] = b ? 1 : 0;
+    if (method !== "threshold") spread(x, y, v - (b ? 0 : 255), method === "atkinson" ? AT : FS);
+  }
+  const wb = Math.ceil(wd / 8), bytes = new Uint8Array(wb * hd);
+  for (let y = 0; y < hd; y++) for (let x = 0; x < wd; x++) if (black[y * wd + x] ^ (invert ? 1 : 0)) bytes[y * wb + (x >> 3)] |= 0x80 >> (x & 7);
+  return { wb, h: hd, bytes };
+}
+function bitmapPRN(lang, dpi, o) {
+  const W = dotsOf(o.lw, dpi), H = dotsOf(o.lh, dpi);
+  let wd = dotsOf(o.iw || o.lw - 4, dpi), hd = Math.round(wd * p2l.img.naturalHeight / p2l.img.naturalWidth);
+  const maxH = H - dotsOf(2, dpi); if (hd > maxH) { hd = maxH; wd = Math.round(hd * p2l.img.naturalWidth / p2l.img.naturalHeight); }
+  const r = rasterize(p2l.img, wd, hd, o.method, o.threshold, o.invert);
+  const x = o.pos === "center" ? Math.round((W - wd) / 2) : dotsOf(2, dpi), y = o.pos === "center" ? Math.round((H - hd) / 2) : dotsOf(2, dpi);
+  const name = o.name;
+  if (lang === "ZPL") {
+    const n = r.bytes.length;
+    return `^XA\n^FX Pic2Label bitmap: ${name}, ${wd} x ${hd} dots at ${dpi} dpi\n^PW${W}\n^LL${H}\n^LH0,0\n^FO${x},${y}^GFA,${n},${n},${r.wb},${zplHexEncode(r.bytes, r.wb, hd)}^FS\n^PQ1\n^XZ\n`;
+  }
+  const inv = r.bytes.map(b => 255 - b); // TSPL and EPL2: a 0 bit prints a dot
+  if (lang === "EPL2") return `N\nq${W}\nQ${H},24\nGW${x},${y},${r.wb},${hd},${putBin(inv)}\nP1\n`;
+  return `SIZE ${o.lw} mm, ${o.lh} mm\nGAP 2 mm, 0 mm\nDIRECTION 1\nCLS\nBITMAP ${x},${y},${r.wb},${hd},0,${putBin(inv)}\nPRINT 1,1\n`;
+}
+
+/* ---- AI layout -> PRN in any language ---- */
+const tsplQ = s => s.replace(/"/g, '\\["]');
+function measureEm(s, emDots) { const c = measureEm.c || (measureEm.c = document.createElement("canvas").getContext("2d")); c.font = `700 ${emDots}px "Roboto Condensed", "Arial Narrow", sans-serif`; return c.measureText(s).width; }
+function linearModules(bcid, text) { const c = bwipCanvas({ bcid, text, height: 5 }); return c ? c.width : 0; }
+function twoDModules(kind, text) { const c = bwipCanvas({ bcid: kind === "qrcode" ? "qrcode" : "datamatrix", text, ...(kind === "qrcode" ? { eclevel: "M" } : {}) }); return c ? (kind === "qrcode" ? qrModules(c) : dmModules(c)) : 0; }
+function normSym(s) { s = String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); if (/qr/.test(s)) return "qrcode"; if (/matrix|dm/.test(s)) return "datamatrix"; if (/ean13|ean/.test(s)) return "ean13"; if (/upc/.test(s)) return "upca"; if (/gs1|ucc|ean128/.test(s)) return "gs1-128"; if (/39/.test(s)) return "code39"; if (/pdf/.test(s)) return "pdf417"; return "code128"; }
+function layoutPRN(L, lang, dpi) {
+  const D = mm => dotsOf(mm, dpi), W = D(L.w), H = D(L.h), out = [], warn = [];
+  const items = L.items.filter(e => e.w > 0 && e.h > 0 || e.type === "line");
+  if (lang === "TSPL") out.push(`SIZE ${L.w} mm, ${L.h} mm`, "GAP 2 mm, 0 mm", "DIRECTION 1", "CODEPAGE UTF-8", "CLS");
+  if (lang === "ZPL") out.push("^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0");
+  if (lang === "EPL2") out.push("N", `q${W}`, `Q${H},24`);
+  const pgl = { alpha: [], horz: [], vert: [], box: [], bars: [] };
+  for (const e of items) {
+    const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
+    if (e.type === "text") {
+      const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
+      const em = Math.max(8, Math.round(h * 1.05));
+      const sx = w ? Math.min(1.5, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
+      if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)); out.push(`TEXT ${x},${y},"0",0,${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
+      else if (lang === "ZPL") out.push(`^FO${x},${y}^A0N,${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`);
+      else if (lang === "EPL2") {
+        // EPL2 fonts are fixed-pitch: pick font + multipliers closest in height that still fit the width
+        let best = [2, 1, 1], score = 1e9;
+        for (const f of [1, 2, 3, 4, 5]) for (let vm = 1; vm <= 9; vm++) for (let hm = 1; hm <= vm; hm++) {
+          const tw = EPL_F[f][0] * hm * s.length, sc = Math.abs(EPL_F[f][1] * vm - em) + (w && tw > w * 1.05 ? 1000 + tw - w : 0) + Math.abs(hm - vm) * 0.5;
+          if (sc < score) { score = sc; best = [f, hm, vm]; }
+        }
+        out.push(`A${x},${y},0,${best[0]},${best[1]},${best[2]},N,"${s.replace(/"/g, '\\"')}"`);
+      } else { const dl = ["*", "|", "#", "~"].find(c => !s.includes(c)) || "*"; pgl.alpha.push(`POINT;${y};${x};${Math.max(4, Math.round(em / dpi * 72))};0;${dl}${s}${dl}`); }
+    } else if (e.type === "barcode") {
+      const sym = normSym(e.symbology); let data = String(e.data || "").trim();
+      if (!data) { warn.push("A barcode had no readable data and was skipped."); continue; }
+      if (sym === "qrcode" || sym === "datamatrix") {
+        const mods = twoDModules(sym, data) || 25, cell = Math.max(1, Math.round(Math.min(w, h) / mods));
+        if (lang === "TSPL") out.push(sym === "qrcode" ? `QRCODE ${x},${y},M,${cell},A,0,"${tsplQ(data)}"` : `DMATRIX ${x},${y},${w},${h},x${cell},"${tsplQ(data)}"`);
+        else if (lang === "ZPL") out.push(sym === "qrcode" ? `^FO${x},${y}^BQN,2,${cell}^FDMA,${data}^FS` : `^FO${x},${y}^BXN,${cell},200^FD${data}^FS`);
+        else warn.push(`${sym === "qrcode" ? "QR code" : "DataMatrix"} is not written in ${lang}; use TSPL or ZPL for 2D codes.`);
+        continue;
+      }
+      let bcid = sym, kind = sym;
+      if (sym === "upca") { data = data.replace(/\D/g, ""); data = ("0" + data).slice(0, 12); kind = bcid = "ean13"; }
+      if (kind === "ean13") { data = data.replace(/\D/g, "").slice(0, 12); if (data.length < 12) { kind = bcid = "code128"; } }
+      if (kind === "pdf417") { kind = bcid = "code128"; warn.push("PDF417 was written as Code 128."); }
+      const raw = kind === "gs1-128" ? data.replace(/[()]/g, "") : data;
+      const paren = kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : data;
+      const mods = linearModules(bcid, kind === "gs1-128" ? paren : (kind === "ean13" ? ean13Full(data) : data)) || 80;
+      const n = Math.max(1, Math.min(10, Math.round(w / mods))), bh = Math.max(D(4), Math.round(h * 0.78));
+      if (lang === "TSPL") {
+        const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "EAN128" }[kind];
+        out.push(`BARCODE ${x},${y},"${t}",${bh},1,0,${n},${kind === "code39" ? n * 3 : n},"${tsplQ(kind === "gs1-128" ? raw : data)}"`);
+      } else if (lang === "ZPL") {
+        if (kind === "ean13") out.push(`^BY${n}^FO${x},${y}^BEN,${bh},Y,N^FD${data}^FS`);
+        else if (kind === "code39") out.push(`^BY${n},3^FO${x},${y}^B3N,N,${bh},Y,N^FD${data}^FS`);
+        else if (kind === "gs1-128") out.push(`^BY${n}^FO${x},${y}^BCN,${bh},Y,N,N,D^FD${paren}^FS`);
+        else out.push(`^BY${n}^FO${x},${y}^BCN,${bh},Y,N,N^FD${data}^FS`);
+      } else if (lang === "EPL2") {
+        const t = { code128: "1", ean13: "E30", code39: "3", "gs1-128": "1E" }[kind];
+        out.push(`B${x},${y},0,${t},${n},${kind === "code39" ? n * 3 : n},${bh},B,"${kind === "gs1-128" ? raw : data}"`);
+      } else {
+        const t = { code128: "C128B", ean13: "EAN13", code39: "C3/9", "gs1-128": "UCC-128" }[kind];
+        const hin = bh / dpi, tenth = Math.max(1, Math.floor(hin * 10)), extra = Math.max(0, bh - Math.round(tenth / 10 * dpi));
+        pgl.bars.push("BARCODE", `${t};H${tenth}${extra ? "." + extra : ""};${y};${x}`, `*${kind === "gs1-128" ? raw : data}*`, "PDF", "STOP");
+      }
+    } else if (e.type === "line" || e.type === "box") {
+      const th = Math.max(1, D(e.thickness || 0.3));
+      const horiz = e.type === "line" && w >= h, ww = e.type === "line" ? (horiz ? Math.max(w, th) : th) : Math.max(w, th), hh = e.type === "line" ? (horiz ? th : Math.max(h, th)) : Math.max(h, th);
+      if (lang === "TSPL") out.push(e.type === "box" ? `BOX ${x},${y},${x + ww},${y + hh},${th}` : `BAR ${x},${y},${ww},${hh}`);
+      else if (lang === "ZPL") out.push(`^FO${x},${y}^GB${ww},${hh},${th}^FS`);
+      else if (lang === "EPL2") { if (e.type === "box") out.push(`LO${x},${y},${ww},${th}`, `LO${x},${y + hh - th},${ww},${th}`, `LO${x},${y},${th},${hh}`, `LO${x + ww - th},${y},${th},${hh}`); else out.push(`LO${x},${y},${ww},${hh}`); }
+      else if (e.type === "box") pgl.box.push(`${th};${y};${x};${y + hh};${x + ww}`);
+      else if (horiz) pgl.horz.push(`${th};${y};${x};${x + ww}`); else pgl.vert.push(`${th};${x};${y};${y + hh}`);
+    }
+  }
+  if (lang === "TSPL") out.push("PRINT 1,1");
+  if (lang === "ZPL") out.push("^PQ1", "^XZ");
+  if (lang === "EPL2") out.push("P1");
+  if (lang === "PGL") {
+    const o = [`~CREATE;P2L;${H}`, `SCALE;DOT;${dpi};${dpi}`];
+    for (const [k, rows] of [["ALPHA", pgl.alpha], ["HORZ", pgl.horz], ["VERT", pgl.vert], ["BOX", pgl.box]]) if (rows.length) o.push(k, ...rows, "STOP");
+    o.push(...pgl.bars, "END", "~EXECUTE;P2L;1", "~NORMAL");
+    return { prn: o.join("\n") + "\n", warn };
+  }
+  return { prn: out.join("\n") + "\n", warn };
+}
+// AI returns percentages of the label; convert to mm using the real size if the user gave one
+function layoutFromAI(ai, wmm, hmm) {
+  const lab = ai.label || {}, w = wmm || +lab.width_mm || 75, h = hmm || +lab.height_mm || 50;
+  const pc = (v, full) => Math.max(0, Math.min(full, (+v || 0) / 100 * full));
+  const items = (ai.elements || []).map(e => ({ ...e, type: String(e.type || "").toLowerCase(), x: pc(e.x, w), y: pc(e.y, h), w: pc(e.w, w), h: pc(e.h, h) }));
+  return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10, items };
+}
+async function detectBarcodes(img) {
+  if (!("BarcodeDetector" in window)) return [];
+  try {
+    const det = new BarcodeDetector(); const found = await det.detect(img);
+    return found.map(b => ({ format: b.format, value: b.rawValue, box_pct: { x: +(b.boundingBox.x / img.naturalWidth * 100).toFixed(1), y: +(b.boundingBox.y / img.naturalHeight * 100).toFixed(1), w: +(b.boundingBox.width / img.naturalWidth * 100).toFixed(1), h: +(b.boundingBox.height / img.naturalHeight * 100).toFixed(1) } }));
+  } catch (e) { return []; }
+}
+function downscale(img, max = 1280) {
+  const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.88);
+}
+
+/* ---- UI wiring ---- */
+function showGenerated(prn, name, notes) {
+  $("prn").value = prn; state.edited = true; clearOv(); $("fileName").textContent = name;
+  const lang = detect(prn); state.lang = lang === "UNKNOWN" ? state.lang : lang; syncButtons();
+  state.genNotes = notes || []; draw();
+  if (lang === "PGL") { state.ov = { w: p2l.lastW, h: p2l.lastH, ox: 0, oy: 0 }; $("ovW").value = p2l.lastW; $("ovH").value = p2l.lastH; draw(); }
+  document.querySelector("main").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+}
+const segVal = id => { const b = $(id).querySelector('[aria-pressed="true"]'); return b && b.dataset.v; };
+for (const id of ["bmLang", "aiLang"]) $(id).onclick = e => { const b = e.target.closest("button"); if (!b) return; [...$(id).children].forEach(x => x.setAttribute("aria-pressed", x === b)); if (id === "bmLang" && p2l.gen) genBitmap(); };
+function genBitmap() {
+  if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
+  const lang = segVal("bmLang"), dpi = lang === "EPL2" ? 203 : state.dpi;
+  const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || 25, iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
+  const prn = bitmapPRN(lang, dpi, o); p2l.gen = true;
+  $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file`;
+  showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`);
+}
+$("bmFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { p2l.img = await loadImage(f); p2l.name = f.name; $("bmThumb").src = p2l.img.src; $("bmThumb").hidden = false; $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px`; genBitmap(); }
+  catch (err) { $("bmStatus").textContent = "Could not read that image."; }
+};
+$("bmGo").onclick = genBitmap;
+for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen) genBitmap(); });
+$("bmThr").addEventListener("input", () => { $("bmThrV").textContent = $("bmThr").value; });
+
+$("aiFile").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { p2l.photo = await loadImage(f); $("aiThumb").src = p2l.photo.src; $("aiThumb").hidden = false; $("aiStatus").textContent = `${f.name} ready. Press Convert.`; $("aiGo").disabled = false; }
+  catch (err) { $("aiStatus").textContent = "Could not read that photo."; }
+};
+$("aiGo").onclick = async () => {
+  if (!p2l.photo) return;
+  const lang = segVal("aiLang"), dpi = lang === "EPL2" ? 203 : state.dpi, wmm = +$("aiW").value || 0, hmm = +$("aiH").value || 0;
+  $("aiGo").disabled = true; $("aiStatus").textContent = "Reading the label… this takes 10–30 seconds.";
+  try {
+    const barcodes = await detectBarcodes(p2l.photo);
+    const res = await fetch(P2L_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: downscale(p2l.photo), width_mm: wmm || null, height_mm: hmm || null, barcodes }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.layout) throw new Error(j.error || `Server error ${res.status}`);
+    const L = layoutFromAI(j.layout, wmm, hmm);
+    // trust the browser's barcode decoder over the model for barcode data
+    const bcs = L.items.filter(e => e.type === "barcode");
+    barcodes.forEach((b, i) => { const t = bcs[i]; if (t) { t.data = b.value; t.symbology = b.format.replace("_", ""); } });
+    p2l.lastW = L.w; p2l.lastH = L.h;
+    const { prn, warn } = layoutPRN(L, lang, dpi);
+    const notes = ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn];
+    $("aiStatus").textContent = `Done: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
+    showGenerated(prn, `pic2label_${lang}_${dpi}dpi.prn`, notes);
+  } catch (err) { $("aiStatus").textContent = "Conversion failed: " + err.message; }
+  finally { $("aiGo").disabled = false; }
+};
+
+// Download with binary bitmaps restored, CRLF line ends
+function prnBytes(text) {
+  const parts = text.replace(/\r?\n/g, "\r\n").split(/(@bmp\d+)/), enc = new TextEncoder(), chunks = [];
+  for (const p of parts) chunks.push(BIN[p] || enc.encode(p));
+  return new Blob(chunks, { type: "application/octet-stream" });
+}
+$("dlBtn").onclick = () => {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes($("prn").value));
+  let n = $("fileName").textContent.trim(); if (!/\.\w{2,4}$/.test(n)) n = (n || "label").replace(/\s+/g, "_") + ".prn";
+  a.download = n; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("PRN downloaded");
+};
 
 buildList(); syncButtons(); loadFile();
 if (document.fonts) document.fonts.ready.then(draw);
