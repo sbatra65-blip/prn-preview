@@ -62,8 +62,9 @@ async function pic2label(request, env) {
   if (env.ANTHROPIC_API_KEY) providers.push(["claude", () => viaClaude(env, env.CLAUDE_MODEL || CLAUDE_MODEL, prompt, mime, b64)]);
   if (env.GEMINI_API_KEY) for (const m of (env.GEMINI_MODEL ? [env.GEMINI_MODEL] : GEMINI_MODELS)) providers.push(["gemini", () => viaGemini(env, m, prompt, mime, b64)]);
   if (env.AI) providers.push(["workers-ai", () => viaWorkersAI(env, prompt, img)]);
+  const only = typeof b.provider === "string" ? b.provider : null; // for testing one provider
   const errors = [];
-  for (const [name, run] of providers) {
+  for (const [name, run] of providers.filter(([n]) => !only || n === only)) {
     try {
       const { text, model } = await run();
       const layout = extractJSON(text);
@@ -85,6 +86,7 @@ async function viaClaude(env, model, prompt, mime, b64) {
         { type: "text", text: prompt },
       ] }],
     }),
+    signal: AbortSignal.timeout(60000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
@@ -98,8 +100,9 @@ async function viaGemini(env, model, prompt, mime, b64) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: SYSTEM }] },
       contents: [{ role: "user", parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192 },
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "low" } },
     }),
+    signal: AbortSignal.timeout(50000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
