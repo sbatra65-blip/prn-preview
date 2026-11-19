@@ -65,8 +65,9 @@ async function pic2label(request, env) {
   if (env.GEMINI_API_KEY) for (const m of (env.GEMINI_MODEL ? [env.GEMINI_MODEL] : GEMINI_MODELS)) providers.push(["gemini", () => viaGemini(env, m, prompt, mime, b64)]);
   if (env.AI) providers.push(["workers-ai", () => viaWorkersAI(env, prompt, img)]);
   const only = typeof b.provider === "string" ? b.provider : null; // for testing one provider
-  const errors = [];
+  const errors = [], started = Date.now();
   for (const [name, run] of providers.filter(([n]) => !only || n === only)) {
+    if (Date.now() - started > 45000) { errors.push(`${name}: skipped, time budget used`); continue; }
     try {
       const { text, model } = await run();
       const layout = extractJSON(text);
@@ -98,7 +99,7 @@ async function viaClaude(env, model, prompt, mime, b64) {
 async function viaGemini(env, model, prompt, mime, b64) {
   try { return await geminiOnce(env, model, prompt, mime, b64); }
   catch (e) { // free tier often returns 503/429 for a moment: wait and retry once
-    if (!/HTTP (503|429|500)/.test(e.message)) throw e;
+    if (!/HTTP (503|429|500)/.test(e.message)) throw e; // timeouts are not retried
     await new Promise(r => setTimeout(r, 2500));
     return geminiOnce(env, model, prompt, mime, b64);
   }
@@ -112,7 +113,7 @@ async function geminiOnce(env, model, prompt, mime, b64) {
       contents: [{ role: "user", parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
       generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "low" } },
     }),
-    signal: AbortSignal.timeout(40000),
+    signal: AbortSignal.timeout(25000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
@@ -121,13 +122,13 @@ async function geminiOnce(env, model, prompt, mime, b64) {
 }
 
 async function viaWorkersAI(env, prompt, img) {
-  const r = await env.AI.run(CF_MODEL, {
+  const r = await Promise.race([new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 30000)), env.AI.run(CF_MODEL, {
     messages: [
       { role: "system", content: SYSTEM },
       { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: img } }] },
     ],
     max_tokens: 3000, temperature: 0.1,
-  });
+  })]);
   const v = r && (r.response ?? r.result ?? r);
   return { text: typeof v === "string" ? v : JSON.stringify(v), model: CF_MODEL };
 }
