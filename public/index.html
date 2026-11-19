@@ -145,6 +145,16 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
 .detect { font-size: 13px; font-weight: 600; color: var(--good); }
 .detect.bad { color: var(--bad); }
 
+/* printer suggestion + lead form */
+.suggest .sg-main { margin: 0; font-size: 14px; font-weight: 600; }
+.suggest .sg-note { margin: 0; font-size: 13px; color: var(--muted); }
+.lead-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 14px; }
+.lead-grid .wide { grid-column: 1 / -1; }
+.lead-grid input, .lead-grid textarea, .lead-grid select { width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; color: var(--ink); background: var(--surface); font-weight: 400; }
+.lead-grid textarea { resize: vertical; }
+.fine { margin: 0; font-size: 12px; color: var(--muted); }
+.lead-err { margin: 0; font-size: 13px; color: var(--bad); min-height: 1em; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 /* LMPC dialog */
 .pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
 .pill { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
@@ -194,7 +204,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
     <a href="#languages">Printer languages</a>
     <a href="https://buytscprinters.com" rel="noopener">Printers</a>
   </nav>
-  <a class="btn dark" href="https://infinitesolutions.co.in" rel="noopener">Talk to Infinite Solutions</a>
+  <button type="button" class="btn dark" data-lead="talk">Talk to Infinite Solutions</button>
 </header>
 
 <div class="wrap">
@@ -279,6 +289,12 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
         <label class="check"><input type="checkbox" id="printLook"> Print look (1-bit dots)</label>
         <label class="check"><input type="checkbox" id="grid"> 5 mm grid</label>
       </section>
+      <section class="suggest" id="suggestBox">
+        <h2>Printer for this label</h2>
+        <p class="sg-main" id="sgMain"></p>
+        <p class="sg-note" id="sgNote"></p>
+        <button type="button" class="btn dark block" data-lead="printer">Get a printer quote</button>
+      </section>
       <section>
         <h2>Export</h2>
         <div class="row">
@@ -333,6 +349,32 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   <div class="dlg-body" id="libBody"></div>
 </dialog>
 
+<dialog id="leadDlg" aria-labelledby="leadTitle">
+  <form id="leadForm" novalidate>
+    <div class="dlg-head"><div><h2 id="leadTitle">Talk to Infinite Solutions</h2><div class="sub" id="leadSub">Printers, BarTender, label design and LMPC help. We reply within one working day.</div></div><button type="button" class="x" data-close aria-label="Close">×</button></div>
+    <div class="dlg-body lead-grid">
+      <label class="field">Name<input id="ldName" autocomplete="name" required></label>
+      <label class="field">Phone / WhatsApp<input id="ldPhone" type="tel" autocomplete="tel" inputmode="tel" placeholder="98100 00000"></label>
+      <label class="field">Email<input id="ldEmail" type="email" autocomplete="email" placeholder="you@company.in"></label>
+      <label class="field">Company<input id="ldCompany" autocomplete="organization"></label>
+      <label class="field">City<input id="ldCity" autocomplete="address-level2"></label>
+      <label class="field">I need<select id="ldNeed">
+        <option value="printer">A label printer quote</option>
+        <option value="migration">To switch from Zebra / Datamax / SATO</option>
+        <option value="bartender">BarTender software</option>
+        <option value="design">Label design / templates</option>
+        <option value="lmpc">An LMPC label review</option>
+        <option value="consumables">Labels and ribbons</option>
+        <option value="other">Something else</option></select></label>
+      <label class="field wide">Message<textarea id="ldMsg" rows="3" placeholder="Label size, quantity per day, printer you use today…"></textarea></label>
+      <label class="hp" aria-hidden="true">Website<input id="ldWeb" tabindex="-1" autocomplete="off"></label>
+      <p class="fine wide">We use these details only to reply to you. The label you are viewing (language, size, dpi) is sent with the enquiry so we can quote the right printer.</p>
+      <p class="lead-err wide" id="leadErr" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" id="leadSkip" hidden>Skip, just download</button><button type="submit" class="btn primary" id="leadSend">Send enquiry</button></div>
+  </form>
+</dialog>
+
 <dialog id="infoDlg" aria-labelledby="infoTitle">
   <div class="dlg-head"><div><h2 id="infoTitle">Label info</h2><div class="badges" style="margin-top:6px"><span class="detect" id="detectBadge"></span><span class="srcbadge" id="srcBadge" hidden></span></div></div><button type="button" class="x" data-close aria-label="Close">×</button></div>
   <div class="dlg-body"><div class="facts" id="facts"></div><div class="notes" id="notes"></div></div>
@@ -358,7 +400,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
       <div class="src">Source: <a href="https://www.khaitanco.com/sites/default/files/2026-03/Legal%20Metrology%20%28Packaged%20Commodities%29%20Rules%202011.pdf">LMPC Rules 2011, as amended to 13 Feb 2026</a></div>
     </details>
   </div>
-  <div class="dlg-foot"><button type="button" class="btn" id="lmpcCopy">Copy report</button><button type="button" class="btn primary" data-close>Done</button></div>
+  <div class="dlg-foot"><button type="button" class="btn soft" data-lead="lmpc" style="margin-right:auto">Get an expert review</button><button type="button" class="btn" id="lmpcCopy">Copy report</button><button type="button" class="btn primary" data-close>Done</button></div>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -1079,7 +1121,8 @@ function render(model, canvas, opts) {
   const view = opts.view || 0, swap = view === 90 || view === 270;
   const VW = swap ? H : W, VH = swap ? W : H;
   const native = !!opts.native;
-  const stageW = (canvas.closest(".stage") || canvas.parentElement.parentElement).clientWidth;
+  const stageEl = native ? null : canvas.closest(".stage") || (canvas.parentElement && canvas.parentElement.parentElement);
+  const stageW = stageEl ? stageEl.clientWidth : 620;
   const maxW = native ? VW : Math.max(160, Math.min(620, stageW - (stageW < 500 ? 44 : 70)));
   const maxH = 640;
   const k = native ? 1 : Math.min(maxW / VW, maxH / VH);
@@ -1327,6 +1370,7 @@ function draw() {
   if (!state.edited && (state.lang === "EPL2" || state.lang === "PGL") && t.hasDM) notes.unshift("This language file omits the GS1 DataMatrix. Use the TSPL or ZPL file to print the 2D code.");
   $("notes").innerHTML = notes.map(n => `<div class="note">${n}</div>`).join("");
   $("noteCount").hidden = !notes.length; $("noteCount").textContent = notes.length;
+  if (typeof suggestPrinter === "function") suggestPrinter();
 }
 
 function chooseLang(l) { if (state.source) { regenSource(l, state.dpi); syncButtons(); return; } state.lang = l; state.edited = false; syncButtons(); loadFile(); }
@@ -1923,6 +1967,69 @@ function formatCode(t, lang) {
 }
 $("fmtBtn").onclick = () => { const lang = detect($("prn").value); if (lang === "UNKNOWN") { toast("Language not recognised"); return; }
   $("prn").value = formatCode($("prn").value, lang); state.edited = true; draw(); toast("Code formatted"); };
+
+
+/* ---------------- Lead capture ---------------- */
+const API_BASE = P2L_API.replace(/\/api\/pic2label$/, "");
+const NEED_TEXT = {
+  talk: ["Talk to Infinite Solutions", "Printers, BarTender, label design and LMPC help. We reply within one working day.", "printer"],
+  printer: ["Get a printer quote", "Tell us where to send the quote. We will suggest the right TSC, Honeywell or Printronix model for this label.", "printer"],
+  lmpc: ["Get an expert LMPC review", "Our team checks the label against the Legal Metrology rules and sends a corrected design.", "lmpc"],
+  migrate: ["Switch printers without redoing labels", "We will quote a replacement printer that runs your existing label files.", "migration"],
+  download: ["Before you download", "Leave your number or email for printer offers and label tips, or skip.", "printer"],
+};
+function suggestPrinter() {
+  const m = state.lastModel; if (!m) return;
+  const lang = state.lastLang || state.lang, dpi = m.dpi, wmm = (state.ov.w || (state.lastW || m.w) / dpi * 25.4) || 0;
+  let main, note = "";
+  if (lang === "CPCL" || wmm && wmm <= 58 && lang !== "TSPL") main = "Mobile printer: TSC Alpha-30L or Honeywell RP4";
+  else if (dpi >= 600) main = "TSC MH641T (600 dpi) for fine text and small 2D codes";
+  else if (wmm > 110) main = "A 6-inch industrial printer for labels over 4 inches wide";
+  else if (dpi >= 300) main = "TSC TE344 or TX310 (300 dpi desktop); TSC MH341 for high volume";
+  else main = "TSC TE244 or TX210 (203 dpi desktop); TSC MH241 or Printronix T6000 for high volume";
+  if (["ZPL", "EPL2", "DPL"].includes(lang)) note = `This is a ${lang} file. TSC printers run ${lang} emulation, so it prints without redesigning.`;
+  else if (["SBPL", "FP", "PGL"].includes(lang)) note = `Moving off ${lang === "FP" ? "Fingerprint" : lang}? Send us the file and we will quote a printer that runs it.`;
+  else if (wmm) note = `Label about ${Math.round(wmm)} mm wide at ${dpi} dpi.`;
+  $("sgMain").textContent = main; $("sgNote").textContent = note;
+  state.suggestion = main;
+}
+let leadAfter = null;
+function openLead(kind, after) {
+  const [title, sub, need] = NEED_TEXT[kind] || NEED_TEXT.talk;
+  $("leadTitle").textContent = title; $("leadSub").textContent = sub; $("ldNeed").value = need;
+  if (kind === "printer" && ["ZPL", "EPL2", "DPL", "SBPL", "FP"].includes(state.lastLang)) $("ldNeed").value = "migration";
+  $("leadSkip").hidden = kind !== "download"; $("leadSend").textContent = kind === "download" ? "Send and download" : "Send enquiry";
+  $("leadErr").textContent = ""; leadAfter = after || null; leadKind = kind;
+  for (const d of document.querySelectorAll("dialog[open]")) if (d.id !== "leadDlg") d.close();
+  const saved = store.get("p2l-contact"); if (saved) { try { const c = JSON.parse(saved); for (const k of ["Name", "Phone", "Email", "Company", "City"]) if (c[k] && !$("ld" + k).value) $("ld" + k).value = c[k]; } catch (e) {} }
+  $("leadDlg").showModal();
+}
+let leadKind = "talk";
+$("leadForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = id => $(id).value.trim(), phone = v("ldPhone"), email = v("ldEmail");
+  if (phone.replace(/\D/g, "").length < 7 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $("leadErr").textContent = "Add a phone number or an email address so we can reply."; return; }
+  const m = state.lastModel || {}, dpi = m.dpi || state.dpi;
+  const context = { file: $("fileName").textContent, language: state.lastLang, dpi, label_mm: m.w ? [+(m.w / dpi * 25.4).toFixed(1), +(m.h / dpi * 25.4).toFixed(1)] : null, suggestion: state.suggestion, page: location.host };
+  $("leadSend").disabled = true; $("leadErr").textContent = "";
+  try {
+    const r = await fetch(API_BASE + "/api/lead", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: v("ldName"), phone, email, company: v("ldCompany"), city: v("ldCity"), need: $("ldNeed").value, message: v("ldMsg"), website: v("ldWeb"), source: leadKind, context }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "Could not send");
+    store.set("p2l-contact", JSON.stringify({ Name: v("ldName"), Phone: phone, Email: email, Company: v("ldCompany"), City: v("ldCity") }));
+    store.set("p2l-lead-asked", "1"); $("leadDlg").close(); $("ldMsg").value = "";
+    toast("Thank you. Infinite Solutions will contact you soon.");
+    if (leadAfter) { const f = leadAfter; leadAfter = null; f(); }
+  } catch (err) { $("leadErr").textContent = err.message + ". You can also call or WhatsApp Infinite Solutions."; }
+  finally { $("leadSend").disabled = false; }
+});
+$("leadSkip").onclick = () => { store.set("p2l-lead-asked", "1"); $("leadDlg").close(); if (leadAfter) { const f = leadAfter; leadAfter = null; f(); } };
+document.addEventListener("click", e => { const b = e.target.closest("[data-lead]"); if (b) openLead(b.dataset.lead); });
+// ask once per browser, the first time someone downloads; the download always happens
+for (const id of ["dlBtn", "pngBtn", "pdfBtn", "sheetBtn"]) {
+  const run = $(id).onclick;
+  $(id).onclick = ev => { if (store.get("p2l-lead-asked") || store.get("p2l-contact")) return run(ev); openLead("download", () => run(ev)); };
+}
 
 buildList(); syncButtons(); loadFile();
 loadFromHash().then(ok => { if (!ok && $("rememberChk").checked && store.get("p2l-last")) { try { unpackState(store.get("p2l-last")); toast("Your last label is back"); } catch (e) {} } });

@@ -134,10 +134,52 @@ async function viaWorkersAI(env, prompt, img) {
   return { text: typeof v === "string" ? v : JSON.stringify(v), model: CF_MODEL };
 }
 
+/* ---------- leads: enquiries from the site, kept in D1 ---------- */
+const clip = (v, n) => String(v ?? "").replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n);
+async function saveLead(request, env) {
+  if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+  if (request.method !== "POST") return json({ error: "Use POST" }, 405);
+  if (!env.LEADS) return json({ error: "Lead storage is not set up" }, 503);
+  if (env.LEAD_LIMITER) { const { success } = await env.LEAD_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") || "anon" }); if (!success) return json({ error: "Too many requests; try again in a minute." }, 429); }
+  let b; try { b = await request.json(); } catch { return json({ error: "Send JSON" }, 400); }
+  if (b.website) return json({ ok: true }); // honeypot: bots fill every field
+  const phone = clip(b.phone, 30), email = clip(b.email, 120).toLowerCase();
+  if (!/\d{7,}/.test(phone.replace(/\D/g, "")) && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Give a phone number or an email address." }, 400);
+  const ctx = clip(JSON.stringify(b.context || {}), 2000);
+  const r = await env.LEADS.prepare("INSERT INTO leads (name, phone, email, company, city, need, message, source, context, country) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)")
+    .bind(clip(b.name, 80), phone, email, clip(b.company, 120), clip(b.city, 60), clip(b.need, 60), clip(b.message, 1000), clip(b.source, 60), ctx, request.cf && request.cf.country || "").run();
+  return json({ ok: true, id: r.meta && r.meta.last_row_id });
+}
+function isAdmin(request, env) {
+  const key = request.headers.get("x-admin-key") || new URL(request.url).searchParams.get("key") || "";
+  return env.ADMIN_KEY && key.length >= 12 && key === env.ADMIN_KEY;
+}
+async function listLeads(request, env) {
+  if (!env.ADMIN_KEY) return json({ error: "Set the ADMIN_KEY secret on the Worker first." }, 503);
+  if (!isAdmin(request, env)) return json({ error: "Wrong key" }, 401);
+  const url = new URL(request.url);
+  if (request.method === "POST") { // update status
+    const b = await request.json().catch(() => ({}));
+    if (!["new", "contacted", "quoted", "won", "lost"].includes(b.status)) return json({ error: "Bad status" }, 400);
+    await env.LEADS.prepare("UPDATE leads SET status = ?1 WHERE id = ?2").bind(b.status, +b.id || 0).run();
+    return json({ ok: true });
+  }
+  const { results } = await env.LEADS.prepare("SELECT * FROM leads ORDER BY id DESC LIMIT 1000").all();
+  if (url.searchParams.get("format") === "csv") {
+    const cols = ["id", "created_at", "status", "name", "phone", "email", "company", "city", "need", "message", "source", "country", "context"];
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const csv = [cols.join(","), ...results.map(r => cols.map(c => esc(r[c])).join(","))].join("\r\n");
+    return new Response(csv, { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": "attachment; filename=pic2label-leads.csv", "cache-control": "no-store" } });
+  }
+  return new Response(JSON.stringify({ leads: results }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/pic2label") return pic2label(request, env);
+    if (url.pathname === "/api/lead") return saveLead(request, env);
+    if (url.pathname === "/api/leads") return listLeads(request, env);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);
   },

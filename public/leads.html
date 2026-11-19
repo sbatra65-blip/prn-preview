@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Pic2Label enquiries</title>
+<style>
+:root { --bg: #f5f6f8; --surface: #fff; --ink: #101828; --muted: #5b6475; --line: #e3e6ec; --accent: #c2410c; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f141a; --surface: #161d25; --ink: #e8edf2; --muted: #a2adba; --line: #2a3542; --accent: #ff7a3d; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 Inter, system-ui, sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--line); }
+h1 { margin: 0; font-size: 18px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+input, select, button { font: inherit; color: inherit; }
+input, select { height: 36px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; background: var(--surface); }
+button { height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+main { padding: 16px 24px 40px; }
+.msg { color: var(--muted); margin: 8px 0 16px; }
+.wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 1100px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); position: sticky; top: 0; background: var(--surface); }
+td small { color: var(--muted); display: block; }
+a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pic2Label enquiries</h1>
+  <form class="row" id="keyForm">
+    <label for="key">Admin key</label>
+    <input id="key" type="password" autocomplete="current-password" required>
+    <button type="submit" class="primary">Show</button>
+    <button type="button" id="csv">Download CSV</button>
+  </form>
+</header>
+<main>
+  <p class="msg" id="msg" role="status">Enter the admin key set on the Worker (secret ADMIN_KEY).</p>
+  <div class="wrap"><table>
+    <thead><tr><th>When</th><th>Status</th><th>Name / company</th><th>Contact</th><th>Need</th><th>Message</th><th>Label</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+let key = ""; try { key = sessionStorage.getItem("p2l-admin") || ""; } catch (e) {}
+$("key").value = key;
+async function load() {
+  key = $("key").value.trim(); try { sessionStorage.setItem("p2l-admin", key); } catch (e) {}
+  const r = await fetch("/api/leads", { headers: { "x-admin-key": key } }), j = await r.json().catch(() => ({}));
+  if (!r.ok) { $("msg").textContent = j.error || "Could not load"; $("rows").innerHTML = ""; return; }
+  $("msg").textContent = `${j.leads.length} enquiries, newest first.`;
+  $("rows").innerHTML = j.leads.map(l => {
+    let c = {}; try { c = JSON.parse(l.context || "{}"); } catch (e) {}
+    const wa = (l.phone || "").replace(/\D/g, ""), waNum = wa.length === 10 ? "91" + wa : wa;
+    return `<tr><td>${esc(l.created_at)} UTC<small>${esc(l.source)} · ${esc(l.country)}</small></td>
+      <td><select data-id="${l.id}">${["new", "contacted", "quoted", "won", "lost"].map(s => `<option${s === l.status ? " selected" : ""}>${s}</option>`).join("")}</select></td>
+      <td>${esc(l.name)}<small>${esc(l.company)} ${l.city ? "· " + esc(l.city) : ""}</small></td>
+      <td>${l.phone ? `<a href="tel:${esc(l.phone)}">${esc(l.phone)}</a> · <a href="https://wa.me/${esc(waNum)}" rel="noopener">WhatsApp</a>` : ""}${l.email ? `<small><a href="mailto:${esc(l.email)}">${esc(l.email)}</a></small>` : ""}</td>
+      <td>${esc(l.need)}</td><td>${esc(l.message)}</td>
+      <td>${esc(c.language || "")} ${c.dpi ? esc(c.dpi) + " dpi" : ""}<small>${c.label_mm ? esc(c.label_mm.join(" × ")) + " mm" : ""} ${esc(c.file || "")}</small><small>${esc(c.suggestion || "")}</small></td></tr>`;
+  }).join("");
+}
+$("keyForm").onsubmit = e => { e.preventDefault(); load(); };
+$("rows").onchange = async e => {
+  const s = e.target.closest("select[data-id]"); if (!s) return;
+  const r = await fetch("/api/leads", { method: "POST", headers: { "x-admin-key": key, "content-type": "application/json" }, body: JSON.stringify({ id: s.dataset.id, status: s.value }) });
+  $("msg").textContent = r.ok ? "Status saved." : "Could not save status.";
+};
+$("csv").onclick = async () => {
+  const r = await fetch("/api/leads?format=csv", { headers: { "x-admin-key": $("key").value.trim() } });
+  if (!r.ok) { $("msg").textContent = "Wrong key or not set up."; return; }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(await r.blob()); a.download = "pic2label-leads.csv"; document.body.appendChild(a); a.click(); a.remove();
+};
+if (key) load();
+</script>
+</body>
+</html>
