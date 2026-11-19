@@ -67,7 +67,8 @@ async function pic2label(request, env) {
   const only = typeof b.provider === "string" ? b.provider : null; // for testing one provider
   const errors = [], started = Date.now();
   for (const [name, run] of providers.filter(([n]) => !only || n === only)) {
-    if (Date.now() - started > 45000) { errors.push(`${name}: skipped, time budget used`); continue; }
+    // keep the whole request under ~60 s: stop trying slow Gemini models, but always give the backup a go
+    if (name !== "workers-ai" && Date.now() - started > 25000) { errors.push(`${name}: skipped, time budget used`); continue; }
     try {
       const { text, model } = await run();
       const layout = extractJSON(text);
@@ -113,7 +114,7 @@ async function geminiOnce(env, model, prompt, mime, b64) {
       contents: [{ role: "user", parts: [{ inline_data: { mime_type: mime, data: b64 } }, { text: prompt }] }],
       generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "low" } },
     }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(22000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
@@ -122,7 +123,7 @@ async function geminiOnce(env, model, prompt, mime, b64) {
 }
 
 async function viaWorkersAI(env, prompt, img) {
-  const r = await Promise.race([new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 30000)), env.AI.run(CF_MODEL, {
+  const r = await Promise.race([new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 35000)), env.AI.run(CF_MODEL, {
     messages: [
       { role: "system", content: SYSTEM },
       { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: img } }] },
