@@ -51,6 +51,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wrap { max-width: 1280px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 40px) 56px; display: flex; flex-direction: column; gap: 26px; }
 .hero h1 { font: 700 clamp(30px, 6vw, 44px)/1.1 var(--font-head); letter-spacing: -0.5px; }
 .hero p { margin: 10px 0 0; max-width: 62ch; font-size: 17px; color: var(--muted); }
+.hero .langline { margin-top: 8px; max-width: 90ch; font-size: 14px; }
 
 /* start cards */
 .starts { display: flex; flex-wrap: wrap; gap: 16px; }
@@ -200,6 +201,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   <div class="hero">
     <h1>See any label file before you print it.</h1>
     <p>Open a printer file in any of 8 languages, or turn a picture into one. Preview it at 203, 300 or 600 dpi and export it for any printer.</p>
+    <p class="langline" id="languages">Reads and writes TSPL (TSC), ZPL (Zebra, Honeywell, Printronix), EPL2 (Zebra, Eltron), PGL (Printronix), DPL (Datamax, Honeywell, Citizen), Fingerprint (Honeywell, Intermec), SBPL (SATO) and CPCL (mobile printers).</p>
   </div>
 
   <div class="starts">
@@ -293,9 +295,6 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   </section>
   <input class="file-input" type="file" id="fileIn" accept=".prn,.txt,.zpl,.tspl,.epl,.pgl,.dpl,.cpcl,.lbl">
 
-  <div class="langs" id="languages"><span class="lbl">Reads and writes</span>
-    <span class="chip">TSPL · TSC</span><span class="chip">ZPL · Zebra, Honeywell, Printronix</span><span class="chip">EPL2 · Zebra / Eltron</span><span class="chip">PGL · Printronix</span><span class="chip">DPL · Datamax, Honeywell, Citizen</span><span class="chip">Fingerprint · Honeywell, Intermec</span><span class="chip">SBPL · SATO</span><span class="chip">CPCL · mobile printers</span>
-  </div>
   <p class="foot">Built by <a href="https://infinitesolutions.co.in">Infinite Solutions</a>, New Delhi: authorised TSC, Printronix, Honeywell and BarTender partner. Pictures read with AI are not stored.</p>
 </div>
 
