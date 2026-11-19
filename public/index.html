@@ -63,7 +63,18 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); ga
 .tpl small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .tpl .size { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
 .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+html, body { max-width: 100%; overflow-x: hidden; }
+main > *, .stack > *, section.outbar, section.create .panel { min-width: 0; }
+.stage, .label-wrap { max-width: 100%; }
+#label { max-width: 100%; height: auto; }
+@media (max-width: 700px) {
+  .seg button { padding: 7px 9px; flex: 1 0 auto; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  section.outbar .lbl { min-width: 0; width: 100%; }
+  label.num input { width: 70px; }
+  .btn-row { flex-wrap: wrap; }
+}
 .seg button { border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 11px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
@@ -1071,7 +1082,8 @@ function render(model, canvas, opts) {
   const view = opts.view || 0, swap = view === 90 || view === 270;
   const VW = swap ? H : W, VH = swap ? W : H;
   const native = !!opts.native;
-  const maxW = native ? VW : Math.min(620, canvas.parentElement.parentElement.clientWidth - 70);
+  const stageW = (canvas.closest(".stage") || canvas.parentElement.parentElement).clientWidth;
+  const maxW = native ? VW : Math.max(160, Math.min(620, stageW - (stageW < 500 ? 44 : 70)));
   const maxH = 640;
   const k = native ? 1 : Math.min(maxW / VW, maxH / VH);
   const dpr = native ? 1 : window.devicePixelRatio || 1;
