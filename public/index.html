@@ -159,6 +159,10 @@ section.create.one { grid-template-columns: 1fr; }
   <span class="chip">ZPL · Zebra, Honeywell, Printronix, TSC emulation</span>
   <span class="chip">EPL2 · older Zebra / Eltron</span>
   <span class="chip">PGL · Printronix</span>
+  <span class="chip">DPL · Datamax-O'Neil, Honeywell, Citizen</span>
+  <span class="chip">Fingerprint / DP · Honeywell, Intermec</span>
+  <span class="chip">SBPL · SATO</span>
+  <span class="chip">CPCL · Zebra / Honeywell / TSC mobile</span>
 </div>
 
 <section class="outbar panel" aria-label="Printer language and resolution">
@@ -172,6 +176,10 @@ section.create.one { grid-template-columns: 1fr; }
           <button type="button" data-lang="ZPL">ZPL</button>
           <button type="button" data-lang="EPL2">EPL2</button>
           <button type="button" data-lang="PGL">PGL</button>
+          <button type="button" data-lang="DPL">DPL</button>
+          <button type="button" data-lang="FP">Fingerprint</button>
+          <button type="button" data-lang="SBPL">SBPL</button>
+          <button type="button" data-lang="CPCL">CPCL</button>
         </div>
         <div class="seg" role="group" aria-label="Printer resolution" id="dpiSeg">
           <button type="button" data-dpi="203">203 dpi</button>
@@ -262,7 +270,7 @@ section.create.one { grid-template-columns: 1fr; }
         <button type="button" class="btn primary" id="copyBtn">Copy code</button>
         <button type="button" class="btn" id="libBtn">Library</button>
         <label class="btn" for="fileIn">Open PRN file</label>
-        <input class="file-input" type="file" id="fileIn" accept=".prn,.txt,.zpl,.tspl,.epl,.pgl">
+        <input class="file-input" type="file" id="fileIn" accept=".prn,.txt,.zpl,.tspl,.epl,.pgl,.dpl,.cpcl,.lbl">
         <button type="button" class="btn" id="dlBtn">Download .prn</button>
         <button type="button" class="btn" id="resetBtn">Reset</button>
       </div>
@@ -350,6 +358,10 @@ function ean13Full(d) {
 function detect(t) {
   if (/\^XA/i.test(t)) return "ZPL";
   if (/~CREATE;/i.test(t)) return "PGL";
+  if (/(\x02|<STX>)L/i.test(t)) return "DPL";
+  if (/(\x1b|<ESC>)A/i.test(t)) return "SBPL";
+  if (/^\s*!\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+/m.test(t)) return "CPCL";
+  if (/^\s*(\d+\s+)?(PP|PRPOS)\s*-?\d+\s*,\s*-?\d+/mi.test(t) && /\b(PT|PRTXT|PB|PRBAR|PF|PRINTFEED|PL|PX)\b/i.test(t)) return "FP";
   if (/(^|>)\s*SIZE\s+[\d.]/mi.test(t) || /^\s*(CLS|PRINT\s+\d)/mi.test(t)) return "TSPL";
   if (/^\s*q\d+/m.test(t) || /^\s*A\d+,\d+,\d/m.test(t)) return "EPL2";
   return "UNKNOWN";
@@ -675,6 +687,333 @@ function bitmapCanvas(it) {
   ctx.putImageData(img, 0, 0); return c;
 }
 
+/* ---------------- More printer languages: DPL, Fingerprint / Direct Protocol, SBPL, CPCL ---------------- */
+// Control characters are shown as <STX>, <ESC>, <SOH> in the editor and turned back into bytes on download.
+const CTL_NAMES = { "\x01": "<SOH>", "\x02": "<STX>", "\x03": "<ETX>", "\x17": "<ETB>", "\x18": "<CAN>", "\x1b": "<ESC>" };
+const showCtl = t => t.replace(/[\x01\x02\x03\x17\x18\x1b]/g, c => CTL_NAMES[c]);
+const realCtl = t => t.replace(/<(SOH|STX|ETX|ETB|CAN|ESC)>/gi, (_, n) => ({ SOH: "\x01", STX: "\x02", ETX: "\x03", ETB: "\x17", CAN: "\x18", ESC: "\x1b" })[n.toUpperCase()]);
+const b36 = ch => { const v = parseInt(ch, 36); return Number.isFinite(v) ? v : 1; };
+const textW = (s, em, sx) => (measureEm(s, em) || em * 0.5 * s.length) * (sx || 1);
+
+// Items given in "y up" printer coordinates (DPL, Fingerprint) are placed once the label height is known.
+// P = anchor point, w/h = object size, ax/ay = anchor position on the object (0..1, ay measured upwards), deg = clockwise on screen
+function upPush(m, it, P, w, h, ax, ay, deg) { (m._up = m._up || []).push({ it, P, w, h, ax, ay, deg: deg || 0 }); }
+function upFinish(m) {
+  const up = m._up || []; delete m._up;
+  if (!m.h) { let top = 0, bot = Infinity; for (const u of up) { top = Math.max(top, u.P[1] + u.h); bot = Math.min(bot, u.P[1]); } m.h = top + Math.max(16, isFinite(bot) ? bot : 16); }
+  for (const u of up) {
+    const r = u.deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r), Px = u.P[0], Py = m.h - u.P[1];
+    const lx = -u.ax * u.w, ly = -(1 - u.ay) * u.h;
+    const x = Px + lx * c - ly * s, y = Py + lx * s + ly * c;
+    if (u.it.k === "rect") { // rectangles stay axis-aligned
+      const sw = Math.abs(u.deg % 180) === 90; u.it.w = sw ? u.h : u.w; u.it.h = sw ? u.w : u.h;
+      u.it.x = Math.min(x, x + (sw ? -u.h * s : u.w * c)); u.it.y = Math.min(y, y + (sw ? u.w * s : u.h * c));
+      if (u.deg === 0) { u.it.x = x; u.it.y = y; }
+    } else Object.assign(u.it, { x, y, deg: u.deg, tspl: true });
+    m.items.push(u.it);
+  }
+}
+function barItem(bcid, data, h, mod, hri) {
+  let text = data, hriText = data;
+  if (bcid === "ean13") { text = data.replace(/\D/g, "").slice(0, 12); if (text.length < 12) return null; hriText = ean13Full(text); }
+  if (bcid === "gs1-128" && !/^\(/.test(data)) { text = hriText = gs1Paren("\x1d" + data.replace(/[^\x1d\w]/g, "")); }
+  const c = bwipCanvas({ bcid, text, height: 5 }); const w = (c ? c.width : 80) * mod;
+  return { it: { k: "bar", bcid, text, hriText, h, mod, hri }, w };
+}
+function twoD(kind, data, mod, ecc) {
+  const gs1 = kind === "dm" && /^\(\d/.test(data);
+  const c = bwipCanvas({ bcid: kind === "qr" ? "qrcode" : gs1 ? "gs1datamatrix" : "datamatrix", text: data, ...(kind === "qr" ? { eclevel: ecc || "M" } : {}) });
+  const n = c ? (kind === "qr" ? qrModules(c) : dmModules(c)) : 21;
+  return { it: { k: kind, text: data, mod, ecc: ecc || "M", gs1 }, s: n * mod };
+}
+
+/* ---- DPL (Datamax-O'Neil, Honeywell, Citizen Datamax mode) ---- */
+const DPL_F = { 0: [5, 7], 1: [7, 13], 2: [10, 18], 3: [14, 27], 4: [18, 36], 5: [24, 52], 6: [32, 64], 7: [15, 27], 8: [15, 28] };
+const DPL_BC = { A: "code39", B: "upca", C: "upce", D: "interleaved2of5", E: "code128", F: "ean13", G: "ean8", I: "rationalizedCodabar", O: "code93", Q: "gs1-128" };
+function parseDPL(t, dpi) {
+  t = realCtl(t);
+  const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
+  let metric = false, inFmt = false, dotX = 1, dotY = 1;
+  const u = v => v * (metric ? dpi / 254 : dpi / 100);
+  for (let line of t.split(/\r\n|\r|\n/)) {
+    line = line.replace(/\x01./g, "");
+    const segs = line.split("\x02");
+    let body = segs[0];
+    for (const sg of segs.slice(1)) {
+      const c = sg[0];
+      if (c === "L") { inFmt = true; body = sg.slice(1); }
+      else if (c === "m") metric = true; else if (c === "n") metric = false;
+      else if (c === "c" && /^c\d{4}/.test(sg)) m.h = u(+sg.slice(1, 5));
+    }
+    const s = body.trim(); if (!s || !inFmt) continue;
+    const rec = s.match(/^([1-4])([0-9A-Za-z])([0-9A-Za-z])([0-9A-Za-z])([0-9A-Za-z]{3})(\d{4})(\d{4})(.*)$/);
+    const w2d = s.match(/^([1-4])W([0-9][A-Za-z])([0-9A-Za-z])([0-9A-Za-z])(\d{3})(\d{4})(\d{4})(.*)$/);
+    if (w2d) {
+      const deg = { 1: 0, 2: 270, 3: 180, 4: 90 }[w2d[1]], type = w2d[2].toLowerCase(), mod = Math.max(1, b36(w2d[3]));
+      const P = [u(+w2d[7]), u(+w2d[6])]; let data = w2d[8];
+      if (type === "1d") { const ecc = (data.match(/^[12]?([LMQH])[AM],/) || [, "M"])[1]; data = data.replace(/^[12]?[LMQH]?[AM],/, ""); const q = twoD("qr", data, mod, ecc); upPush(m, q.it, P, q.s, q.s, 0, 0, deg); }
+      else if (type === "1c") { const d = twoD("dm", data, mod); upPush(m, d.it, P, d.s, d.s, 0, 0, deg); }
+      else m.warn.push("DPL 2D symbol W" + w2d[2] + " not previewed");
+      continue;
+    }
+    if (!rec) {
+      const c = s[0];
+      if (c === "E" || c === "X") inFmt = false;
+      else if (c === "m") metric = true; else if (c === "n") metric = false;
+      else if (c === "D" && /^D\d\d/.test(s)) { dotX = +s[1] || 1; dotY = +s[2] || 1; }
+      else if (!/^[HPSQAC RzyMUeKpTGF+-^]/.test(c)) m.warn.push("DPL line not previewed: " + s.slice(0, 20));
+      continue;
+    }
+    const [, r, id, cm, dm, eee, row, col, data] = rec;
+    const deg = { 1: 0, 2: 270, 3: 180, 4: 90 }[r], P = [u(+col), u(+row)];
+    if (/[0-8]/.test(id)) {
+      const f = DPL_F[id], k = dpi / 203, em = f[1] * k * b36(dm) * dotY, cw = f[0] * k * b36(cm) * dotX;
+      upPush(m, { k: "text", s: data, em, cw, mono: true }, P, cw * data.length, em, 0, 0, deg);
+    } else if (id === "9") {
+      const pt = /^[A-Z]\d\d$/i.test(eee) ? +eee.slice(1) : (+eee || 10), em = pt / 72 * dpi, sx = b36(cm) / Math.max(1, b36(dm));
+      upPush(m, { k: "text", s: data, em, sx, align: 1 }, P, textW(data, em, sx), em * 0.85, 0, 0, deg);
+    } else if (id === "X") {
+      const lm = data.match(/^l(\d{4})(\d{4})/), bm = data.match(/^b(\d{4})(\d{4})(\d{4})(\d{4})/);
+      if (lm) upPush(m, { k: "rect" }, P, u(+lm[1]), u(+lm[2]), 0, 0, 0);
+      else if (bm) { const W = u(+bm[1]), H = u(+bm[2]), tb = u(+bm[3]) || 1, ts = u(+bm[4]) || 1;
+        upPush(m, { k: "rect" }, P, W, tb, 0, 0, 0); upPush(m, { k: "rect" }, [P[0], P[1] + H - tb], W, tb, 0, 0, 0);
+        upPush(m, { k: "rect" }, P, ts, H, 0, 0, 0); upPush(m, { k: "rect" }, [P[0] + W - ts, P[1]], ts, H, 0, 0, 0); }
+      else m.warn.push("DPL graphic record not previewed");
+    } else if (id === "Y") m.warn.push("DPL stored image (Y) not previewed");
+    else {
+      const bcid = DPL_BC[id.toUpperCase()]; if (!bcid) { m.warn.push("DPL barcode type " + id + " not previewed"); continue; }
+      const narrow = Math.max(1, b36(dm)), bh = u(+eee) || u(50);
+      const b = barItem(bcid === "upca" ? "ean13" : bcid, bcid === "upca" ? "0" + data : data, bh, narrow, id === id.toUpperCase());
+      if (!b) { m.warn.push("DPL barcode data invalid: " + data); continue; }
+      upPush(m, b.it, P, b.w, bh, 0, 0, deg);
+    }
+  }
+  if (!m.h && state.sizeHint) { m.h = state.sizeHint[1] * dpi / 25.4; m.w = state.sizeHint[0] * dpi / 25.4; }
+  upFinish(m); return m;
+}
+
+/* ---- Fingerprint / Direct Protocol (Honeywell, Intermec) ---- */
+function fpStatements(t) {
+  const out = [];
+  for (let line of t.split(/\r\n|\r|\n/)) {
+    line = line.replace(/^\s*\d+\s+/, ""); // optional line numbers
+    let cur = "", q = false;
+    for (const ch of line) { if (ch === '"') q = !q; if (ch === ":" && !q) { out.push(cur.trim()); cur = ""; } else cur += ch; }
+    if (cur.trim()) out.push(cur.trim());
+  }
+  return out;
+}
+const FP_BT = { CODE128: "code128", "CODE128A": "code128", "CODE128B": "code128", "CODE128C": "code128", EAN13: "ean13", CODE39: "code39", EAN128: "gs1-128", UCC128: "gs1-128", "GS1-128": "gs1-128", UPCA: "upca", EAN8: "ean8", CODE93: "code93", I2OF5: "interleaved2of5" };
+function parseFP(t, dpi) {
+  const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
+  let P = [0, 0], dir = 1, an = 1, em = 12 / 72 * dpi, sx = 1, bt = "CODE128", bh = 100, bm = 2, bf = false;
+  const strs = a => [...a.matchAll(/"((?:[^"]|"")*)"/g)].map(x => x[1].replace(/""/g, '"')).join("");
+  for (const st of fpStatements(t)) {
+    const mm = st.match(/^([A-Z$]+)\s*(.*)$/i); if (!mm) continue;
+    const cmd = mm[1].toUpperCase(), arg = mm[2];
+    const nums = arg.split(",").map(v => parseFloat(v));
+    const ax = ((an - 1) % 3) / 2, ay = Math.floor((an - 1) / 3) / 2, deg = { 1: 0, 2: 90, 3: 180, 4: 270 }[dir] || 0;
+    if (cmd === "REM") { const s = arg.match(/W=(\d+)\s*H=(\d+)/i); if (s) { m.w = +s[1]; m.h = +s[2]; } }
+    else if (cmd === "PP" || cmd === "PRPOS") P = [nums[0] || 0, nums[1] || 0];
+    else if (cmd === "DIR") dir = nums[0] || 1;
+    else if (cmd === "AN" || cmd === "ALIGN") an = nums[0] || 1;
+    else if (cmd === "FT" || cmd === "FONT") { const p = arg.replace(/^"[^"]*"\s*,?/, "").split(",").map(Number); em = (p[0] || 12) / 72 * dpi; sx = p[2] ? p[2] / 100 : 1; }
+    else if (cmd === "PT" || cmd === "PRTXT") { const s = strs(arg); upPush(m, { k: "text", s, em, sx, align: 1 }, P, textW(s, em, sx), em * 0.8, ax, ay, deg); }
+    else if (cmd === "BT" || cmd === "BARTYPE") bt = strs(arg).toUpperCase().replace(/\s/g, "");
+    else if (cmd === "BH" || cmd === "BARHEIGHT") bh = nums[0] || bh;
+    else if (cmd === "BM" || cmd === "BARMAG") bm = nums[0] || bm;
+    else if (cmd === "BF" || cmd === "BARFONT") bf = !/OFF/i.test(arg);
+    else if (cmd === "PB" || cmd === "PRBAR") {
+      const data = strs(arg);
+      if (bt === "QRCODE") { const q = twoD("qr", data, bm); upPush(m, q.it, P, q.s, q.s, ax, ay, deg); continue; }
+      if (bt === "DATAMATRIX") { const d = twoD("dm", data, bm); upPush(m, d.it, P, d.s, d.s, ax, ay, deg); continue; }
+      const bcid = FP_BT[bt]; if (!bcid) { m.warn.push("Fingerprint barcode type " + bt + " not previewed"); continue; }
+      const b = barItem(bcid === "upca" ? "ean13" : bcid, bcid === "upca" ? "0" + data : data, bh, bm, bf);
+      if (!b) { m.warn.push("Barcode data invalid: " + data); continue; }
+      upPush(m, b.it, P, b.w, bh, ax, ay, deg);
+    }
+    else if (cmd === "PL" || cmd === "PRLINE") upPush(m, { k: "rect" }, P, nums[0] || 0, nums[1] || 1, ax, ay, deg);
+    else if (cmd === "PX" || cmd === "PRBOX") {
+      const H = nums[0] || 0, W = nums[1] || 0, th = nums[2] || 1, bx = P[0] - ax * W, by = P[1] - ay * H;
+      for (const [x, y, w, h] of [[bx, by, W, th], [bx, by + H - th, W, th], [bx, by, th, H], [bx + W - th, by, th, H]]) upPush(m, { k: "rect" }, [x, y], w, h, 0, 0, 0);
+    }
+    else if (/^(PF|PRINTFEED)$/.test(cmd)) break;
+    else if (!/^(INPUT|VERBON|VERBOFF|LAYOUT|CLL|INVIMAGE|II|NI|NORIMAGE|NASC|MAG|SETUP|OPTIMIZE|BARRATIO|BR|BARSET|BARFONTON|BARFONTOFF|BFON|BFOFF|FT|PRINT|DIRECTION|ON|CLIP|SYSVAR|PM|PRIMAGE|FORMFEED|FF|LBLCOND|DBF|BEEP)$/.test(cmd)) m.warn.push("Fingerprint command not previewed: " + cmd);
+  }
+  upFinish(m); return m;
+}
+
+/* ---- SBPL (SATO) ---- */
+const SATO_F = { XU: [5, 9], XS: [17, 17], XM: [24, 24], XB: [48, 48], XL: [48, 48], OA: [15, 22], OB: [20, 24], WB: [18, 30], WL: [28, 52], U: [5, 9], S: [8, 15], M: [13, 20] };
+const SATO_BC = { 0: "rationalizedCodabar", 1: "code39", 2: "interleaved2of5", 3: "ean13", 4: "ean8", G: "code128", I: "gs1-128" };
+function parseSBPL(t, dpi) {
+  t = realCtl(t).replace(/\r?\n/g, "");
+  const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
+  let V = 0, H = 0, lh = 1, lv = 1, deg = 0, vf = null, pend = null; const k = dpi / 203;
+  for (const tok of t.split("\x1b").slice(1)) {
+    let r;
+    if ((r = tok.match(/^A1(\d{3,4})(\d{3,4})/))) { m.h = +r[1]; m.w = +r[2]; }
+    else if (tok === "A" || tok === "Z" || /^Q\d+/.test(tok)) { /* start, end, quantity */ }
+    else if ((r = tok.match(/^V(\d+)/))) V = +r[1];
+    else if ((r = tok.match(/^H(\d+)/))) H = +r[1];
+    else if ((r = tok.match(/^L(\d\d)(\d\d)/))) { lh = +r[1] || 1; lv = +r[2] || 1; }
+    else if ((r = tok.match(/^%(\d)/))) deg = { 0: 0, 1: 270, 2: 180, 3: 90 }[r[1]] || 0;
+    else if ((r = tok.match(/^\$A,(\d+),(\d+),\d/))) vf = [+r[1], +r[2]];
+    else if ((r = tok.match(/^\$=(.*)$/s))) { const f = vf || [24, 24]; m.items.push({ k: "text", x: H, y: V, em: f[1], sx: f[0] / f[1], s: r[1], deg, align: 1, tspl: true }); }
+    else if ((r = tok.match(/^(XU|XS|XM|XB|XL|OA|OB|WB|WL|U|S|M)(.*)$/s))) { const f = SATO_F[r[1]]; m.items.push({ k: "text", x: H, y: V, em: f[1] * k * lv, cw: f[0] * k * lh, s: r[2], mono: true, deg, tspl: true }); }
+    else if ((r = tok.match(/^(?:B|D|BD)([0-9GI])(\d\d)(\d{3})(.*)$/s))) {
+      const bcid = SATO_BC[r[1]]; let data = r[4];
+      if (r[1] === "G" || r[1] === "I") data = data.replace(/^>[A-Z]/, "").replace(/>[A-Z]/g, "");
+      if (r[1] === "1") data = data.replace(/^\*|\*$/g, "");
+      const b = barItem(bcid, data, +r[3], +r[2], false); if (!b) { m.warn.push("SATO barcode data invalid"); continue; }
+      m.items.push({ ...b.it, x: H, y: V, deg, tspl: true });
+    }
+    else if ((r = tok.match(/^2D30,([LMQH]),(\d\d)/))) pend = { k: "qr", ecc: r[1], mod: +r[2] };
+    else if ((r = tok.match(/^2D50,(\d\d)/))) pend = { k: "dm", mod: +r[1] };
+    else if ((r = tok.match(/^D[NSM][^,]*,(.*)$/s)) && pend) { m.items.push({ ...twoD(pend.k, r[1], pend.mod, pend.ecc).it, x: H, y: V, deg, tspl: true }); pend = null; }
+    else if ((r = tok.match(/^FW(\d\d)(\d\d)V(\d+)H(\d+)/))) boxRects(m, H, V, +r[4], +r[3], +r[1]);
+    else if ((r = tok.match(/^FW(\d\d)([HV])(\d+)/))) m.items.push({ k: "rect", x: H, y: V, w: r[2] === "H" ? +r[3] : +r[1], h: r[2] === "H" ? +r[1] : +r[3] });
+    else if (!/^(CS|#E|P\d|EX|\/|&|\(|C|E|ID|IG|PS|PH|TK|WK|\*)/.test(tok)) m.warn.push("SATO command not previewed: <ESC>" + tok.slice(0, 4));
+  }
+  return m;
+}
+
+/* ---- CPCL (Zebra mobile, Honeywell / TSC mobile CPCL mode) ---- */
+const CPCL_F = { 0: [8, 9], 1: [13, 24], 2: [12, 20], 3: [12, 24], 4: [23, 47], 5: [12, 24], 6: [13, 27], 7: [12, 24], 55: [8, 16] };
+const CPCL_BC = { 128: "code128", UPCA: "upca", EAN13: "ean13", EAN8: "ean8", 39: "code39", "39C": "code39", F39: "code39", 93: "code93", I2OF5: "interleaved2of5", UCCEAN128: "gs1-128" };
+function parseCPCL(t, dpi) {
+  const m = { items: [], warn: [], dpi, w: 0, h: 0, meta: {} };
+  const lines = t.split(/\r\n|\r|\n/); let mag = [1, 1], hri = false, center = null;
+  for (let i = 0; i < lines.length; i++) {
+    const s = lines[i].trim(); if (!s) continue;
+    let r;
+    if ((r = s.match(/^!\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/))) { m.h = +r[4]; continue; }
+    const p = s.split(/\s+/), cmd = p[0].toUpperCase();
+    if (/^(PAGE-WIDTH|PW)$/.test(cmd)) m.w = +p[1];
+    else if (cmd === "SETMAG") mag = [+p[1] || 1, +p[2] || 1];
+    else if (cmd === "CENTER") center = +p[1] || m.w || null; else if (cmd === "LEFT") center = null;
+    else if (/^(TEXT|T|TEXT90|T90|TEXT180|T180|TEXT270|T270|VTEXT|VT)$/.test(cmd)) {
+      const deg = /90/.test(cmd) ? 270 : /180/.test(cmd) ? 180 : /270|^V/.test(cmd) ? 90 : 0;
+      const f = CPCL_F[p[1]] || CPCL_F[7], sz = +p[2] || 0, k = dpi / 203, em = f[1] * k * (sz + 1) * mag[1], cw = f[0] * k * (sz + 1) * mag[0];
+      const txt = s.split(/\s+/).slice(5).join(" ") || s.replace(/^(\S+\s+){5}/, "");
+      let x = +p[3]; if (center && deg === 0) x = x + (center - cw * txt.length) / 2;
+      m.items.push({ k: "text", x, y: +p[4], em, cw, s: txt, mono: true, deg, tspl: true });
+    }
+    else if (/^(BARCODE-TEXT|BT)$/.test(cmd)) hri = !/OFF/i.test(p[1] || "");
+    else if (/^(BARCODE|B|VBARCODE|VB)$/.test(cmd)) {
+      const deg = /^V/.test(cmd) ? 270 : 0, type = (p[1] || "").toUpperCase();
+      if (type === "QR" || type === "DATAMATRIX") {
+        const mod = +(s.match(/\bU\s+(\d+)/i) || [, 4])[1] || +p[p.length - 1] || 4; let data = "";
+        while (++i < lines.length && !/^END(QR|DATAMATRIX)/i.test(lines[i].trim())) data += (data ? "\n" : "") + lines[i].trim();
+        const ecc = type === "QR" ? (data.match(/^([LMQH])[AM],/) || [, "M"])[1] : "M"; if (type === "QR") data = data.replace(/^[LMQH][AM],/, "");
+        m.items.push({ ...twoD(type === "QR" ? "qr" : "dm", data, mod, ecc).it, x: +p[2], y: +p[3], deg, tspl: true });
+        continue;
+      }
+      const bcid = CPCL_BC[type]; if (!bcid) { m.warn.push("CPCL barcode type " + type + " not previewed"); continue; }
+      const data = p.slice(7).join(" ");
+      const b = barItem(bcid === "upca" ? "ean13" : bcid, bcid === "upca" ? "0" + data : data, +p[4], +p[2] || 1, hri);
+      if (!b) { m.warn.push("CPCL barcode data invalid: " + data); continue; }
+      m.items.push({ ...b.it, x: +p[5], y: +p[6], deg, tspl: true });
+    }
+    else if (/^(LINE|L)$/.test(cmd)) { const [x0, y0, x1, y1, w] = p.slice(1).map(Number);
+      if (y0 === y1) m.items.push({ k: "rect", x: Math.min(x0, x1), y: y0, w: Math.abs(x1 - x0), h: w || 1 });
+      else if (x0 === x1) m.items.push({ k: "rect", x: x0, y: Math.min(y0, y1), w: w || 1, h: Math.abs(y1 - y0) });
+      else m.warn.push("Diagonal CPCL line not previewed"); }
+    else if (cmd === "BOX") { const [x0, y0, x1, y1, w] = p.slice(1).map(Number); boxRects(m, Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0), w || 1); }
+    else if (/^(EG|EXPANDED-GRAPHICS)$/.test(cmd)) { const wb = +p[1], h = +p[2], hex = p.slice(5).join("");
+      const bits = new Uint8Array(wb * h); for (let j = 0; j < bits.length; j++) bits[j] = parseInt(hex.substr(j * 2, 2), 16) || 0;
+      m.items.push({ k: "bmp", x: +p[3], y: +p[4], wb, h, bits }); }
+    else if (/^(PRINT|END)$/.test(cmd)) break;
+    else if (!/^(FORM|CONTRAST|SPEED|TONE|JOURNAL|ON-FEED|NO-PACE|PACE|SETSP|COUNTRY|ENCODING|SETBOLD|SETFF|PREFEED|POSTFEED|ROTATE|IN-MILLIMETERS|IN-DOTS|IN-INCHES|IN-CENTIMETERS|UNITS|WAIT|BEEP|RIGHT|INVERSE-LINE|IL|ML|ENDML|PAGE-HEIGHT|BAR-SENSE|GAP-SENSE|PW)$/.test(cmd)) m.warn.push("CPCL command not previewed: " + cmd);
+  }
+  return m;
+}
+
+/* ---- writers for the new languages (from an mm layout) ---- */
+function layoutPRN2(L, lang, dpi) {
+  const D = mm => dotsOf(mm, dpi), W = D(L.w), H = D(L.h), out = [], warn = [];
+  const p4 = v => String(Math.max(0, Math.round(v))).padStart(4, "0"), p3 = v => String(Math.max(0, Math.min(999, Math.round(v)))).padStart(3, "0"), p2 = v => String(Math.max(0, Math.min(99, Math.round(v)))).padStart(2, "0");
+  const c36 = v => Math.max(1, Math.min(35, Math.round(v))).toString(36).toUpperCase();
+  const dmm = v => v * 10; // DPL metric units (0.1 mm)
+  if (lang === "DPL") out.push("<STX>L", "m", "D11", "H15", "PG");
+  if (lang === "FP") out.push(`REM Pic2Label W=${W} H=${H} dots at ${dpi} dpi`, "INPUT OFF", "VERBOFF", "CLL");
+  if (lang === "SBPL") out.push("<ESC>A", `<ESC>A1${p4(H)}${p4(W)}`, "<ESC>%0");
+  if (lang === "CPCL") out.push(`! 0 ${dpi === 203 ? 200 : dpi} ${dpi === 203 ? 200 : dpi} ${H} 1`, `PAGE-WIDTH ${W}`);
+  for (const e of L.items) {
+    const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
+    if (e.type === "text") {
+      const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
+      const em = Math.max(8, Math.round(h * 1.2)), sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
+      if (lang === "DPL") { const emmm = em / dpi * 25.4, pt = Math.max(4, Math.min(99, Math.round(em / dpi * 72)));
+        out.push(`1911A${p2(pt)}${p4(dmm(L.h - e.y - emmm * 0.85))}${p4(dmm(e.x))}${s}`); }
+      else if (lang === "FP") { const pt = Math.max(4, Math.round(em / dpi * 72));
+        out.push(`PP ${x},${H - y}:DIR 1:AN 7:FT "Swiss 721 Bold BT",${pt}${sx < 0.97 ? `,0,${Math.round(sx * 100)}` : ""}:PT "${s.replace(/"/g, "''")}"`); }
+      else if (lang === "SBPL") out.push(`<ESC>V${p4(y)}<ESC>H${p4(x)}<ESC>$A,${Math.round(em * sx * 0.92)},${em},0<ESC>$=${s}`);
+      else { const k = dpi / 203, my = Math.max(1, Math.round(em / (24 * k))), mx = Math.max(1, Math.min(my, Math.floor((w || 1e9) / (12 * k * s.length)) || 1));
+        out.push(`SETMAG ${mx} ${my}`, `TEXT 7 0 ${x} ${y} ${s}`); }
+    } else if (e.type === "barcode") {
+      const sym = normSym(e.symbology); let data = String(e.data || "").trim(); if (!data) continue;
+      if (sym === "qrcode" || sym === "datamatrix") {
+        const mods = twoDModules(sym, data) || 25, cell = Math.max(1, Math.round(Math.min(w, h) / mods)), sz = mods * cell, g1 = sym === "datamatrix" && /^\(\d/.test(data);
+        if (lang === "DPL") out.push(`1W1${sym === "qrcode" ? "d" : "c"}${c36(cell)}${c36(cell)}000${p4(dmm(L.h - e.y) - dmm(sz / dpi * 25.4))}${p4(dmm(e.x))}${sym === "qrcode" ? "QA," : ""}${g1 ? gs1Raw(data, "\x1d") : data}`);
+        else if (lang === "FP") out.push(`PP ${x},${H - y}:DIR 1:AN 7:BT "${sym === "qrcode" ? "QRCODE" : "DATAMATRIX"}":BM ${cell}:PB "${g1 ? gs1Raw(data, "#") : data}"`);
+        else if (lang === "SBPL") out.push(sym === "qrcode" ? `<ESC>V${p4(y)}<ESC>H${p4(x)}<ESC>2D30,M,${p2(cell)},0,0<ESC>DS2,${data}` : `<ESC>V${p4(y)}<ESC>H${p4(x)}<ESC>2D50,${p2(cell)},${p2(cell)},000,000<ESC>DN${p4(data.length)},${data}`);
+        else if (sym === "qrcode") out.push(`BARCODE QR ${x} ${y} M 2 U ${cell}`, `MA,${data}`, "ENDQR");
+        else warn.push("DataMatrix is not written in CPCL here; use QR or another language.");
+        if (g1 && lang !== "CPCL") warn.push(`GS1 DataMatrix in ${lang}: check the FNC1 handling on a test print.`);
+        continue;
+      }
+      let kind = sym;
+      if (sym === "upca") { data = ("0" + data.replace(/\D/g, "")).slice(0, 12); kind = "ean13"; }
+      if (kind === "ean13") { data = data.replace(/\D/g, "").slice(0, 12); if (data.length < 12) kind = "code128"; }
+      if (kind === "pdf417") { kind = "code128"; warn.push("PDF417 was written as Code 128."); }
+      const raw = kind === "gs1-128" ? gs1Raw(data.includes("(") ? data : gs1Paren("\x1d" + data), "\x1d") : data;
+      const mods = linearModules(kind, kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : kind === "ean13" ? ean13Full(data) : data) || 80;
+      const n = Math.max(1, Math.min(10, Math.round(w / mods))), bh = Math.max(D(4), Math.round(h * 0.78));
+      if (lang === "DPL") { const id = { code128: "E", ean13: "F", code39: "A", "gs1-128": "Q" }[kind];
+        out.push(`1${id}${c36(kind === "code39" ? n * 3 : n)}${c36(n)}${p3(dmm(bh / dpi * 25.4))}${p4(dmm(L.h - e.y) - dmm(bh / dpi * 25.4))}${p4(dmm(e.x))}${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`); }
+      else if (lang === "FP") { const t = { code128: "CODE128", ean13: "EAN13", code39: "CODE39", "gs1-128": "EAN128" }[kind];
+        out.push(`PP ${x},${H - y}:DIR 1:AN 7:BT "${t}":BH ${bh}:BM ${n}:BF ON:PB "${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}"`); }
+      else if (lang === "SBPL") {
+        const code = { code128: `<ESC>BG${p2(n)}${p3(bh)}>G${data}`, ean13: `<ESC>B3${p2(n)}${p3(bh)}${data}`, code39: `<ESC>B1${p2(n)}${p3(bh)}*${data}*`, "gs1-128": `<ESC>BI${p2(n)}${p3(bh)}>I>F${raw.replace(/\x1d/g, "")}` }[kind];
+        out.push(`<ESC>V${p4(y)}<ESC>H${p4(x)}${code}`);
+        const hri = kind === "ean13" ? ean13Full(data) : kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : data;
+        out.push(`<ESC>V${p4(y + bh + 4)}<ESC>H${p4(x)}<ESC>$A,${Math.round(n * 7)},${Math.round(n * 8)},0<ESC>$=${hri}`); // SATO prints no human-readable line by default
+      } else {
+        const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "UCCEAN128" }[kind];
+        out.push("BARCODE-TEXT 7 0 5", `BARCODE ${t} ${n} ${kind === "code39" ? 2 : 1} ${bh} ${x} ${y} ${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`, "BARCODE-TEXT OFF");
+      }
+    } else if (e.type === "line" || e.type === "box") {
+      const th = Math.max(1, D(e.thickness || 0.3)), horiz = e.type === "line" && w >= h;
+      const ww = e.type === "line" ? (horiz ? Math.max(w, th) : th) : Math.max(w, th), hh = e.type === "line" ? (horiz ? th : Math.max(h, th)) : Math.max(h, th);
+      if (lang === "DPL") { const r = p4(dmm(L.h - e.y) - dmm(hh / dpi * 25.4)), c = p4(dmm(e.x)), mw = p4(dmm(ww / dpi * 25.4)), mh = p4(dmm(hh / dpi * 25.4)), mt = p4(dmm(th / dpi * 25.4));
+        out.push(e.type === "box" ? `1X11000${r}${c}b${mw}${mh}${mt}${mt}` : `1X11000${r}${c}l${mw}${mh}`); }
+      else if (lang === "FP") out.push(e.type === "box" ? `PP ${x},${H - y}:DIR 1:AN 7:PX ${hh},${ww},${th}` : `PP ${x},${H - y}:DIR 1:AN 7:PL ${ww},${hh}`);
+      else if (lang === "SBPL") out.push(e.type === "box" ? `<ESC>V${p4(y)}<ESC>H${p4(x)}<ESC>FW${p2(th)}${p2(th)}V${p4(hh)}H${p4(ww)}` : `<ESC>V${p4(y)}<ESC>H${p4(x)}<ESC>FW${p2(horiz ? hh : ww)}${horiz ? "H" : "V"}${p4(horiz ? ww : hh)}`);
+      else out.push(e.type === "box" ? `BOX ${x} ${y} ${x + ww} ${y + hh} ${th}` : horiz ? `LINE ${x} ${y} ${x + ww} ${y} ${hh}` : `LINE ${x} ${y} ${x} ${y + hh} ${ww}`);
+    }
+  }
+  if (lang === "DPL") out.push("Q0001", "E");
+  if (lang === "FP") out.push("PF");
+  if (lang === "SBPL") out.push("<ESC>Q1", "<ESC>Z");
+  if (lang === "CPCL") out.push("PRINT");
+  if (lang === "DPL" && L.items.some(e => e.type === "text")) warn.push("DPL text uses scalable font 9 (CG Triumvirate); sizes are close, not exact.");
+  return { prn: out.join("\n") + "\n", warn };
+}
+// Parsed model (dots) -> language-neutral layout (mm). Used for templates in languages without hand-made files.
+function modelToLayout(model) {
+  const k = 25.4 / model.dpi, items = [];
+  for (const it of model.items) {
+    if (it.deg) continue;
+    if (it.k === "text") { const em = it.em, w = it.mono ? (it.cw || em * 0.6) * it.s.length : textW(it.s, em, it.sx); items.push({ type: "text", x: it.x * k, y: it.y * k, w: w * k * 1.02, h: em / 1.2 * k, text: it.s }); }
+    else if (it.k === "rect") { const th = Math.min(it.w, it.h); items.push({ type: "line", x: it.x * k, y: it.y * k, w: it.w * k, h: it.h * k, thickness: th * k }); }
+    else if (it.k === "bar") { const c = bwipCanvas({ bcid: it.bcid, text: it.text, height: 5 }); items.push({ type: "barcode", symbology: it.bcid, data: it.bcid === "ean13" ? it.text : it.text, x: it.x * k, y: it.y * k, w: (c ? c.width : 80) * it.mod * k, h: it.h / 0.78 * k }); }
+    else if (it.k === "qr" || it.k === "dm") { const t2 = twoD(it.k, it.text, it.mod, it.ecc); items.push({ type: "barcode", symbology: it.k === "qr" ? "qrcode" : "datamatrix", data: it.text, x: it.x * k, y: it.y * k, w: t2.s * k, h: t2.s * k }); }
+  }
+  return { w: model.w * k, h: model.h * k, items };
+}
+const NEW_LANGS = ["DPL", "FP", "SBPL", "CPCL"];
+
 /* ---------------- renderer ---------------- */
 function bwipCanvas(opts) {
   const c = document.createElement("canvas");
@@ -854,10 +1193,15 @@ function syncButtons() {
   [...$("dpiSeg").children].forEach(b => { b.setAttribute("aria-pressed", +b.dataset.dpi === (state.lang === "EPL2" ? 203 : state.dpi)); b.disabled = state.lang === "EPL2" && b.dataset.dpi !== "203"; });
 }
 function clearOv() { state.ov = { w: null, h: null, ox: 0, oy: 0 }; if ($("ovW")) { $("ovW").value = ""; $("ovH").value = ""; } }
+function convertTpl(t) { state.sizeHint = [t.w, t.h];
+  const dpi = state.dpi, src = t.files["TSPL_" + dpi] || t.files.TSPL_203;
+  const L = modelToLayout(parseTSPL(src, t.files["TSPL_" + dpi] ? dpi : 203)); L.w = t.w; L.h = t.h;
+  const r = layoutPRN(L, state.lang, dpi); state.genNotes = ["Converted from the TSPL template for " + state.lang + ".", ...r.warn]; return r.prn;
+}
 function loadFile() {
-  clearOv(); state.genNotes = []; state.source = null; if ($("srcBadge")) $("srcBadge").hidden = true;
-  const t = currentTpl();
-  $("prn").value = t.files[fileKey()];
+  clearOv(); state.genNotes = []; state.source = null; state.sizeHint = null; if ($("srcBadge")) $("srcBadge").hidden = true;
+  const t = currentTpl(); state.genNotes = [];
+  $("prn").value = t.files[fileKey()] || convertTpl(t);
   $("fileName").textContent = `${t.code}_${fileKey().replace("_", "_")}dpi.prn`.replace("PGL_", "PGL-Printronix_");
   $("lmpcPanel").hidden = true; draw();
 }
@@ -876,14 +1220,19 @@ function draw() {
   else if (lang === "ZPL") model = parseZPL(text, dpi);
   else if (lang === "EPL2") model = parseEPL(text, dpi);
   else if (lang === "PGL") model = parsePGL(text, dpi, state.edited ? 0 : t.w);
-  else { model = { items: [], warn: ["Could not recognise the printer language. Paste TSPL, ZPL, EPL2 or PGL code."], dpi, w: 812, h: 406 }; }
+  else if (lang === "DPL") model = parseDPL(text, dpi);
+  else if (lang === "FP") model = parseFP(text, dpi);
+  else if (lang === "SBPL") model = parseSBPL(text, dpi);
+  else if (lang === "CPCL") model = parseCPCL(text, dpi);
+  else { model = { items: [], warn: ["Could not recognise the printer language. Paste TSPL, ZPL, EPL2, PGL, DPL, Fingerprint, SBPL or CPCL code."], dpi, w: 812, h: 406 }; }
   if (typeof bwipjs === "undefined") model.warn.push("Barcode engine did not load; barcodes are not drawn.");
   const view = state.view === "auto" ? autoView(model) : +state.view;
   if (state.fileSize && (state.fileSize[0] !== model.w || state.fileSize[1] !== model.h)) clearOv();
   const { W, H, VW, VH, bb } = render(model, $("label"), { grid: $("grid").checked, view, ov: state.ov });
   state.lastModel = model; state.lastW = W; state.lastH = H; state.lastBB = bb; state.lastDpi = model.dpi; state.fileSize = [model.w, model.h];
   const mmW = (VW / model.dpi * 25.4).toFixed(1), mmH = (VH / model.dpi * 25.4).toFixed(1);
-  const names = { TSPL: "TSPL (TSC)", ZPL: "ZPL (Zebra / Honeywell / Printronix / TSC)", EPL2: "EPL2 (Zebra / Eltron)", PGL: "PGL (Printronix)" };
+  const names = { TSPL: "TSPL (TSC)", ZPL: "ZPL (Zebra / Honeywell / Printronix / TSC)", EPL2: "EPL2 (Zebra / Eltron)", PGL: "PGL (Printronix)",
+    DPL: "DPL (Datamax-O'Neil / Honeywell / Citizen)", FP: "Fingerprint / Direct Protocol (Honeywell / Intermec)", SBPL: "SBPL (SATO)", CPCL: "CPCL (Zebra mobile / Honeywell / TSC mobile)" };
   $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang] + (model.meta && model.meta.dialect ? " · " + model.meta.dialect : "");
   $("detectBadge").className = "detect" + (lang === "UNKNOWN" ? " bad" : "");
   $("dimW").textContent = `${mmW} mm`; $("dimH").textContent = `${mmH} mm`;
@@ -932,7 +1281,7 @@ $("resetBtn").onclick = () => { state.edited = false; loadFile(); };
 $("copyBtn").onclick = async () => { if (/@bmp\d+/.test($("prn").value)) { toast("This file has binary graphics: use Download .prn"); return; } try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
 $("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; const buf = await f.arrayBuffer(); let txt;
   try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { txt = new TextDecoder("latin1").decode(buf); }
-  state.genNotes = []; state.source = null; $("srcBadge").hidden = true; $("prn").value = extractBinaries(txt); state.edited = true; clearOv(); $("fileName").textContent = f.name;
+  state.genNotes = []; state.source = null; state.sizeHint = null; $("srcBadge").hidden = true; $("prn").value = showCtl(extractBinaries(txt)); state.edited = true; clearOv(); $("fileName").textContent = f.name;
   const d = f.name.match(/(203|300)/); if (d) { state.dpi = +d[1]; syncButtons(); } draw(); };
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
 window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
@@ -978,6 +1327,8 @@ function bitmapPRN(lang, dpi, o) {
   }
   const inv = r.bytes.map(b => 255 - b); // TSPL and EPL2: a 0 bit prints a dot
   if (lang === "EPL2") return `N\nq${W}\nQ${H},24\nGW${x},${y},${r.wb},${hd},${putBin(inv)}\nP1\n`;
+  if (lang === "CPCL") { let hex = ""; for (const b of r.bytes) hex += b.toString(16).padStart(2, "0").toUpperCase();
+    return `! 0 ${dpi === 203 ? 200 : dpi} ${dpi === 203 ? 200 : dpi} ${H} 1\nPAGE-WIDTH ${W}\nEG ${r.wb} ${hd} ${x} ${y} ${hex}\nPRINT\n`; }
   return `SIZE ${o.lw} mm, ${o.lh} mm\nGAP 2 mm, 0 mm\nDIRECTION 1\nCLS\nBITMAP ${x},${y},${r.wb},${hd},0,${putBin(inv)}\nPRINT 1,1\n`;
 }
 
@@ -994,6 +1345,7 @@ function gs1Raw(paren, sep) {
 function twoDModules(kind, text) { const c = bwipCanvas({ bcid: kind === "qrcode" ? "qrcode" : /^\(\d/.test(text) ? "gs1datamatrix" : "datamatrix", text, ...(kind === "qrcode" ? { eclevel: "M" } : {}) }); return c ? (kind === "qrcode" ? qrModules(c) : dmModules(c)) : 0; }
 function normSym(s) { s = String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); if (/qr/.test(s)) return "qrcode"; if (/matrix|dm/.test(s)) return "datamatrix"; if (/ean13|ean/.test(s)) return "ean13"; if (/upc/.test(s)) return "upca"; if (/gs1|ucc|ean128/.test(s)) return "gs1-128"; if (/39/.test(s)) return "code39"; if (/pdf/.test(s)) return "pdf417"; return "code128"; }
 function layoutPRN(L, lang, dpi) {
+  if (NEW_LANGS.includes(lang)) return layoutPRN2(L, lang, dpi);
   const D = mm => dotsOf(mm, dpi), W = D(L.w), H = D(L.h), out = [], warn = [];
   const items = L.items.filter(e => e.w > 0 && e.h > 0 || e.type === "line");
   if (lang === "TSPL") out.push(`SIZE ${L.w} mm, ${L.h} mm`, "GAP 2 mm, 0 mm", "DIRECTION 1", "CODEPAGE UTF-8", "CLS");
@@ -1126,10 +1478,10 @@ const segVal = id => { const b = $(id).querySelector('[aria-pressed="true"]'); r
 function genBitmap() {
   if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
   // PGL has no bitmap command here; Printronix printers take the ZPL version through ZGL emulation
-  const lang = state.lang === "PGL" ? "ZPL" : state.lang, dpi = lang === "EPL2" ? 203 : state.dpi;
+  const noBmp = ["PGL", "DPL", "FP", "SBPL"].includes(state.lang), lang = noBmp ? "ZPL" : state.lang, dpi = lang === "EPL2" ? 203 : state.dpi;
   const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || (p2l.img ? Math.max(10, Math.round((+$("bmW").value || 50) * p2l.img.naturalHeight / p2l.img.naturalWidth) + 4) : 25), iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
   const prn = bitmapPRN(lang, dpi, o); p2l.gen = true; state.dpi = dpi === 203 && lang === "EPL2" ? state.dpi : dpi;
-  $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file${state.lang === "PGL" ? " (PGL has no bitmap: ZPL works on Printronix via emulation)" : ""}`;
+  $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file${noBmp ? ` (bitmaps are not written in ${state.lang} here; most ${state.lang === "PGL" ? "Printronix" : state.lang === "SBPL" ? "SATO" : "Honeywell / Datamax"} printers also accept ZPL)` : ""}`;
   showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`);
   state.source = { kind: "bitmap" }; srcBadge();
 }
@@ -1181,13 +1533,13 @@ function regenSource(lang, dpi, first) {
   const src = state.source; if (!src) return;
   if (src.dirty && !first) toast("Your code edits were replaced by fresh " + lang + " output");
   if (src.kind === "bitmap") {
-    if (lang === "PGL") { toast("PGL has no bitmap command here: use ZPL (Printronix ZGL emulation)"); return; }
+    if (["PGL", "DPL", "FP", "SBPL"].includes(lang)) { toast(`Bitmaps are not written in ${lang} here: ZPL emulation is the usual route`); return; }
     state.lang = lang; state.dpi = dpi; genBitmap(); return;
   }
-  const L = p2l.layout; if (!L) return;
+  const L = p2l.layout; if (!L) return; state.sizeHint = [L.w, L.h];
   const d = lang === "EPL2" ? 203 : dpi; if (lang !== "EPL2") state.dpi = dpi;
   const { prn, warn } = layoutPRN(L, lang, d);
-  showGenerated(prn, `pic2label_${lang}_${d}dpi.prn`, ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn]);
+  showGenerated(prn, `${src.lib || "pic2label"}_${lang}_${d}dpi.prn`, ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn]);
   state.source = { kind: "ai", lib: src.lib }; srcBadge();
 }
 function srcBadge() {
@@ -1197,7 +1549,9 @@ function srcBadge() {
 }
 // Download with binary bitmaps restored, CRLF line ends
 function prnBytes(text) {
-  const parts = text.replace(/\r?\n/g, "\r\n").split(/(@bmp\d+)/), enc = new TextEncoder(), chunks = [];
+  text = realCtl(text);
+  text = detect(text) === "SBPL" ? text.replace(/\r?\n/g, "") : text.replace(/\r?\n/g, "\r\n");
+  const parts = text.split(/(@bmp\d+)/), enc = new TextEncoder(), chunks = [];
   for (const p of parts) chunks.push(BIN[p] || enc.encode(p));
   return new Blob(chunks, { type: "application/octet-stream" });
 }
