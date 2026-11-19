@@ -990,7 +990,7 @@ function layoutPRN(L, lang, dpi) {
     const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
-      const em = Math.max(8, Math.round(h * 1.05));
+      const em = Math.max(8, Math.round(h));
       const sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
       if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)); out.push(`TEXT ${x},${y},"0",0,${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
       else if (lang === "ZPL") out.push(`^FO${x},${y}^A0N,${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`);
@@ -1058,11 +1058,31 @@ function layoutPRN(L, lang, dpi) {
   }
   return { prn: out.join("\n") + "\n", warn };
 }
-// AI returns percentages of the label; convert to mm using the real size if the user gave one
+// AI returns box_2d [ymin,xmin,ymax,xmax] (0-1000 of the photo) plus the label's own box_2d.
+// Convert to mm on the label; older x/y/w/h replies (percent, mm or pixels) are normalised too.
 function layoutFromAI(ai, wmm, hmm) {
   const lab = ai.label || {}, w = wmm || +lab.width_mm || 75, h = hmm || +lab.height_mm || 50;
-  const pc = (v, full) => Math.max(0, Math.min(full, (+v || 0) / 100 * full));
-  const items = (ai.elements || []).map(e => ({ ...e, type: String(e.type || "").toLowerCase(), x: pc(e.x, w), y: pc(e.y, h), w: pc(e.w, w), h: pc(e.h, h) }));
+  const els = (ai.elements || []).filter(e => e && typeof e === "object");
+  const box = b => Array.isArray(b) && b.length === 4 && b.every(v => Number.isFinite(+v)) ? b.map(Number) : null;
+  let LB = box(lab.box_2d) || [0, 0, 1000, 1000];
+  if (LB[2] - LB[0] < 50 || LB[3] - LB[1] < 50) LB = [0, 0, 1000, 1000];
+  // legacy x/y/w/h: work out the unit from the largest extent
+  const legacy = els.filter(e => !box(e.box_2d));
+  const mx = Math.max(1, ...legacy.map(e => (+e.x || 0) + (+e.w || 0))), my = Math.max(1, ...legacy.map(e => (+e.y || 0) + (+e.h || 0)));
+  const ux = mx <= 101 ? 100 : mx <= w * 1.1 ? w : mx, uy = my <= 101 ? 100 : my <= h * 1.1 ? h : my;
+  const clamp = (v, full) => Math.max(0, Math.min(full, v));
+  const items = [];
+  for (const e of els) {
+    let x, y, ew, eh; const b = box(e.box_2d);
+    if (b) {
+      const [y0, x0, y1, x1] = [Math.min(b[0], b[2]), Math.min(b[1], b[3]), Math.max(b[0], b[2]), Math.max(b[1], b[3])];
+      x = (x0 - LB[1]) / (LB[3] - LB[1]) * w; y = (y0 - LB[0]) / (LB[2] - LB[0]) * h;
+      ew = (x1 - x0) / (LB[3] - LB[1]) * w; eh = (y1 - y0) / (LB[2] - LB[0]) * h;
+    } else { x = (+e.x || 0) / ux * w; y = (+e.y || 0) / uy * h; ew = (+e.w || 0) / ux * w; eh = (+e.h || 0) / uy * h; }
+    if (x > w || y > h || x + ew < 0 || y + eh < 0) continue; // outside the label
+    x = clamp(x, w); y = clamp(y, h); ew = clamp(ew, w - x); eh = clamp(eh, h - y);
+    items.push({ ...e, type: String(e.type || "").toLowerCase(), x, y, w: ew, h: eh, thickness: +e.thickness_mm || +e.thickness || 0 });
+  }
   return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10, items };
 }
 async function detectBarcodes(img) {

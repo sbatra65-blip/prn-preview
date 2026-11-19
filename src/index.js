@@ -22,10 +22,12 @@ function userPrompt(b) {
     ? `Barcodes already decoded from the photo (position in percent of the whole photo): ${JSON.stringify(b.barcodes).slice(0, 2000)}. Use these values as the barcode data.`
     : "";
   return `Read this label photo and return its layout as JSON with exactly this shape:
-{"label":{"width_mm":number,"height_mm":number},"elements":[ ... ]}
-Each element has "type" ("text", "barcode", "line" or "box") and a bounding box "x","y","w","h" in percent (0-100) of the label's width and height, measured from the label's top-left corner. Ignore anything outside the label.
-- text: one element per printed line. "text" = the exact characters (keep case, digits and punctuation), "bold": true or false. The box height is the height of that line of text.
-- barcode: "symbology" is one of code128, ean13, upca, code39, gs1-128, qrcode, datamatrix, pdf417. "data" = the encoded value; if you cannot decode it, use the human-readable digits printed under it. Do not add the printed digits again as a separate text element.
+{"label":{"width_mm":number,"height_mm":number,"box_2d":[ymin,xmin,ymax,xmax]},"elements":[ ... ]}
+All box_2d values are integers 0-1000, normalized to the WHOLE PHOTO (0,0 = photo top-left, 1000,1000 = photo bottom-right), in the order [ymin, xmin, ymax, xmax].
+label.box_2d is the outline of the label itself inside the photo (use [0,0,1000,1000] if the label fills the photo).
+Each element has "type" ("text", "barcode", "line" or "box") and a tight "box_2d" around what is printed:
+- text: one element per printed line. "text" = the exact characters (keep case, digits and punctuation), "bold": true or false. box_2d covers just that line of text.
+- barcode: "symbology" is one of code128, ean13, upca, code39, gs1-128, qrcode, datamatrix, pdf417. "data" = the encoded value; if you cannot decode it, use the human-readable digits printed under it. box_2d covers the bars only; do not add the printed digits again as a separate text element.
 - line: a printed rule, with "thickness_mm".
 - box: a printed rectangular frame, with "thickness_mm".
 ${size}
