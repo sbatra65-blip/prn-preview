@@ -990,7 +990,7 @@ function layoutPRN(L, lang, dpi) {
     const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
-      const em = Math.max(8, Math.round(h));
+      const em = Math.max(8, Math.round(h * 1.2)); // box_2d hugs the glyphs; the em square is taller
       const sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
       if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)); out.push(`TEXT ${x},${y},"0",0,${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
       else if (lang === "ZPL") out.push(`^FO${x},${y}^A0N,${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`);
