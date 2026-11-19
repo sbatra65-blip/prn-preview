@@ -1372,6 +1372,12 @@ function rasterize(img, wd, hd, method, threshold, invert) {
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, wd, hd); ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, wd, hd);
   const px = ctx.getImageData(0, 0, wd, hd).data, g = new Float32Array(wd * hd);
   for (let i = 0; i < wd * hd; i++) { const a = px[i * 4 + 3] / 255; const l = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]; g[i] = 255 - a * (255 - l); }
+  // stretch the grey range (1st to 99th percentile) so dull phone photos still give clean black and white
+  const hist = new Uint32Array(256); for (const v of g) hist[Math.max(0, Math.min(255, v | 0))]++;
+  let lo = 0, hi = 255, acc = 0; const n = g.length;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.01) { lo = v; break; } }
+  acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.01) { hi = v; break; } }
+  if (hi - lo > 24 && (lo > 8 || hi < 247)) for (let i = 0; i < n; i++) g[i] = Math.max(0, Math.min(255, (g[i] - lo) * 255 / (hi - lo)));
   const black = new Uint8Array(wd * hd);
   const spread = (x, y, e, list) => { for (const [dx, dy, f] of list) { const X = x + dx, Y = y + dy; if (X >= 0 && X < wd && Y < hd) g[Y * wd + X] += e * f; } };
   const FS = [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]];
@@ -1500,7 +1506,17 @@ function layoutPRN(L, lang, dpi) {
 function layoutFromAI(ai, wmm, hmm) {
   const lab = ai.label || {}, w = wmm || +lab.width_mm || 75, h = hmm || +lab.height_mm || 50;
   const els = (ai.elements || []).filter(e => e && typeof e === "object");
-  const box = b => Array.isArray(b) && b.length === 4 && b.every(v => Number.isFinite(+v)) ? b.map(Number) : null;
+  // models return [y0,x0,y1,x1], [[y0,x0,y1,x1]], {ymin,xmin,ymax,xmax} or numeric strings: accept them all
+  const box = b => {
+    if (b && !Array.isArray(b) && typeof b === "object") b = [b.ymin ?? b.y0 ?? b.top, b.xmin ?? b.x0 ?? b.left, b.ymax ?? b.y1 ?? b.bottom, b.xmax ?? b.x1 ?? b.right];
+    if (typeof b === "string") b = b.match(/-?\d+(\.\d+)?/g) || [];
+    while (Array.isArray(b) && b.length === 1 && Array.isArray(b[0])) b = b[0];
+    if (Array.isArray(b) && b.length > 4 && Array.isArray(b[0]) === false && b.length % 4 === 0) b = b.slice(0, 4);
+    if (!Array.isArray(b) || b.length !== 4 || !b.every(v => Number.isFinite(+v))) return null;
+    b = b.map(Number);
+    if (Math.max(...b) <= 1.001) b = b.map(v => v * 1000); // 0-1 fractions
+    return b;
+  };
   let LB = box(lab.box_2d) || [0, 0, 1000, 1000];
   if (LB[2] - LB[0] < 50 || LB[3] - LB[1] < 50) LB = [0, 0, 1000, 1000];
   // legacy x/y/w/h: work out the unit from the largest extent
@@ -1518,7 +1534,30 @@ function layoutFromAI(ai, wmm, hmm) {
     } else { x = (+e.x || 0) / ux * w; y = (+e.y || 0) / uy * h; ew = (+e.w || 0) / ux * w; eh = (+e.h || 0) / uy * h; }
     if (x > w || y > h || x + ew < 0 || y + eh < 0) continue; // outside the label
     x = clamp(x, w); y = clamp(y, h); ew = clamp(ew, w - x); eh = clamp(eh, h - y);
-    items.push({ ...e, type: String(e.type || "").toLowerCase(), x, y, w: ew, h: eh, thickness: +e.thickness_mm || +e.thickness || 0 });
+    const it = { ...e, type: String(e.type || "").toLowerCase(), x, y, w: ew, h: eh, thickness: +e.thickness_mm || +e.thickness || 0 };
+    if (it.type === "barcode" && /^\s*\(\d{2,4}\)/.test(it.data || "")) it.data = String(it.data).replace(/\s+/g, ""); // GS1 element strings: no spaces
+    if (it.type === "barcode" && /qr/i.test(it.symbology || "") && /^\(0[01]\)\d{14}/.test(it.data || "")) it.symbology = "datamatrix";
+    if (it.type === "line") { // a model's box around a rule is loose: draw the rule through its middle
+      const th = Math.max(0.2, it.thickness || 0.3); it.thickness = th;
+      if (it.w >= it.h) { it.y = it.y + it.h / 2 - th / 2; it.h = th; } else { it.x = it.x + it.w / 2 - th / 2; it.w = th; }
+    }
+    if (it.type === "text" && !String(it.text || "").trim()) continue;
+    items.push(it);
+  }
+  // Box heights from a photo are loose and overlap; widths and line spacing are more reliable.
+  const texts = items.filter(i => i.type === "text").sort((a, b) => a.y - b.y);
+  for (const t of texts) {
+    const s = String(t.text).trim(), perEm = (measureEm(s, 100) || 50 * s.length) / 100;
+    let em = t.h * 1.2;
+    if (t.w > 0) em = Math.min(em, t.w / perEm * 1.04);
+    const below = texts.find(o => o !== t && o.y > t.y + t.h * 0.25 && o.x < t.x + t.w && t.x < o.x + o.w);
+    if (below) em = Math.min(em, (below.y - t.y) * 1.08);
+    t.h = Math.max(0.8, em / 1.2);
+  }
+  // a rule that cuts through a line of text belongs just above or below it
+  for (const l of items.filter(i => i.type === "line" && i.w >= i.h)) {
+    const mid = l.y + l.h / 2, hit = texts.find(t => mid > t.y && mid < t.y + t.h * 1.2 && t.x < l.x + l.w && l.x < t.x + t.w);
+    if (hit) l.y = mid < hit.y + hit.h * 0.6 ? hit.y - l.h - 0.6 : hit.y + hit.h * 1.2 + 0.4;
   }
   return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10, items };
 }
@@ -1529,11 +1568,11 @@ async function detectBarcodes(img) {
     return found.map(b => ({ format: b.format, value: b.rawValue, box_pct: { x: +(b.boundingBox.x / img.naturalWidth * 100).toFixed(1), y: +(b.boundingBox.y / img.naturalHeight * 100).toFixed(1), w: +(b.boundingBox.width / img.naturalWidth * 100).toFixed(1), h: +(b.boundingBox.height / img.naturalHeight * 100).toFixed(1) } }));
   } catch (e) { return []; }
 }
-function downscale(img, max = 1280) {
+function downscale(img, max = 1600) {
   const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
   const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
   const ctx = c.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
-  return c.toDataURL("image/jpeg", 0.88);
+  return c.toDataURL("image/jpeg", 0.9);
 }
 
 /* ---- UI wiring ---- */
@@ -1546,6 +1585,19 @@ function showGenerated(prn, name, notes) {
   $("viewer").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 const segVal = id => { const b = $(id).querySelector('[aria-pressed="true"]'); return b && b.dataset.v; };
+// Look at a picture once: photo or flat artwork, and the best black/white split (Otsu)
+function analysePicture(img) {
+  const k = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+  const d = ctx.getImageData(0, 0, w, h).data, hist = new Float64Array(256); let mid = 0;
+  for (let i = 0; i < d.length; i += 4) { const l = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]); hist[l]++; if (l > 40 && l < 215) mid++; }
+  const total = w * h; let sum = 0; for (let v = 0; v < 256; v++) sum += v * hist[v];
+  let sB = 0, wB = 0, best = 0, thr = 128;
+  for (let v = 0; v < 256; v++) { wB += hist[v]; if (!wB) continue; const wF = total - wB; if (!wF) break; sB += v * hist[v];
+    const mB = sB / wB, mF = (sum - sB) / wF, between = wB * wF * (mB - mF) ** 2; if (between > best) { best = between; thr = v; } }
+  return { photo: mid / total > 0.35, threshold: Math.max(40, Math.min(220, thr + 8)) };
+}
 function genBitmap() {
   if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
   // PGL has no bitmap command here; Printronix printers take the ZPL version through ZGL emulation
@@ -1571,8 +1623,10 @@ $("bmFile").onchange = async e => {
   try {
     p2l.img = await loadImage(f); p2l.name = f.name; p2l.layout = null; p2l.gen = false;
     $("bmThumb").src = p2l.img.src; $("bmThumb").hidden = false;
+    const an = analysePicture(p2l.img);
+    $("bmMethod").value = an.photo ? "atkinson" : "threshold"; $("bmThr").value = an.threshold; $("bmThrV").textContent = an.threshold;
     if ($("useAI").checked) syncAI(); // AI costs a call: wait for Make PRN
-    else { $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px`; genBitmap(); }
+    else { $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px · ${an.photo ? "photo: dithered" : "artwork: threshold " + an.threshold}`; genBitmap(); }
   } catch (err) { $("bmStatus").textContent = "Could not read that image."; }
 };
 $("bmGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : genBitmap(); };
