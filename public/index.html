@@ -51,7 +51,7 @@ header h1 span { color: var(--accent); }
 header p { margin: 0; color: var(--muted); max-width: 70ch; }
 .printers { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 24px 16px; }
 .chip { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); }
-main { display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(0, 420px); gap: 16px; padding: 0 24px 24px; align-items: start; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 16px; padding: 0 24px 24px; align-items: start; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .panel h2 { margin: 0; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 12px 14px 8px; }
 .tpl-list { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 12px; }
@@ -98,6 +98,16 @@ textarea#prn { width: 100%; min-height: 360px; resize: vertical; border: 0; bord
 .checklist li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; }
 .mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
 .mark.ok { background: var(--good-soft); color: var(--good); }
+.mark.bad { background: #fde8e2; color: #b42318; }
+.mark.warn { background: #fff4d6; color: #8a5a00; }
+dialog#libDlg { border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(920px, 94vw); max-height: 86vh; background: var(--surface); color: var(--ink); }
+dialog#libDlg::backdrop { background: rgba(16, 24, 40, .45); }
+.dlg-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--surface); }
+.dlg-head h2 { padding: 0; margin: 0; }
+#libBody { padding: 4px 16px 16px; overflow: auto; }
+#libBody h3 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 16px 0 8px; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+#lmpcSummary { margin: 0; padding: 0 14px 10px; font-size: 13px; color: var(--muted); }
 .mark.na { background: var(--code-bg); color: var(--muted); border: 1px solid var(--line); }
 .checklist .rule { color: var(--muted); font-family: var(--font-mono); font-size: 11px; }
 .stack { display: grid; gap: 16px; }
@@ -124,6 +134,9 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
 .form .lbl { font-size: 13px; font-weight: 600; color: var(--muted); }
 .form select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .form input[type=range] { width: 130px; accent-color: var(--accent); }
+section.create.one { grid-template-columns: 1fr; }
+.create .ai { font-weight: 600; color: var(--ink); }
+.create.ai-on .bmonly { display: none; }
 .thumb { height: 40px; max-width: 90px; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .status { font-size: 13px; color: var(--muted); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 3ch; }
@@ -131,7 +144,7 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
-@media (max-width: 1150px) { main { grid-template-columns: 240px minmax(0, 1fr); } .code-col { grid-column: 1 / -1; } }
+@media (max-width: 1150px) { main { grid-template-columns: minmax(0, 1fr); } .code-col { grid-column: 1 / -1; } }
 @media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; } section.outbar { margin-left: 16px; margin-right: 16px; }
   header, .printers, section.about, section.create { padding-left: 16px; padding-right: 16px; } }
 </style>
@@ -168,23 +181,24 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
   </div>
 </section>
 
-<section class="create" aria-label="Pic2Label: make PRN from a picture">
+<section class="create one" aria-label="Pic2Label: make PRN from a picture">
   <div class="panel">
-    <h2>Picture → PRN · bitmap</h2>
-    <p class="hint">Logo, picture or artwork as a black-and-white printer graphic. Runs in your browser; the image is not uploaded. Uses the printer language and resolution set above.</p>
+    <h2>Picture → PRN</h2>
+    <p class="hint" id="p2lHint"></p>
     <div class="form">
       <div class="row">
-        <label class="btn" for="bmFile">Choose image</label>
+        <label class="btn" for="bmFile">Choose image or photo</label>
         <input class="file-input" type="file" id="bmFile" accept="image/*">
         <img id="bmThumb" class="thumb" alt="Selected image" hidden>
+        <label class="check ai"><input type="checkbox" id="useAI"> Use AI: read text, barcodes and lines into editable PRN</label>
       </div>
       <div class="row">
-        <label class="num" for="bmW">Label W <input type="number" id="bmW" value="50" min="5" max="300" step="0.5"> mm</label>
-        <label class="num" for="bmH">H <input type="number" id="bmH" value="25" min="5" max="500" step="0.5"> mm</label>
-        <label class="num" for="bmIW">Image width <input type="number" id="bmIW" min="2" max="300" step="0.5" placeholder="fit"> mm</label>
-        <label class="num" for="bmPos">Place <select id="bmPos"><option value="center">Centre</option><option value="tl">Top left</option></select></label>
+        <label class="num" for="bmW">Label W <input type="number" id="bmW" min="5" max="300" step="0.5" placeholder="50"> mm</label>
+        <label class="num" for="bmH">H <input type="number" id="bmH" min="5" max="500" step="0.5" placeholder="25"> mm</label>
+        <span class="bmonly"><label class="num" for="bmIW">Image width <input type="number" id="bmIW" min="2" max="300" step="0.5" placeholder="fit"> mm</label></span>
+        <span class="bmonly"><label class="num" for="bmPos">Place <select id="bmPos"><option value="center">Centre</option><option value="tl">Top left</option></select></label></span>
       </div>
-      <div class="row">
+      <div class="row bmonly">
         <label class="num" for="bmMethod">Method <select id="bmMethod"><option value="threshold">Threshold (logos, text)</option><option value="fs">Floyd–Steinberg dither (photos)</option><option value="atkinson">Atkinson dither (photos, crisper)</option></select></label>
         <label class="num" for="bmThr">Threshold <input type="range" id="bmThr" min="10" max="245" value="128"> <span id="bmThrV" class="mono">128</span></label>
         <label class="check"><input type="checkbox" id="bmInv"> Invert</label>
@@ -195,33 +209,9 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
       </div>
     </div>
   </div>
-  <div class="panel">
-    <h2>Photo → PRN · AI</h2>
-    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. Uses the printer setting above; one AI read covers every language, so switch it afterwards without converting again. The photo is read by Google Gemini and is not stored.</p>
-    <div class="form">
-      <div class="row">
-        <label class="btn" for="aiFile">Choose photo</label>
-        <input class="file-input" type="file" id="aiFile" accept="image/*">
-        <img id="aiThumb" class="thumb" alt="Selected label photo" hidden>
-      </div>
-      <div class="row">
-        <span class="lbl">Real label size</span>
-        <label class="num" for="aiW">W <input type="number" id="aiW" min="5" max="300" step="0.5" placeholder="auto"> mm</label>
-        <label class="num" for="aiH">H <input type="number" id="aiH" min="5" max="500" step="0.5" placeholder="auto"> mm</label>
-      </div>
-      <div class="row">
-        <button type="button" class="btn primary" id="aiGo" disabled>Convert with AI</button>
-        <span class="status" id="aiStatus" role="status" aria-live="polite">No photo yet.</span>
-      </div>
-    </div>
-  </div>
 </section>
 
 <main>
-  <aside class="panel">
-    <h2>LMPC templates</h2>
-    <div class="tpl-list" id="tplList"></div>
-  </aside>
 
   <div class="stack">
     <div class="panel">
@@ -235,6 +225,7 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
         </div>
         <label class="check"><input type="checkbox" id="grid"> 5 mm grid</label>
         <button type="button" class="btn" id="redrawBtn">Redraw</button>
+        <button type="button" class="btn" id="lmpcBtn">Check LMPC rules</button>
       </div>
       <div class="controls sizebar">
         <span class="lbl">Label size</span>
@@ -257,8 +248,9 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
       <div class="facts" id="facts"></div>
       <div class="notes" id="notes"></div>
     </div>
-    <div class="panel">
-      <h2>LMPC checklist for this template</h2>
+    <div class="panel" id="lmpcPanel" hidden>
+      <h2>LMPC check of this design</h2>
+      <p id="lmpcSummary"></p>
       <ul class="checklist" id="checklist"></ul>
     </div>
   </div>
@@ -268,6 +260,7 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
       <span class="file" id="fileName"></span>
       <div class="btn-row">
         <button type="button" class="btn primary" id="copyBtn">Copy code</button>
+        <button type="button" class="btn" id="libBtn">Library</button>
         <label class="btn" for="fileIn">Open PRN file</label>
         <input class="file-input" type="file" id="fileIn" accept=".prn,.txt,.zpl,.tspl,.epl,.pgl">
         <button type="button" class="btn" id="dlBtn">Download .prn</button>
@@ -278,6 +271,11 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
     <textarea id="prn" spellcheck="false"></textarea>
   </div>
 </main>
+
+<dialog id="libDlg" aria-labelledby="libTitle">
+  <div class="dlg-head"><h2 id="libTitle">Label library</h2><button type="button" class="btn" id="libClose">Close</button></div>
+  <div id="libBody"></div>
+</dialog>
 
 <section class="about">
   <div class="panel">
@@ -841,7 +839,7 @@ const state = { tpl: 0, lang: "TSPL", dpi: 203, edited: false, view: "auto", ov:
 function fileKey() { return state.lang === "EPL2" ? "EPL2_203" : `${state.lang}_${state.dpi}`; }
 function currentTpl() { return DATA[state.tpl]; }
 
-function buildList() {
+function buildList() { return; // templates now live in the Library dialog
   $("tplList").innerHTML = "";
   DATA.forEach((t, i) => {
     const b = document.createElement("button");
@@ -852,7 +850,6 @@ function buildList() {
   });
 }
 function syncButtons() {
-  [...$("tplList").children].forEach((b, i) => b.setAttribute("aria-pressed", i === state.tpl));
   [...$("langSeg").children].forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === state.lang));
   [...$("dpiSeg").children].forEach(b => { b.setAttribute("aria-pressed", +b.dataset.dpi === (state.lang === "EPL2" ? 203 : state.dpi)); b.disabled = state.lang === "EPL2" && b.dataset.dpi !== "203"; });
 }
@@ -862,7 +859,7 @@ function loadFile() {
   const t = currentTpl();
   $("prn").value = t.files[fileKey()];
   $("fileName").textContent = `${t.code}_${fileKey().replace("_", "_")}dpi.prn`.replace("PGL_", "PGL-Printronix_");
-  renderChecklist(); draw();
+  $("lmpcPanel").hidden = true; draw();
 }
 function renderChecklist() {
   const t = currentTpl();
@@ -884,7 +881,7 @@ function draw() {
   const view = state.view === "auto" ? autoView(model) : +state.view;
   if (state.fileSize && (state.fileSize[0] !== model.w || state.fileSize[1] !== model.h)) clearOv();
   const { W, H, VW, VH, bb } = render(model, $("label"), { grid: $("grid").checked, view, ov: state.ov });
-  state.lastBB = bb; state.lastDpi = model.dpi; state.fileSize = [model.w, model.h];
+  state.lastModel = model; state.lastW = W; state.lastH = H; state.lastBB = bb; state.lastDpi = model.dpi; state.fileSize = [model.w, model.h];
   const mmW = (VW / model.dpi * 25.4).toFixed(1), mmH = (VH / model.dpi * 25.4).toFixed(1);
   const names = { TSPL: "TSPL (TSC)", ZPL: "ZPL (Zebra / Honeywell / Printronix / TSC)", EPL2: "EPL2 (Zebra / Eltron)", PGL: "PGL (Printronix)" };
   $("detectBadge").textContent = lang === "UNKNOWN" ? "Language not recognised" : "Auto-detected: " + names[lang] + (model.meta && model.meta.dialect ? " · " + model.meta.dialect : "");
@@ -988,7 +985,13 @@ function bitmapPRN(lang, dpi, o) {
 const tsplQ = s => s.replace(/"/g, '\\["]');
 function measureEm(s, emDots) { const c = measureEm.c || (measureEm.c = document.createElement("canvas").getContext("2d")); c.font = `700 ${emDots}px "Roboto Condensed", "Arial Narrow", sans-serif`; return c.measureText(s).width; }
 function linearModules(bcid, text) { const c = bwipCanvas({ bcid, text, height: 5 }); return c ? c.width : 0; }
-function twoDModules(kind, text) { const c = bwipCanvas({ bcid: kind === "qrcode" ? "qrcode" : "datamatrix", text, ...(kind === "qrcode" ? { eclevel: "M" } : {}) }); return c ? (kind === "qrcode" ? qrModules(c) : dmModules(c)) : 0; }
+// "(01)0890…(10)AB" -> "010890…10AB" with sep after variable-length AIs (FNC1 / GS)
+function gs1Raw(paren, sep) {
+  const parts = [...paren.matchAll(/\((\d{2,4})\)([^(]*)/g)];
+  const fixed = ai => FIXED[ai.slice(0, 2)] && ai.length === 2 || /^3[1-6]\d\d$/.test(ai) || /^41\d$/.test(ai);
+  return parts.map(([, ai, v], i) => ai + v + (i < parts.length - 1 && !fixed(ai) ? sep : "")).join("");
+}
+function twoDModules(kind, text) { const c = bwipCanvas({ bcid: kind === "qrcode" ? "qrcode" : /^\(\d/.test(text) ? "gs1datamatrix" : "datamatrix", text, ...(kind === "qrcode" ? { eclevel: "M" } : {}) }); return c ? (kind === "qrcode" ? qrModules(c) : dmModules(c)) : 0; }
 function normSym(s) { s = String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); if (/qr/.test(s)) return "qrcode"; if (/matrix|dm/.test(s)) return "datamatrix"; if (/ean13|ean/.test(s)) return "ean13"; if (/upc/.test(s)) return "upca"; if (/gs1|ucc|ean128/.test(s)) return "gs1-128"; if (/39/.test(s)) return "code39"; if (/pdf/.test(s)) return "pdf417"; return "code128"; }
 function layoutPRN(L, lang, dpi) {
   const D = mm => dotsOf(mm, dpi), W = D(L.w), H = D(L.h), out = [], warn = [];
@@ -1019,8 +1022,9 @@ function layoutPRN(L, lang, dpi) {
       if (!data) { warn.push("A barcode had no readable data and was skipped."); continue; }
       if (sym === "qrcode" || sym === "datamatrix") {
         const mods = twoDModules(sym, data) || 25, cell = Math.max(1, Math.round(Math.min(w, h) / mods));
-        if (lang === "TSPL") out.push(sym === "qrcode" ? `QRCODE ${x},${y},M,${cell},A,0,"${tsplQ(data)}"` : `DMATRIX ${x},${y},${w},${h},x${cell},"${tsplQ(data)}"`);
-        else if (lang === "ZPL") out.push(sym === "qrcode" ? `^FO${x},${y}^BQN,2,${cell}^FDMA,${data}^FS` : `^FO${x},${y}^BXN,${cell},200^FD${data}^FS`);
+        const g1 = sym === "datamatrix" && /^\(\d{2,4}\)/.test(data);
+        if (lang === "TSPL") out.push(sym === "qrcode" ? `QRCODE ${x},${y},M,${cell},A,0,"${tsplQ(data)}"` : g1 ? `DMATRIX ${x},${y},${w},${h},c126,x${cell},"~1${gs1Raw(data, "~1")}"` : `DMATRIX ${x},${y},${w},${h},x${cell},"${tsplQ(data)}"`);
+        else if (lang === "ZPL") out.push(sym === "qrcode" ? `^FO${x},${y}^BQN,2,${cell}^FDMA,${data}^FS` : g1 ? `^FO${x},${y}^BXN,${cell},200,,,,~^FD~1${gs1Raw(data, "~1")}^FS` : `^FO${x},${y}^BXN,${cell},200^FD${data}^FS`);
         else warn.push(`${sym === "qrcode" ? "QR code" : "DataMatrix"} is not written in ${lang}; use TSPL or ZPL for 2D codes.`);
         continue;
       }
@@ -1123,33 +1127,41 @@ function genBitmap() {
   if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
   // PGL has no bitmap command here; Printronix printers take the ZPL version through ZGL emulation
   const lang = state.lang === "PGL" ? "ZPL" : state.lang, dpi = lang === "EPL2" ? 203 : state.dpi;
-  const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || 25, iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
+  const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || (p2l.img ? Math.max(10, Math.round((+$("bmW").value || 50) * p2l.img.naturalHeight / p2l.img.naturalWidth) + 4) : 25), iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
   const prn = bitmapPRN(lang, dpi, o); p2l.gen = true; state.dpi = dpi === 203 && lang === "EPL2" ? state.dpi : dpi;
   $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file${state.lang === "PGL" ? " (PGL has no bitmap: ZPL works on Printronix via emulation)" : ""}`;
   showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`);
   state.source = { kind: "bitmap" }; srcBadge();
 }
+const HINT_BM = "Logo, picture or artwork as a black-and-white printer graphic in the printer language above. Runs in your browser; the image is not uploaded.";
+const HINT_AI = "AI reads a photo of an existing label into editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real label size (or leave blank to estimate). One AI read covers every language, so switch the printer setting afterwards without reading again. The photo is read by Google Gemini and is not stored.";
+function syncAI() {
+  const on = $("useAI").checked;
+  document.querySelector("section.create").classList.toggle("ai-on", on);
+  $("p2lHint").textContent = on ? HINT_AI : HINT_BM;
+  $("bmW").placeholder = on ? "auto" : "50"; $("bmH").placeholder = on ? "auto" : "25";
+  if (p2l.img) $("bmStatus").textContent = `${p2l.name} ready. Press Make PRN${on ? " to read it with AI" : ""}.`;
+}
+$("useAI").onchange = syncAI; syncAI();
 $("bmFile").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { p2l.img = await loadImage(f); p2l.name = f.name; $("bmThumb").src = p2l.img.src; $("bmThumb").hidden = false; $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px`; genBitmap(); }
-  catch (err) { $("bmStatus").textContent = "Could not read that image."; }
+  try {
+    p2l.img = await loadImage(f); p2l.name = f.name; p2l.layout = null; p2l.gen = false;
+    $("bmThumb").src = p2l.img.src; $("bmThumb").hidden = false;
+    if ($("useAI").checked) syncAI(); // AI costs a call: wait for Make PRN
+    else { $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px`; genBitmap(); }
+  } catch (err) { $("bmStatus").textContent = "Could not read that image."; }
 };
-$("bmGo").onclick = genBitmap;
-for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen) genBitmap(); });
+$("bmGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : genBitmap(); };
+for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen && !$("useAI").checked) genBitmap(); });
 $("bmThr").addEventListener("input", () => { $("bmThrV").textContent = $("bmThr").value; });
 
-$("aiFile").onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try { p2l.photo = await loadImage(f); $("aiThumb").src = p2l.photo.src; $("aiThumb").hidden = false; $("aiStatus").textContent = `${f.name} ready. Press Convert.`; $("aiGo").disabled = false; }
-  catch (err) { $("aiStatus").textContent = "Could not read that photo."; }
-};
-$("aiGo").onclick = async () => {
-  if (!p2l.photo) return;
-  const lang = state.lang, dpi = lang === "EPL2" ? 203 : state.dpi, wmm = +$("aiW").value || 0, hmm = +$("aiH").value || 0;
-  $("aiGo").disabled = true; $("aiStatus").textContent = "Reading the label… this can take up to a minute.";
+async function runAI() {
+  const lang = state.lang, dpi = lang === "EPL2" ? 203 : state.dpi, wmm = +$("bmW").value || 0, hmm = +$("bmH").value || 0;
+  $("bmGo").disabled = true; $("bmStatus").textContent = "Reading the label with AI… usually 5–20 seconds.";
   try {
-    const barcodes = await detectBarcodes(p2l.photo);
-    const res = await fetch(P2L_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: downscale(p2l.photo), width_mm: wmm || null, height_mm: hmm || null, barcodes }) });
+    const barcodes = await detectBarcodes(p2l.img);
+    const res = await fetch(P2L_API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: downscale(p2l.img), width_mm: wmm || null, height_mm: hmm || null, barcodes }) });
     const j = await res.json().catch(() => ({}));
     if (!res.ok || !j.layout) throw new Error(j.error || `Server error ${res.status}`);
     const L = layoutFromAI(j.layout, wmm, hmm);
@@ -1158,11 +1170,11 @@ $("aiGo").onclick = async () => {
     barcodes.forEach((b, i) => { const t = bcs[i]; if (t) { t.data = b.value; t.symbology = b.format.replace("_", ""); } });
     p2l.lastW = L.w; p2l.lastH = L.h; p2l.layout = L; p2l.provider = j.provider;
     const who = { claude: "Claude", gemini: "Gemini", "workers-ai": "Cloudflare Llama (backup)" }[j.provider] || j.provider || "AI";
-    $("aiStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
+    $("bmStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
     state.source = { kind: "ai" }; regenSource(lang, dpi, true);
-  } catch (err) { $("aiStatus").textContent = "Conversion failed: " + err.message; }
-  finally { $("aiGo").disabled = false; }
-};
+  } catch (err) { $("bmStatus").textContent = "AI conversion failed: " + err.message; }
+  finally { $("bmGo").disabled = false; }
+}
 
 // One AI call (or one picture) -> any language and dpi: the layout is kept and re-emitted on demand
 function regenSource(lang, dpi, first) {
@@ -1176,12 +1188,12 @@ function regenSource(lang, dpi, first) {
   const d = lang === "EPL2" ? 203 : dpi; if (lang !== "EPL2") state.dpi = dpi;
   const { prn, warn } = layoutPRN(L, lang, d);
   showGenerated(prn, `pic2label_${lang}_${d}dpi.prn`, ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn]);
-  state.source = { kind: "ai" }; srcBadge();
+  state.source = { kind: "ai", lib: src.lib }; srcBadge();
 }
 function srcBadge() {
   const src = state.source, el = $("srcBadge"); if (!el) return;
   el.hidden = !src;
-  if (src) el.textContent = src.kind === "ai" ? "From AI layout · switch language or dpi freely, no new AI call" : "From picture · switch language or dpi to regenerate";
+  if (src) el.textContent = src.lib ? `Library: ${src.lib} · switch language or dpi freely` : src.kind === "ai" ? "From AI layout · switch language or dpi freely, no new AI call" : "From picture · switch language or dpi to regenerate";
 }
 // Download with binary bitmaps restored, CRLF line ends
 function prnBytes(text) {
@@ -1195,6 +1207,122 @@ $("dlBtn").onclick = () => {
   a.download = n; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("PRN downloaded");
 };
 
+/* ---------------- Label library (layouts in mm, emitted in any language) ---------------- */
+const T = (x, y, h, text, w) => ({ type: "text", x, y, h, w: w || 0, text });
+const BC = (x, y, w, h, symbology, data) => ({ type: "barcode", x, y, w, h, symbology, data });
+const LN = (x, y, w, h, t) => ({ type: "line", x, y, w, h, thickness: t || 0.3 });
+const BX = (x, y, w, h, t) => ({ type: "box", x, y, w, h, thickness: t || 0.4 });
+const LIB = [
+  { code: "GS1-01", cat: "Logistics", name: "GS1 logistics label (SSCC)", w: 100, h: 150,
+    short: "Pallet / carton label with SSCC, GTIN, count, batch and best before in GS1-128.",
+    items: [BX(2, 2, 96, 146, 0.5),
+      T(5, 5, 3, "FROM: Sample Foods Pvt Ltd"), T(5, 10, 2.6, "Plot 12, Okhla Ph-II, New Delhi-110020"),
+      T(5, 17, 3, "TO: ABC Retail DC, Bhiwandi-421302"), LN(2, 24, 96, 0.4, 0.4),
+      T(5, 27, 2.8, "CONTENT (02)  18901234000011"), T(5, 33, 2.8, "COUNT (37)  24"), T(55, 27, 2.8, "BATCH (10)  B2611A"), T(55, 33, 2.8, "BEST BEFORE (15)  31.12.2027"),
+      LN(2, 40, 96, 0.4, 0.4),
+      BC(8, 44, 84, 28, "gs1-128", "(02)18901234000011(37)24"),
+      BC(8, 78, 84, 28, "gs1-128", "(10)B2611A(15)271231"),
+      LN(2, 112, 96, 0.4, 0.4), T(5, 115, 3, "SSCC"),
+      BC(8, 120, 84, 24, "gs1-128", "(00)389012345000000010")] },
+  { code: "SHIP-01", cat: "Logistics", name: "Courier / shipping label", w: 100, h: 150,
+    short: "Address label with AWB barcode, order number, weight and COD box.",
+    items: [BX(2, 2, 96, 146, 0.5), T(5, 5, 4, "SHIP TO"),
+      T(5, 12, 4.5, "RAHUL SHARMA"), T(5, 19, 3.2, "Flat 402, Lotus Residency, Sector 21"), T(5, 24.5, 3.2, "Gurugram, Haryana"), T(5, 30, 4.5, "PIN 122016"), T(5, 37, 3.2, "Ph: 98100 00000"),
+      LN(2, 44, 96, 0.4, 0.4), T(5, 47, 3, "AWB No."), BC(8, 52, 84, 26, "code128", "IS1234567890IN"),
+      LN(2, 84, 96, 0.4, 0.4), T(5, 87, 3, "Order: SO-26-004512"), T(55, 87, 3, "Weight: 1.25 kg"),
+      BX(55, 94, 40, 14, 0.6), T(59, 98, 6, "COD 1,499"), T(5, 96, 3, "Dimensions: 30x20x10 cm"),
+      LN(2, 112, 96, 0.4, 0.4), T(5, 115, 3, "FROM: Infinite Solutions, New Delhi-110020"), T(5, 121, 3, "Return to origin if undelivered")] },
+  { code: "PRD-01", cat: "Retail", name: "Product barcode label", w: 50, h: 25,
+    short: "Small shelf / product label: name, EAN-13 and MRP.",
+    items: [T(2.5, 1.8, 2.6, "BASMATI RICE 1 KG"), BC(5, 6, 40, 12, "ean13", "8901234567890"), T(2.5, 21, 2.4, "MRP Rs. 185.00 (incl. of all taxes)")] },
+  { code: "TAG-01", cat: "Retail", name: "Garment price tag", w: 40, h: 60,
+    short: "Hang tag with brand, style, size, colour, MRP and EAN-13.",
+    items: [T(4, 4, 5, "URBANWEAR"), LN(3, 12, 34, 0.3, 0.3), T(4, 15, 2.6, "Style: UW-TS-1042"), T(4, 20, 2.6, "Size: L"), T(4, 25, 2.6, "Colour: Navy"),
+      T(4, 31, 3.2, "MRP Rs. 999.00"), T(4, 36, 2, "(incl. of all taxes)"), BC(4, 41, 32, 13, "ean13", "8901234500016")] },
+  { code: "JWL-01", cat: "Retail", name: "Jewellery tag", w: 60, h: 12,
+    short: "Narrow tag: item code, gross / net weight, purity and Code 128.",
+    items: [T(1.5, 1, 2, "RNG-22K-0457"), T(1.5, 4.2, 1.8, "G.Wt 4.120 g  N.Wt 3.980 g"), T(1.5, 7.4, 1.8, "22K (916) BIS HUID AB12CD"), BC(34, 1.5, 24, 8, "code128", "RNG0457")] },
+  { code: "PH-01", cat: "Pharma", name: "Pharma carton label", w: 75, h: 50,
+    short: "Batch, Mfg / Exp, MRP, licence number and GS1 DataMatrix (GTIN, batch, expiry, serial).",
+    items: [T(3, 2.5, 3.6, "PARACETAMOL TABLETS IP 500 mg"), T(3, 8, 2.2, "Each uncoated tablet contains Paracetamol IP 500 mg"),
+      T(3, 13, 2.4, "Batch No.: PT26110"), T(3, 17.5, 2.4, "Mfg. Date: 10/2026"), T(3, 22, 2.4, "Exp. Date: 09/2029"), T(3, 26.5, 2.4, "M.R.P. Rs. 25.00 for 10 tablets"),
+      T(3, 31, 2.2, "(incl. of all taxes)"), T(3, 36, 2.2, "Mfg. Lic. No.: DL-25-1234"), T(3, 40.5, 2.2, "Mfd. by: Sample Pharma Ltd, Baddi-173205"),
+      BC(52, 13, 20, 20, "datamatrix", "(01)08901234567890(17)290930(10)PT26110(21)A1B2C3D4")] },
+  { code: "AST-01", cat: "Assets", name: "Fixed asset tag", w: 50, h: 25,
+    short: "Asset ID with QR code and Code 128 for audits and stock-takes.",
+    items: [T(2.5, 2, 2.6, "INFINITE SOLUTIONS", 27), T(2.5, 6.5, 2, "Property of IS · Do not remove", 25), T(2.5, 10.5, 3.4, "FA-000123"), BC(2.5, 15.5, 27, 7, "code128", "FA-000123"),
+      BC(33, 4, 15, 15, "qrcode", "https://assets.example.in/FA-000123")] },
+  { code: "BIN-01", cat: "Warehouse", name: "Warehouse bin / location label", w: 100, h: 50,
+    short: "Large location code with Code 128 for scanning at the rack.",
+    items: [T(5, 4, 12, "A-01-03"), T(5, 19, 3, "Aisle A · Rack 01 · Level 03"), BC(5, 24, 90, 17, "code128", "A0103")] },
+  { code: "PRT-01", cat: "Warehouse", name: "Part / inventory label", w: 75, h: 38,
+    short: "Part number, description, quantity and QR code.",
+    items: [T(3, 2.5, 3.8, "P/N  TTP-244-PH"), T(3, 8.5, 2.6, "Print head, 203 dpi, TSC TTP-244"), T(3, 13.5, 2.6, "Qty: 1 Nos  ·  Bin: B-02-07"), T(3, 18.5, 2.6, "GRN: 26-11-0457"),
+      BC(3, 24, 45, 11, "code128", "TTP-244-PH"), BC(54, 15, 18, 18, "qrcode", "PN:TTP-244-PH;QTY:1;BIN:B-02-07")] },
+];
+// The original LMPC templates come with hand-made files; library entries are built from layouts.
+function libraryList() {
+  return [...DATA.map((t, i) => ({ code: t.code, cat: "LMPC", name: "LMPC " + (t.code === "LM-05" ? "wholesale carton" : "retail") + " label", w: t.w, h: t.h, short: t.short, tplIndex: i })), ...LIB];
+}
+function libLayout(e) { // text without a width may use the rest of the label line (only ever compressed, never stretched)
+  return { w: e.w, h: e.h, items: e.items.map(i => ({ ...i, w: i.type === "text" && !i.w ? Math.max(1, e.w - i.x - 1) : i.w })) };
+}
+function openLibrary() {
+  const list = libraryList(), cats = [...new Set(list.map(e => e.cat))];
+  $("libBody").innerHTML = cats.map(c => `<h3>${c}</h3><div class="lib-grid">` + list.filter(e => e.cat === c).map(e =>
+    `<button type="button" class="tpl" data-code="${e.code}"><b>${e.name}</b><span class="size">${e.code} · ${e.w} × ${e.h} mm</span><small>${e.short}</small></button>`).join("") + "</div>").join("");
+  $("libBody").onclick = ev => { const b = ev.target.closest("button[data-code]"); if (!b) return; loadLibrary(b.dataset.code); $("libDlg").close(); };
+  $("libDlg").showModal();
+}
+function loadLibrary(code) {
+  const e = libraryList().find(x => x.code === code); if (!e) return;
+  if (e.tplIndex != null) { state.tpl = e.tplIndex; state.edited = false; loadFile(); syncButtons(); return; }
+  p2l.layout = libLayout(e); p2l.lastW = e.w; p2l.lastH = e.h;
+  state.source = { kind: "ai", lib: e.code };
+  regenSource(state.lang, state.dpi, true);
+  state.genNotes = []; $("fileName").textContent = `${e.code}_${state.lang}_${state.lang === "EPL2" ? 203 : state.dpi}dpi.prn`; draw();
+}
+
+/* ---------------- LMPC check of the current design ---------------- */
+// Legal Metrology (Packaged Commodities) Rules 2011: declarations in Rule 6, letter size in Rule 7 Table I.
+function lmpcMinLetter(areaCm2) { return areaCm2 <= 50 ? 1 : areaCm2 <= 100 ? 1.5 : areaCm2 <= 500 ? 2.5 : areaCm2 <= 2500 ? 4 : 6; }
+function lmpcCheck() {
+  const model = state.lastModel; if (!model) return;
+  const dpmm = model.dpi / 25.4;
+  const texts = model.items.filter(i => i.k === "text").map(i => i.s);
+  const all = texts.join("\n"), has = re => re.test(all);
+  const Wmm = state.ov.w || (state.lastW || model.w) / dpmm, Hmm = state.ov.h || (state.lastH || model.h) / dpmm;
+  const area = Wmm * Hmm / 100, minH = lmpcMinLetter(area);
+  const R = []; const add = (status, item, rule, note) => R.push([status, item, rule, note || ""]);
+  const imported = has(/import(ed|er)/i);
+  add(has(/(mfd|mfg|manufactured|mkt|marketed|packed|pkd|imported|importer)\.?\s*(&|and)?\s*\w*\.?\s*by/i) ? (has(/\b\d{3}\s?\d{3}\b/) ? "ok" : "warn") : "miss",
+    `Name and address of ${imported ? "importer" : "manufacturer / packer"}`, "Rule 6(1)(a)", has(/\b\d{3}\s?\d{3}\b/) ? "" : "add the full address with PIN code");
+  add("check", "Common or generic name of the commodity", "Rule 6(1)(b)", texts[0] ? `check that "${texts[0].slice(0, 40)}" names the product` : "");
+  const nq = all.match(/net\s*(qty|quantity|wt|weight|content|vol(ume)?)\.?\s*:?\s*([\d.,]+\s*(kg|g|mg|ml|l|ltr|litre|m|cm|mm|N|U|unit|units|nos|pcs|pieces|pair|sq\.?\s*m)\b)/i);
+  add(nq ? "ok" : "miss", "Net quantity in standard units", "Rule 6(1)(c)", nq ? nq[3] : "e.g. Net Quantity: 500 g");
+  add(has(/(mfg|mfd|manufactur|packed|pkd|import)[^\n]*((0?[1-9]|1[0-2])\s*[\/.-]\s*(20)?\d\d|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i) ? "ok" : "miss", "Month and year of manufacture / packing / import", "Rule 6(1)(d)");
+  const mrp = has(/m\.?\s?r\.?\s?p/i) && has(/(rs\.?|₹|inr)\s*[\d,]+/i), incl = has(/incl\w*\.?\s*(of\s*)?all\s*taxes/i);
+  add(mrp && incl ? "ok" : mrp ? "warn" : "miss", "MRP inclusive of all taxes", "Rule 6(1)(e)", mrp && !incl ? "add \"(incl. of all taxes)\"" : "");
+  const usp = has(/unit\s*sale\s*price|\bper\s*(kg|g|100\s*g|l|ml|100\s*ml|unit|piece|pc|m|metre)\b/i), stdPack = nq && /^\s*1\s*(kg|l|ltr|litre|unit|nos|pcs|m)\b/i.test(nq[3]);
+  add(usp ? "ok" : stdPack ? "na" : "warn", "Unit sale price", "Rule 6(11)", usp ? "" : stdPack ? "1 kg / 1 L / 1 unit pack: equals MRP" : "needed unless the pack is 1 kg, 1 L, 1 unit or 1 m");
+  const cc = has(/(consumer|customer)\s*care|complaint/i), ph = has(/(\+?\d[\d\s-]{8,}\d)/), em = has(/[\w.-]+@[\w-]+\.\w+/);
+  add(cc && ph && em ? "ok" : cc || ph || em ? "warn" : "miss", "Consumer care: name, address, phone and email", "Rule 6(2)", [!cc && "consumer care heading", !ph && "phone", !em && "email"].filter(Boolean).join(", ") ? "missing: " + [!cc && "consumer care heading", !ph && "phone", !em && "email"].filter(Boolean).join(", ") : "");
+  add(has(/country\s*of\s*origin|made\s*in\s+\w+/i) ? "ok" : imported ? "miss" : "na", "Country of origin", "Rule 6(1)(aa)", imported ? "" : "needed for imported goods");
+  add(has(/(best\s*before|use\s*by|expiry|exp\.?\s*date|\bexp\b)/i) ? "ok" : "check", "Best before / use by date", "Rule 6(1)(da)", "needed for food and other perishables");
+  let small = 0, minSeen = Infinity;
+  for (const it of model.items) if (it.k === "text" && it.s.trim()) { const cap = (it.mono ? it.em * 0.75 : it.em * 0.72) / dpmm; minSeen = Math.min(minSeen, cap); if (cap + 0.05 < minH) small++; }
+  add(small ? "miss" : "ok", `Letters at least ${minH} mm high (panel ${area.toFixed(0)} cm²)`, "Rule 7, Table I", isFinite(minSeen) ? `smallest text about ${minSeen.toFixed(1)} mm${small ? `; ${small} line(s) too small` : ""}` : "no text found");
+  const ok = R.filter(r => r[0] === "ok").length, bad = R.filter(r => r[0] === "miss").length;
+  const icon = { ok: ["✓", "ok", "Present"], miss: ["✕", "bad", "Missing"], warn: ["!", "warn", "Incomplete"], check: ["?", "na", "Check by hand"], na: ["–", "na", "Not required"] };
+  $("lmpcPanel").hidden = false;
+  $("lmpcSummary").textContent = `${ok} of ${R.length} checks passed${bad ? `, ${bad} missing` : ""}. Automatic text check of the current design; it is not legal advice.`;
+  $("checklist").innerHTML = R.map(([st, item, rule, note]) => `<li><span class="mark ${icon[st][1]}" aria-label="${icon[st][2]}">${icon[st][0]}</span><span>${item}${note ? ` <span class="rule">· ${note}</span>` : ""}<br><span class="rule">${rule}</span></span></li>`).join("");
+  $("lmpcPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+$("libBtn").onclick = openLibrary; $("libClose").onclick = () => $("libDlg").close();
+$("lmpcBtn").onclick = lmpcCheck;
+$("prn").addEventListener("input", () => { if (!$("lmpcPanel").hidden) { clearTimeout(lmpcCheck.t); lmpcCheck.t = setTimeout(lmpcCheck, 400); } });
 buildList(); syncButtons(); loadFile();
 if (document.fonts) document.fonts.ready.then(draw);
 </script>
