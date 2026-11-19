@@ -1385,7 +1385,7 @@ $("grid").onchange = draw;
 $("viewSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.view;
   [...$("viewSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); draw(); };
 const setOv = () => { const w = parseFloat($("ovW").value), h = parseFloat($("ovH").value); state.ov.w = w ? +fromU(w).toFixed(2) : null; state.ov.h = h ? +fromU(h).toFixed(2) : null; draw(); };
-$("ovW").addEventListener("change", setOv); $("ovH").addEventListener("change", setOv);
+for (const id of ["ovW", "ovH"]) { $(id).addEventListener("change", setOv); $(id).addEventListener("input", () => { clearTimeout(setOv.t); setOv.t = setTimeout(setOv, 250); }); }
 $("fitBtn").onclick = () => {
   const bb = state.lastBB; if (!bb || !isFinite(bb.x0)) return;
   const k = 25.4 / state.lastDpi, margin = 1.5 / k;
@@ -1637,11 +1637,12 @@ function downscale(img, max = 1600) {
 }
 
 /* ---- UI wiring ---- */
-function showGenerated(prn, name, notes) {
+function showGenerated(prn, name, notes, stay) {
   $("prn").value = prn; state.edited = true; clearOv(); $("fileName").textContent = name;
   const lang = detect(prn); state.lang = lang === "UNKNOWN" ? state.lang : lang; syncButtons();
   state.genNotes = notes || []; draw();
   if (lang === "PGL") { state.ov = { w: p2l.lastW, h: p2l.lastH, ox: 0, oy: 0 }; $("ovW").value = p2l.lastW; $("ovH").value = p2l.lastH; draw(); }
+  if (stay) return; // tweaking settings inside the picture dialog: keep it open
   if ($("picDlg").open) $("picDlg").close();
   $("viewer").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
@@ -1659,14 +1660,14 @@ function analysePicture(img) {
     const mB = sB / wB, mF = (sum - sB) / wF, between = wB * wF * (mB - mF) ** 2; if (between > best) { best = between; thr = v; } }
   return { photo: mid / total > 0.35, threshold: Math.max(40, Math.min(220, thr + 8)) };
 }
-function genBitmap() {
+function genBitmap(stay) {
   if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
   // PGL has no bitmap command here; Printronix printers take the ZPL version through ZGL emulation
   const noBmp = ["PGL", "DPL", "FP", "SBPL"].includes(state.lang), lang = noBmp ? "ZPL" : state.lang, dpi = lang === "EPL2" ? 203 : state.dpi;
   const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || (p2l.img ? Math.max(10, Math.round((+$("bmW").value || 50) * p2l.img.naturalHeight / p2l.img.naturalWidth) + 4) : 25), iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
   const prn = bitmapPRN(lang, dpi, o); p2l.gen = true; state.dpi = dpi === 203 && lang === "EPL2" ? state.dpi : dpi;
   $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file${noBmp ? ` (bitmaps are not written in ${state.lang} here; most ${state.lang === "PGL" ? "Printronix" : state.lang === "SBPL" ? "SATO" : "Honeywell / Datamax"} printers also accept ZPL)` : ""}`;
-  showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`);
+  showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`, undefined, stay === true);
   state.source = { kind: "bitmap" }; srcBadge();
 }
 const HINT_BM = "Logo, picture or artwork as a black-and-white printer graphic. Runs in your browser; the image is not uploaded.";
@@ -1691,7 +1692,8 @@ $("bmFile").onchange = async e => {
   } catch (err) { $("bmStatus").textContent = "Could not read that image."; }
 };
 $("bmGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : genBitmap(); };
-for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen && !$("useAI").checked) genBitmap(); });
+for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen && !$("useAI").checked) genBitmap(true); });
+for (const id of ["bmW", "bmH", "bmIW", "bmThr"]) $(id).addEventListener("input", () => { clearTimeout(genBitmap.t); genBitmap.t = setTimeout(() => { if (p2l.gen && !$("useAI").checked) genBitmap(true); }, 350); });
 $("bmThr").addEventListener("input", () => { $("bmThrV").textContent = $("bmThr").value; });
 
 async function runAI() {
