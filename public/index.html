@@ -111,6 +111,12 @@ table.t1 th, table.t1 td { border-bottom: 1px solid var(--line); padding: 5px 6p
 table.t1 th { color: var(--muted); font-weight: 600; }
 .src { font-size: 12px; color: var(--muted); padding: 6px 14px 0; }
 .src a { color: var(--accent); }
+section.outbar { position: sticky; top: 8px; z-index: 20; box-shadow: 0 6px 18px rgba(16, 24, 40, .08); margin: 0 24px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-bottom: 14px; }
+section.outbar h2 { padding-bottom: 4px; }
+section.outbar .hint { padding-bottom: 0; }
+main, section.create { scroll-margin-top: 96px; }
+@media (max-width: 700px) { section.outbar .hint { display: none; } section.outbar h2 { padding-bottom: 0; } main, section.create { scroll-margin-top: 130px; } }
+section.outbar .row { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 14px; }
 section.create { padding: 0 24px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr)); gap: 16px; }
 .hint { margin: 0; padding: 0 14px 10px; font-size: 13px; color: var(--muted); max-width: 75ch; }
 .form { display: grid; gap: 10px; padding: 0 14px 14px; }
@@ -126,7 +132,8 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
 .toast.show { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
 @media (max-width: 1150px) { main { grid-template-columns: 240px minmax(0, 1fr); } .code-col { grid-column: 1 / -1; } }
-@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; } header, .printers, section.about, section.create { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); padding: 0 16px 16px; } section.outbar { margin-left: 16px; margin-right: 16px; }
+  header, .printers, section.about, section.create { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
@@ -141,20 +148,35 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
   <span class="chip">PGL · Printronix</span>
 </div>
 
+<section class="outbar panel" aria-label="Printer language and resolution">
+  <div>
+    <h2>Printer</h2>
+    <p class="hint">Applies to templates, pictures, AI conversions and the preview. Opened files switch it to their own language.</p>
+  </div>
+  <div class="row">
+        <div class="seg" role="group" aria-label="Printer language" id="langSeg">
+          <button type="button" data-lang="TSPL">TSPL</button>
+          <button type="button" data-lang="ZPL">ZPL</button>
+          <button type="button" data-lang="EPL2">EPL2</button>
+          <button type="button" data-lang="PGL">PGL</button>
+        </div>
+        <div class="seg" role="group" aria-label="Printer resolution" id="dpiSeg">
+          <button type="button" data-dpi="203">203 dpi</button>
+          <button type="button" data-dpi="300">300 dpi</button>
+          <button type="button" data-dpi="600">600 dpi</button>
+        </div>
+  </div>
+</section>
+
 <section class="create" aria-label="Pic2Label: make PRN from a picture">
   <div class="panel">
     <h2>Picture → PRN · bitmap</h2>
-    <p class="hint">Logo, picture or artwork as a black-and-white printer graphic. Runs in your browser; the image is not uploaded. Resolution follows the dpi selector below.</p>
+    <p class="hint">Logo, picture or artwork as a black-and-white printer graphic. Runs in your browser; the image is not uploaded. Uses the printer language and resolution set above.</p>
     <div class="form">
       <div class="row">
         <label class="btn" for="bmFile">Choose image</label>
         <input class="file-input" type="file" id="bmFile" accept="image/*">
         <img id="bmThumb" class="thumb" alt="Selected image" hidden>
-        <div class="seg" role="group" aria-label="Bitmap output language" id="bmLang">
-          <button type="button" data-v="ZPL" aria-pressed="true">ZPL ^GFA</button>
-          <button type="button" data-v="TSPL">TSPL BITMAP</button>
-          <button type="button" data-v="EPL2">EPL2 GW</button>
-        </div>
       </div>
       <div class="row">
         <label class="num" for="bmW">Label W <input type="number" id="bmW" value="50" min="5" max="300" step="0.5"> mm</label>
@@ -175,18 +197,12 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
   </div>
   <div class="panel">
     <h2>Photo → PRN · AI</h2>
-    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. One AI read covers every language: switch TSPL / ZPL / EPL2 / PGL or dpi afterwards without converting again. The photo is read by Claude (Anthropic), with Google Gemini as backup, and is not stored.</p>
+    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. Uses the printer setting above; one AI read covers every language, so switch it afterwards without converting again. The photo is read by Google Gemini and is not stored.</p>
     <div class="form">
       <div class="row">
         <label class="btn" for="aiFile">Choose photo</label>
         <input class="file-input" type="file" id="aiFile" accept="image/*">
         <img id="aiThumb" class="thumb" alt="Selected label photo" hidden>
-        <div class="seg" role="group" aria-label="AI output language" id="aiLang">
-          <button type="button" data-v="TSPL" aria-pressed="true">TSPL</button>
-          <button type="button" data-v="ZPL">ZPL</button>
-          <button type="button" data-v="EPL2">EPL2</button>
-          <button type="button" data-v="PGL">PGL</button>
-        </div>
       </div>
       <div class="row">
         <span class="lbl">Real label size</span>
@@ -210,17 +226,6 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
   <div class="stack">
     <div class="panel">
       <div class="controls">
-        <div class="seg" role="group" aria-label="Printer language" id="langSeg">
-          <button type="button" data-lang="TSPL">TSPL</button>
-          <button type="button" data-lang="ZPL">ZPL</button>
-          <button type="button" data-lang="EPL2">EPL2</button>
-          <button type="button" data-lang="PGL">PGL</button>
-        </div>
-        <div class="seg" role="group" aria-label="Printer resolution" id="dpiSeg">
-          <button type="button" data-dpi="203">203 dpi</button>
-          <button type="button" data-dpi="300">300 dpi</button>
-          <button type="button" data-dpi="600">600 dpi</button>
-        </div>
         <div class="seg" role="group" aria-label="View rotation" id="viewSeg">
           <button type="button" data-view="auto" aria-pressed="true">Auto</button>
           <button type="button" data-view="0">0°</button>
@@ -1114,15 +1119,13 @@ function showGenerated(prn, name, notes) {
   document.querySelector("main").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 const segVal = id => { const b = $(id).querySelector('[aria-pressed="true"]'); return b && b.dataset.v; };
-for (const id of ["bmLang", "aiLang"]) $(id).onclick = e => { const b = e.target.closest("button"); if (!b) return; [...$(id).children].forEach(x => x.setAttribute("aria-pressed", x === b));
-  if (id === "bmLang" && p2l.gen) { state.source = { kind: "bitmap" }; regenSource(b.dataset.v, state.dpi); }
-  if (id === "aiLang" && p2l.layout) { state.source = { kind: "ai" }; regenSource(b.dataset.v, state.dpi); } };
 function genBitmap() {
   if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
-  const lang = segVal("bmLang"), dpi = lang === "EPL2" ? 203 : state.dpi;
+  // PGL has no bitmap command here; Printronix printers take the ZPL version through ZGL emulation
+  const lang = state.lang === "PGL" ? "ZPL" : state.lang, dpi = lang === "EPL2" ? 203 : state.dpi;
   const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || 25, iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
   const prn = bitmapPRN(lang, dpi, o); p2l.gen = true; state.dpi = dpi === 203 && lang === "EPL2" ? state.dpi : dpi;
-  $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file`;
+  $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file${state.lang === "PGL" ? " (PGL has no bitmap: ZPL works on Printronix via emulation)" : ""}`;
   showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`);
   state.source = { kind: "bitmap" }; srcBadge();
 }
@@ -1142,7 +1145,7 @@ $("aiFile").onchange = async e => {
 };
 $("aiGo").onclick = async () => {
   if (!p2l.photo) return;
-  const lang = segVal("aiLang"), dpi = lang === "EPL2" ? 203 : state.dpi, wmm = +$("aiW").value || 0, hmm = +$("aiH").value || 0;
+  const lang = state.lang, dpi = lang === "EPL2" ? 203 : state.dpi, wmm = +$("aiW").value || 0, hmm = +$("aiH").value || 0;
   $("aiGo").disabled = true; $("aiStatus").textContent = "Reading the label… this can take up to a minute.";
   try {
     const barcodes = await detectBarcodes(p2l.photo);
@@ -1167,12 +1170,10 @@ function regenSource(lang, dpi, first) {
   if (src.dirty && !first) toast("Your code edits were replaced by fresh " + lang + " output");
   if (src.kind === "bitmap") {
     if (lang === "PGL") { toast("PGL has no bitmap command here: use ZPL (Printronix ZGL emulation)"); return; }
-    [...$("bmLang").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === lang));
-    state.dpi = dpi; genBitmap(); return;
+    state.lang = lang; state.dpi = dpi; genBitmap(); return;
   }
   const L = p2l.layout; if (!L) return;
   const d = lang === "EPL2" ? 203 : dpi; if (lang !== "EPL2") state.dpi = dpi;
-  [...$("aiLang").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === lang));
   const { prn, warn } = layoutPRN(L, lang, d);
   showGenerated(prn, `pic2label_${lang}_${d}dpi.prn`, ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn]);
   state.source = { kind: "ai" }; srcBadge();
