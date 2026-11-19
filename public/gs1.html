@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GS1 barcodes in India: GTIN, SSCC, GS1-128, DataMatrix and Sunrise 2027 | Pic2Label</title>
+<meta name="description" content="Plain-language guide to GS1 barcodes in India: getting 890 barcodes from GS1 India, GTIN, GLN and SSCC, which barcode to use, GS1 logistic labels, Application Identifiers and Sunrise 2027. With a free check-digit calculator.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #f5f6f8; --surface: #fff; --ink: #101828; --muted: #5b6475; --line: #e3e6ec; --accent: #c2410c; --accent-ink: #9a3412; --accent-soft: #fff1e8; --good: #1b6b3a; --bad: #b42318; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f141a; --surface: #161d25; --ink: #e8edf2; --muted: #a2adba; --line: #2a3542; --accent: #ff7a3d; --accent-ink: #ffa070; --accent-soft: #3a2418; --good: #6fd39c; --bad: #ff9b8a; } }
+* { box-sizing: border-box; }
+html, body { overflow-x: hidden; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 Inter, system-ui, sans-serif; }
+a { color: var(--accent); } a:hover { color: var(--accent-ink); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; padding: 14px clamp(16px, 4vw, 40px); background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.brand .mark { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 15px "Space Grotesk", sans-serif; }
+.brand b { font: 700 18px "Space Grotesk", sans-serif; } .brand span { color: var(--muted); font-weight: 500; }
+.topnav { display: flex; gap: 6px 22px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
+.topnav a { color: var(--muted); text-decoration: none; } .topnav a:hover, .topnav .on { color: var(--ink); }
+.wrap { max-width: 980px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 40px) 64px; }
+h1 { font: 700 clamp(28px, 5.5vw, 40px)/1.15 "Space Grotesk", sans-serif; margin: 0 0 12px; letter-spacing: -0.4px; }
+h2 { font: 600 24px/1.25 "Space Grotesk", sans-serif; margin: 40px 0 10px; }
+h3 { font-size: 17px; margin: 22px 0 6px; }
+.lead { font-size: 18px; color: var(--muted); max-width: 65ch; margin: 0; }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; padding: 0; list-style: none; }
+.toc a { display: inline-block; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); text-decoration: none; color: var(--ink); font-size: 14px; font-weight: 600; }
+p, li { max-width: 72ch; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin: 14px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.grid .card { margin: 0; }
+.card h3 { margin-top: 0; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.92em; }
+.btn { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font: 600 14px Inter, sans-serif; text-decoration: none; cursor: pointer; }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.calc input { height: 42px; width: min(360px, 100%); border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; font: 16px "JetBrains Mono", monospace; background: var(--surface); color: var(--ink); }
+.calc output { display: block; margin-top: 10px; font-size: 15px; min-height: 1.5em; }
+.ok { color: var(--good); } .bad { color: var(--bad); }
+.note { font-size: 13px; color: var(--muted); }
+.labelset { display: flex; flex-wrap: wrap; gap: 10px; }
+.foot { margin-top: 48px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="./"><span class="mark" aria-hidden="true">P2</span><b>Pic2Label <span>PRN Studio</span></b></a>
+  <nav class="topnav" aria-label="Main">
+    <a href="./#viewer">Viewer</a>
+    <a href="./?lib=1">Library</a>
+    <a href="gs1.html" class="on" aria-current="page">GS1 guide</a>
+    <a href="https://buytscprinters.com" rel="noopener">Printers</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <h1>GS1 barcodes in India: a practical guide</h1>
+  <p class="lead">What GS1 India does, which barcode goes where, how logistic labels are laid out and what Sunrise 2027 means for your packs. Written for factories, brand owners and label printers; the official rules are on <a href="https://www.gs1india.org/" rel="noopener">gs1india.org</a>.</p>
+  <ul class="toc">
+    <li><a href="#get">Getting barcodes</a></li>
+    <li><a href="#keys">GTIN, GLN, SSCC</a></li>
+    <li><a href="#which">Which barcode</a></li>
+    <li><a href="#ai">Application Identifiers</a></li>
+    <li><a href="#logistic">Logistic labels</a></li>
+    <li><a href="#sunrise">Sunrise 2027</a></li>
+    <li><a href="#calc">Check-digit calculator</a></li>
+    <li><a href="#templates">Free label templates</a></li>
+  </ul>
+
+  <h2 id="get">Getting barcodes in India</h2>
+  <p>GS1 India is the only authorised body that issues barcode numbers starting with <span class="mono">890</span>, India's GS1 prefix. Numbers bought from resellers or "barcode websites" are not registered to your company and can be rejected by retailers and marketplaces. GS1 India's own site warns against buying from unauthorised sources.</p>
+  <div class="card">
+    <h3>How registration works</h3>
+    <ul>
+      <li>You apply online and receive a GS1 Company Prefix, from which you make GTINs for your products.</li>
+      <li>The fee depends on your company's turnover, the number of barcodes you need and the subscription period. It is made up of a registration fee, a subscription fee, an interest-free refundable security deposit, and taxes.</li>
+      <li>Keep your GST registration, company documents and, if you are an MSME, your Udyam certificate ready.</li>
+      <li>Renew the subscription on time: a lapsed prefix should not stay on new packs.</li>
+    </ul>
+    <div class="row"><a class="btn" href="https://www.gs1india.org/register-for-barcodes" rel="noopener">Register on GS1 India</a><a class="btn ghost" href="https://www.gs1india.org/services/gtin-validation" rel="noopener">Validate a GTIN</a></div>
+    <p class="note">GS1 India registration desk: registration@gs1india.org, +91 11 4289 0890 (Ext. 1). Check gs1india.org for current fees.</p>
+  </div>
+  <div class="grid">
+    <div class="card"><h3>Barcode verification</h3><p>GS1 India grades printed barcodes against the ISO quality standards, useful before a retailer or export audit.</p><a href="https://www.gs1india.org/services/barcode-verification" rel="noopener">Barcode verification</a></div>
+    <div class="card"><h3>DataKart</h3><p>GS1 India's product data repository, where brand owners publish product details that retailers and marketplaces read.</p><a href="https://www.gs1india.org/services/datakart" rel="noopener">DataKart</a></div>
+    <div class="card"><h3>GLN for locations</h3><p>A Global Location Number identifies a factory, warehouse or store in EDI and shipping documents.</p><a href="https://www.gs1india.org/services/global-location-number" rel="noopener">Global Location Number</a></div>
+  </div>
+
+  <h2 id="keys">The three numbers you will meet</h2>
+  <div class="grid">
+    <div class="card"><h3>GTIN</h3><p>Global Trade Item Number: one number per product variant (pack size, flavour, colour). Printed as EAN-13 on retail packs; 14 digits on cartons.</p><p class="mono">8901234567890</p></div>
+    <div class="card"><h3>SSCC</h3><p>Serial Shipping Container Code: 18 digits, a new one for every pallet or parcel you ship. The one number every logistic label must carry.</p><p class="mono">389012345000000010</p></div>
+    <div class="card"><h3>GLN</h3><p>Global Location Number: 13 digits for a place or a legal entity, used for ship-to, ship-from and invoicing.</p><p class="mono">8901234000007</p></div>
+  </div>
+  <p class="note">Every GTIN, SSCC and GLN ends in a check digit worked out from the other digits. Use the <a href="#calc">calculator below</a> before you print.</p>
+
+  <h2 id="which">Which barcode goes where</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Where</th><th>Barcode</th><th>Carries</th></tr></thead>
+    <tbody>
+      <tr><td>Retail pack scanned at the till</td><td>EAN-13 (EAN-8 on very small packs)</td><td>GTIN only</td></tr>
+      <tr><td>Retail pack, Sunrise 2027 ready</td><td>EAN-13 plus a QR code with GS1 Digital Link, or GS1 DataMatrix</td><td>GTIN, and optionally batch, expiry, serial, a web link</td></tr>
+      <tr><td>Medicines, medical devices</td><td>GS1 DataMatrix</td><td>GTIN, batch, expiry, serial number</td></tr>
+      <tr><td>Cartons and outer cases</td><td>ITF-14 or GS1-128</td><td>Carton GTIN (14 digits), often with batch and dates</td></tr>
+      <tr><td>Pallets and parcels</td><td>GS1-128 on a GS1 Logistic Label</td><td>SSCC, plus content, count, batch, dates, weight, ship-to</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="ai">Application Identifiers you will use most</h2>
+  <p>In GS1-128, DataMatrix and QR codes each piece of data starts with an Application Identifier (AI) in brackets. The brackets are printed in the text under the barcode, not encoded.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>AI</th><th>Meaning</th><th>Format</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">(00)</td><td>SSCC, the logistic unit</td><td>18 digits</td><td class="mono">(00)389012345000000010</td></tr>
+      <tr><td class="mono">(01)</td><td>GTIN of the item</td><td>14 digits</td><td class="mono">(01)08901234567890</td></tr>
+      <tr><td class="mono">(02)</td><td>GTIN of the items inside a logistic unit</td><td>14 digits, used with (37)</td><td class="mono">(02)18901234000011</td></tr>
+      <tr><td class="mono">(10)</td><td>Batch or lot</td><td>up to 20 characters</td><td class="mono">(10)B2611A</td></tr>
+      <tr><td class="mono">(11)</td><td>Production date</td><td>YYMMDD</td><td class="mono">(11)261105</td></tr>
+      <tr><td class="mono">(15)</td><td>Best before date</td><td>YYMMDD</td><td class="mono">(15)271231</td></tr>
+      <tr><td class="mono">(17)</td><td>Expiry date</td><td>YYMMDD</td><td class="mono">(17)290930</td></tr>
+      <tr><td class="mono">(21)</td><td>Serial number</td><td>up to 20 characters</td><td class="mono">(21)A1B2C3D4</td></tr>
+      <tr><td class="mono">(37)</td><td>Count of items inside</td><td>up to 8 digits</td><td class="mono">(37)24</td></tr>
+      <tr><td class="mono">(3102)</td><td>Net weight in kg, 2 decimals</td><td>6 digits</td><td class="mono">(3102)012000 = 120.00 kg</td></tr>
+      <tr><td class="mono">(400)</td><td>Customer's purchase order</td><td>up to 30 characters</td><td class="mono">(400)PO4512</td></tr>
+      <tr><td class="mono">(420)</td><td>Ship-to postal code</td><td>up to 20 characters</td><td class="mono">(420)421302</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="logistic">How a GS1 logistic label is laid out</h2>
+  <ul>
+    <li><b>Three sections, top to bottom.</b> A free section for the sender's name, logo or addresses; a middle section with the data in plain text for people; and a bottom section with the GS1-128 barcodes.</li>
+    <li><b>The SSCC is the only mandatory element</b>, and it goes in the lowest barcode on the label.</li>
+    <li><b>Size.</b> GS1 does not fix one size. A6 (105 × 148 mm) covers most needs; A5 (148 × 210 mm) leaves room for transport details. A 100 × 150 mm thermal label is the usual A6 equivalent.</li>
+    <li><b>Orientation.</b> Barcodes on pallets and cartons run in picket-fence orientation, bars vertical, so scanners read them on a conveyor or forklift.</li>
+    <li><b>Placement.</b> On pallets, labels go on two adjacent sides at a height scanners can reach.</li>
+  </ul>
+  <p>Full rules: <a href="https://www.gs1.org/standards/gs1-logistic-label-guideline" rel="noopener">GS1 Logistic Label Guideline</a>.</p>
+
+  <h2 id="sunrise">Sunrise 2027 in brief</h2>
+  <p>Sunrise 2027 is GS1's industry target for shop tills to read 2D barcodes as well as linear ones by the end of 2027. Packs will carry both an EAN-13 and a 2D code during the change-over; later the 2D code alone will do.</p>
+  <div class="grid">
+    <div class="card"><h3>QR code with GS1 Digital Link</h3><p>The GTIN (and batch, expiry if you like) inside a web address. Tills read the GTIN; shoppers' phones open your product page. Needs a URL you control.</p><p class="mono">https://samplefoods.in/01/08901234567890/10/B2611A</p><a href="https://www.gs1india.org/qr-code" rel="noopener">GS1 India on QR codes</a></div>
+    <div class="card"><h3>GS1 DataMatrix</h3><p>Compact, no web address, already standard on medicines. Tills and warehouse scanners read it; ordinary phone cameras usually do not show anything useful.</p><p class="mono">(01)08901234567890(17)290930(10)PT26110</p><a href="https://www.gs1india.org/gs1-data-matrix" rel="noopener">GS1 India on DataMatrix</a></div>
+  </div>
+  <p>Practical steps: keep printing the EAN-13; add the 2D code close to it on the next print run; make sure the GTIN inside both is the same; and test-scan with the retailer's scanner. Thermal transfer printers at 300 dpi give crisp small 2D codes on labels.</p>
+
+  <h2 id="calc">GTIN / SSCC / GLN check-digit calculator</h2>
+  <div class="card calc">
+    <label for="cd">Type the number without its last digit to get the check digit, or the full number to verify it.</label>
+    <div class="row" style="margin-top:8px"><input id="cd" inputmode="numeric" autocomplete="off" placeholder="890123456789"></div>
+    <output id="cdOut" for="cd" aria-live="polite"></output>
+    <p class="note">Works for GTIN-8, GTIN-12, GTIN-13, GTIN-14, GLN (13) and SSCC (18). Runs in your browser.</p>
+  </div>
+
+  <h2 id="templates">Free GS1 label templates</h2>
+  <p>Original Pic2Label designs that follow the published GS1 layout rules. They are not copies of GS1's illustrations, so you can use and change them freely. They open in the viewer in any printer language: TSPL, ZPL, EPL2, PGL, DPL, Fingerprint, SBPL or CPCL.</p>
+  <div class="labelset">
+    <a class="btn ghost" href="./?lib=GS1-A6">SSCC parcel label (A6)</a>
+    <a class="btn ghost" href="./?lib=GS1-01">Pallet label with content, count, batch (100 × 150)</a>
+    <a class="btn ghost" href="./?lib=GS1-A5">Pallet label with weight, PO and ship-to (A5)</a>
+    <a class="btn ghost" href="./?lib=GS1-CTN">Carton label, GS1-128 (100 × 75)</a>
+    <a class="btn ghost" href="./?lib=SUN-01">Sunrise 2027 retail label (EAN-13 + QR)</a>
+    <a class="btn ghost" href="./?lib=PH-01">Pharma carton with GS1 DataMatrix</a>
+  </div>
+  <p class="note">Sample numbers use GS1 India's 890 prefix with a made-up company number. Replace them with your own GTINs and SSCCs before printing.</p>
+
+  <p class="foot">Pic2Label is made by Infinite Solutions, New Delhi, and is not part of GS1 or GS1 India. GS1 and the GS1 logo are trademarks of GS1 AISBL. This page explains GS1 standards in our own words for general guidance; for binding rules refer to <a href="https://www.gs1india.org/" rel="noopener">GS1 India</a> and the <a href="https://www.gs1.org/standards/barcodes-epcrfid-id-keys/gs1-general-specifications" rel="noopener">GS1 General Specifications</a>.</p>
+</main>
+<script>
+// GS1 mod-10 check digit: weights 3,1,3,1… from the right of the data digits
+function check(d) { let s = 0; for (let i = d.length - 1, w = 3; i >= 0; i--, w = 4 - w) s += +d[i] * w; return (10 - s % 10) % 10; }
+const inp = document.getElementById("cd"), out = document.getElementById("cdOut");
+inp.addEventListener("input", () => {
+  const v = inp.value.replace(/\D/g, ""); out.className = "";
+  if (!v) { out.textContent = ""; return; }
+  const full = [8, 12, 13, 14, 18].includes(v.length), body = [7, 11, 12, 13, 17].includes(v.length);
+  if (full) { const ok = check(v.slice(0, -1)) === +v.slice(-1); out.className = ok ? "ok" : "bad";
+    out.textContent = ok ? `Valid: the check digit ${v.slice(-1)} is correct.` : `Not valid: the check digit should be ${check(v.slice(0, -1))}, giving ${v.slice(0, -1)}${check(v.slice(0, -1))}.`;
+    if (body) out.textContent += ` (If you typed it without a check digit, the full number is ${v}${check(v)}.)`; }
+  else if (body) { out.className = "ok"; out.textContent = `Check digit ${check(v)}: full number ${v}${check(v)}.`; }
+  else out.textContent = `${v.length} digits. Type 7, 11, 12, 13 or 17 digits to get a check digit, or a full 8, 12, 13, 14 or 18-digit number to verify it.`;
+});
+</script>
+</body>
+</html>

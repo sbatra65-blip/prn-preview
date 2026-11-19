@@ -201,6 +201,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
     <a href="#viewer" class="on">Viewer</a>
     <button type="button" data-open="pic">From picture</button>
     <button type="button" data-open="lib">Library</button>
+    <a href="gs1.html">GS1 guide</a>
     <a href="#languages">Printer languages</a>
     <a href="https://buytscprinters.com" rel="noopener">Printers</a>
   </nav>
@@ -345,7 +346,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
 </dialog>
 
 <dialog id="libDlg" class="wide" aria-labelledby="libTitle">
-  <div class="dlg-head"><div><h2 id="libTitle">Label library</h2><div class="sub">Opens in the printer language and resolution set in the viewer.</div></div><button type="button" class="x" id="libClose" aria-label="Close">×</button></div>
+  <div class="dlg-head"><div><h2 id="libTitle">Label library</h2><div class="sub">Opens in the printer language and resolution set in the viewer. GS1 labels follow the <a href="gs1.html#logistic">GS1 layout rules</a>.</div></div><button type="button" class="x" id="libClose" aria-label="Close">×</button></div>
   <div class="dlg-body" id="libBody"></div>
 </dialog>
 
@@ -417,6 +418,8 @@ function gs1Paren(raw) {
     if (s[i] === "\x1d") { i++; continue; }
     const ai2 = s.substr(i, 2);
     if (FIXED[ai2]) { out += "(" + ai2 + ")" + s.substr(i + 2, FIXED[ai2]); i += 2 + FIXED[ai2]; continue; }
+    if (/^3[1-6]\d\d/.test(s.substr(i, 4))) { out += "(" + s.substr(i, 4) + ")" + s.substr(i + 4, 6); i += 10; continue; }
+    if (/^41[0-7]/.test(s.substr(i, 3))) { out += "(" + s.substr(i, 3) + ")" + s.substr(i + 3, 13); i += 16; continue; }
     let ai = /^(10|21|22|30|37|90|91|92|93|94|95|96|97|98|99)/.test(s.substr(i)) ? ai2 : s.substr(i, s.substr(i,1) === "4" ? 3 : 4);
     let j = s.indexOf("\x1d", i + ai.length); if (j < 0) j = s.length;
     out += "(" + ai + ")" + s.slice(i + ai.length, j); i = j;
@@ -494,7 +497,8 @@ function parseTSPL(t, dpi) {
       const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[3], mod: +a[6], hri: a[4] !== "0", deg: +a[5] || 0, tspl: true };
       if (type.startsWith("EAN13")) Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
       else if (type.startsWith("EAN128")) { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
-      else if (/^128M?$/.test(type)) Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+      else if (type === "128M" && data.includes("!102")) { const p = gs1Paren(data.replace(/!102/g, "\x1d").replace(/!1\d\d/g, "")); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
+      else if (/^128M?$/.test(type)) { const d = data.replace(/!1\d\d/g, ""); Object.assign(bc, { bcid: "code128", text: d, hriText: d }); }
       else if (type === "39" || type === "39S") Object.assign(bc, { bcid: "code39", text: data, hriText: data });
       else { m.warn.push("Barcode type " + type + " not previewed"); continue; }
       m.items.push(bc);
@@ -1045,7 +1049,7 @@ function layoutPRN2(L, lang, dpi) {
       if (kind === "pdf417") { kind = "code128"; warn.push("PDF417 was written as Code 128."); }
       const raw = kind === "gs1-128" ? gs1Raw(data.includes("(") ? data : gs1Paren("\x1d" + data), "\x1d") : data;
       const mods = linearModules(kind, kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : kind === "ean13" ? ean13Full(data) : data) || 80;
-      let n = Math.max(1, Math.min(10, Math.round(w / mods))); if (n > 1 && mods * n > w * 1.08) n--;
+      let n = Math.max(1, Math.min(10, Math.round(w / mods))); while (n > 1 && mods * n > w * 1.01) n--;
       const bh = Math.max(D(4), Math.round(h * 0.78)), bx = x + Math.max(0, Math.round((w - mods * n) / 2)); // centre the symbol in its box
       if (lang === "DPL") { const id = { code128: "E", ean13: "F", code39: "A", "gs1-128": "Q" }[kind];
         out.push(`1${id}${c36(kind === "code39" ? n * 3 : n)}${c36(n)}${p3(dmm(bh / dpi * 25.4))}${p4(dmm(L.h - e.y) - dmm(bh / dpi * 25.4))}${p4(dmm(bx / dpi * 25.4))}${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`); }
@@ -1504,14 +1508,15 @@ function layoutPRN(L, lang, dpi) {
       if (sym === "upca") { data = data.replace(/\D/g, ""); data = ("0" + data).slice(0, 12); kind = bcid = "ean13"; }
       if (kind === "ean13") { data = data.replace(/\D/g, "").slice(0, 12); if (data.length < 12) { kind = bcid = "code128"; } }
       if (kind === "pdf417") { kind = bcid = "code128"; warn.push("PDF417 was written as Code 128."); }
-      const raw = kind === "gs1-128" ? data.replace(/[()]/g, "") : data;
+      const raw = kind === "gs1-128" ? gs1Raw(data.includes("(") ? data : gs1Paren("\x1d" + data), "\x1d") : data;
       const paren = kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : data;
       const mods = linearModules(bcid, kind === "gs1-128" ? paren : (kind === "ean13" ? ean13Full(data) : data)) || 80;
-      let n = Math.max(1, Math.min(10, Math.round(w / mods))); if (n > 1 && mods * n > w * 1.08) n--;
+      let n = Math.max(1, Math.min(10, Math.round(w / mods))); while (n > 1 && mods * n > w * 1.01) n--;
       const bh = Math.max(D(4), Math.round(h * 0.78)), bx = x + Math.max(0, Math.round((w - mods * n) / 2)); // centre the symbol in its box
       if (lang === "TSPL") {
-        const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "EAN128" }[kind];
-        out.push(`BARCODE ${bx},${y},"${t}",${bh},1,0,${n},${kind === "code39" ? n * 3 : n},"${tsplQ(kind === "gs1-128" ? raw : data)}"`);
+        const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "128M" }[kind];
+        const g1 = kind === "gs1-128" ? "!102" + gs1Raw(paren, "!102") : data; // 128M: !102 is FNC1
+        out.push(`BARCODE ${bx},${y},"${t}",${bh},1,0,${n},${kind === "code39" ? n * 3 : n},"${tsplQ(g1)}"`);
       } else if (lang === "ZPL") {
         if (kind === "ean13") out.push(`^BY${n}^FO${bx},${y}^BEN,${bh},Y,N^FD${data}^FS`);
         else if (kind === "code39") out.push(`^BY${n},3^FO${bx},${y}^B3N,N,${bh},Y,N^FD${data}^FS`);
@@ -1720,7 +1725,7 @@ function regenSource(lang, dpi, first) {
   const L = p2l.layout; if (!L) return; state.sizeHint = [L.w, L.h];
   const d = lang === "EPL2" ? 203 : dpi; if (lang !== "EPL2") state.dpi = dpi;
   const { prn, warn } = layoutPRN(L, lang, d);
-  showGenerated(prn, `${src.lib || "pic2label"}_${lang}_${d}dpi.prn`, ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn]);
+  showGenerated(prn, `${src.lib || "pic2label"}_${lang}_${d}dpi.prn`, [...(src.lib ? [] : ["AI draft from a photo: check every text line and barcode value against the original before printing."]), ...warn]);
   state.source = { kind: "ai", lib: src.lib }; srcBadge();
 }
 function srcBadge() {
@@ -1748,7 +1753,7 @@ const BC = (x, y, w, h, symbology, data) => ({ type: "barcode", x, y, w, h, symb
 const LN = (x, y, w, h, t) => ({ type: "line", x, y, w, h, thickness: t || 0.3 });
 const BX = (x, y, w, h, t) => ({ type: "box", x, y, w, h, thickness: t || 0.4 });
 const LIB = [
-  { code: "GS1-01", cat: "Logistics", name: "GS1 logistics label (SSCC)", w: 100, h: 150,
+  { code: "GS1-01", cat: "GS1", name: "GS1 pallet label (100 × 150)", w: 100, h: 150,
     short: "Pallet / carton label with SSCC, GTIN, count, batch and best before in GS1-128.",
     items: [BX(2, 2, 96, 146, 0.5),
       T(5, 5, 3, "FROM: Sample Foods Pvt Ltd"), T(5, 10, 2.6, "Plot 12, Okhla Ph-II, New Delhi-110020"),
@@ -1759,6 +1764,42 @@ const LIB = [
       BC(8, 78, 84, 28, "gs1-128", "(10)B2611A(15)271231"),
       LN(2, 112, 96, 0.4, 0.4), T(5, 115, 3, "SSCC"),
       BC(8, 120, 84, 24, "gs1-128", "(00)389012345000000010")] },
+  { code: "GS1-A6", cat: "GS1", name: "GS1 SSCC parcel label (A6)", w: 105, h: 148,
+    short: "SSCC-only logistic label: sender and receiver on top, SSCC in plain text and GS1-128 at the bottom.",
+    items: [BX(2, 2, 101, 144, 0.5),
+      T(5, 5, 2.6, "FROM"), T(5, 9.5, 3.2, "Sample Foods Pvt Ltd"), T(5, 15, 2.6, "Plot 12, Okhla Ph-II, New Delhi 110020"),
+      T(5, 23, 2.6, "TO"), T(5, 27.5, 3.2, "ABC Retail DC"), T(5, 33, 2.6, "Bhiwandi, Maharashtra 421302"),
+      LN(2, 42, 101, 0.4, 0.4),
+      T(5, 47, 3, "SSCC"), T(5, 53, 6, "3 8901234 500000001 0"),
+      T(5, 64, 2.6, "Order: PO4512"), T(55, 64, 2.6, "Packages: 1 of 3"),
+      LN(2, 74, 101, 0.4, 0.4), T(5, 78, 2.6, "SSCC"),
+      BC(6, 84, 93, 45, "gs1-128", "(00)389012345000000010")] },
+  { code: "GS1-A5", cat: "GS1", name: "GS1 pallet label with transport data (A5)", w: 148, h: 210,
+    short: "Content GTIN, count, net weight, best before, batch, PO and ship-to postal code, with SSCC as the lowest barcode.",
+    items: [BX(2, 2, 144, 206, 0.6),
+      T(6, 6, 4, "Sample Foods Pvt Ltd"), T(6, 13, 2.8, "Plot 12, Okhla Ph-II, New Delhi 110020"), T(6, 19, 2.8, "Ship to: ABC Retail DC, Bhiwandi 421302"),
+      LN(2, 26, 144, 0.5, 0.5),
+      T(6, 30, 2.6, "SSCC"), T(6, 35, 4.2, "389012345000000010"),
+      T(6, 44, 2.6, "CONTENT"), T(6, 49, 3.4, "18901234000011"), T(78, 44, 2.6, "COUNT"), T(78, 49, 3.4, "24"),
+      T(6, 57, 2.6, "NET WEIGHT (kg)"), T(6, 62, 3.4, "120.00"), T(78, 57, 2.6, "BEST BEFORE (dd.mm.yy)"), T(78, 62, 3.4, "31.12.27"),
+      T(6, 70, 2.6, "BATCH"), T(6, 75, 3.4, "B2611A"), T(78, 70, 2.6, "PURCHASE ORDER"), T(78, 75, 3.4, "PO4512"),
+      LN(2, 83, 144, 0.5, 0.5),
+      BC(8, 88, 132, 26, "gs1-128", "(02)18901234000011(37)24"),
+      BC(8, 119, 132, 26, "gs1-128", "(3102)012000(15)271231(10)B2611A"),
+      BC(8, 150, 132, 24, "gs1-128", "(420)421302(400)PO4512"),
+      BC(8, 179, 132, 26, "gs1-128", "(00)389012345000000010")] },
+  { code: "GS1-CTN", cat: "GS1", name: "GS1 carton label (GS1-128)", w: 100, h: 75,
+    short: "Outer case: product name, carton GTIN with batch and best before in GS1-128, quantity per case.",
+    items: [T(4, 3, 4, "BASMATI RICE PREMIUM 1 kg"), T(4, 10, 2.8, "Case of 12 · Net 12 kg"),
+      T(4, 16, 2.6, "GTIN 18901234000011 · Batch B2611A · Best before 31.12.27"),
+      LN(3, 22, 94, 0.4, 0.4),
+      BC(5, 26, 90, 40, "gs1-128", "(01)18901234000011(15)271231(10)B2611A")] },
+  { code: "SUN-01", cat: "GS1", name: "Sunrise 2027 retail label (EAN-13 + QR)", w: 75, h: 50,
+    short: "Dual marking: EAN-13 for today's tills and a QR code with GS1 Digital Link carrying the same GTIN and batch.",
+    items: [T(3, 2.5, 3.4, "BASMATI RICE PREMIUM 1 kg"), T(3, 8, 2.6, "MRP Rs. 185.00 (incl. of all taxes)"), T(3, 12.5, 2.4, "Batch B2611A · Best before 10/05/2027"),
+      BC(3, 18, 38, 26, "ean13", "8901234567890"),
+      BC(48, 17, 24, 24, "qrcode", "https://samplefoods.in/01/08901234567890/10/B2611A"),
+      T(46, 42.5, 1.8, "Scan for product details")] },
   { code: "SHIP-01", cat: "Logistics", name: "Courier / shipping label", w: 100, h: 150,
     short: "Address label with AWB barcode, order number, weight and COD box.",
     items: [BX(2, 2, 96, 146, 0.5), T(5, 5, 4, "SHIP TO"),
@@ -1796,6 +1837,7 @@ const LIB = [
       BC(3, 24, 45, 11, "code128", "TTP-244-PH"), BC(54, 15, 18, 18, "qrcode", "PN:TTP-244-PH;QTY:1;BIN:B-02-07")] },
 ];
 // The original LMPC templates come with hand-made files; library entries are built from layouts.
+const CAT_ORDER = ["LMPC", "GS1", "Logistics", "Retail", "Pharma", "Assets", "Warehouse"];
 function libraryList() {
   return [...DATA.map((t, i) => ({ code: t.code, cat: "LMPC", name: "LMPC " + (t.code === "LM-05" ? "wholesale carton" : "retail") + " label", w: t.w, h: t.h, short: t.short, tplIndex: i })), ...LIB];
 }
@@ -1803,7 +1845,7 @@ function libLayout(e) { // text without a width may use the rest of the label li
   return { w: e.w, h: e.h, items: e.items.map(i => ({ ...i, w: i.type === "text" && !i.w ? Math.max(1, e.w - i.x - 1) : i.w })) };
 }
 function openLibrary() {
-  const list = libraryList(), cats = [...new Set(list.map(e => e.cat))];
+  const list = libraryList(), cats = [...new Set(list.map(e => e.cat))].sort((a, b) => CAT_ORDER.indexOf(a) - CAT_ORDER.indexOf(b));
   $("libBody").innerHTML = cats.map(c => `<h3>${c}</h3><div class="lib-grid">` + list.filter(e => e.cat === c).map(e =>
     `<button type="button" class="tpl" data-code="${e.code}"><b>${e.name}</b><span class="size">${e.code} · ${e.w} × ${e.h} mm</span><small>${e.short}</small></button>`).join("") + "</div>").join("");
   $("libBody").onclick = ev => { const b = ev.target.closest("button[data-code]"); if (!b) return; loadLibrary(b.dataset.code); $("libDlg").close(); };
@@ -2032,6 +2074,9 @@ for (const id of ["dlBtn", "pngBtn", "pdfBtn", "sheetBtn"]) {
 }
 
 buildList(); syncButtons(); loadFile();
+// gs1.html links here with ?lib=CODE (open that template) or ?lib=1 (open the library)
+const libParam = new URLSearchParams(location.search).get("lib");
+if (libParam) setTimeout(() => { if (libParam === "1") openLibrary(); else { loadLibrary(libParam); $("viewer").scrollIntoView({ block: "start" }); } }, 0);
 loadFromHash().then(ok => { if (!ok && $("rememberChk").checked && store.get("p2l-last")) { try { unpackState(store.get("p2l-last")); toast("Your last label is back"); } catch (e) {} } });
 window.addEventListener("hashchange", loadFromHash);
 if (document.fonts) document.fonts.ready.then(draw);
