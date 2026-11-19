@@ -1003,19 +1003,20 @@ function layoutPRN2(L, lang, dpi) {
       if (kind === "pdf417") { kind = "code128"; warn.push("PDF417 was written as Code 128."); }
       const raw = kind === "gs1-128" ? gs1Raw(data.includes("(") ? data : gs1Paren("\x1d" + data), "\x1d") : data;
       const mods = linearModules(kind, kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : kind === "ean13" ? ean13Full(data) : data) || 80;
-      const n = Math.max(1, Math.min(10, Math.round(w / mods))), bh = Math.max(D(4), Math.round(h * 0.78));
+      let n = Math.max(1, Math.min(10, Math.round(w / mods))); if (n > 1 && mods * n > w * 1.08) n--;
+      const bh = Math.max(D(4), Math.round(h * 0.78)), bx = x + Math.max(0, Math.round((w - mods * n) / 2)); // centre the symbol in its box
       if (lang === "DPL") { const id = { code128: "E", ean13: "F", code39: "A", "gs1-128": "Q" }[kind];
-        out.push(`1${id}${c36(kind === "code39" ? n * 3 : n)}${c36(n)}${p3(dmm(bh / dpi * 25.4))}${p4(dmm(L.h - e.y) - dmm(bh / dpi * 25.4))}${p4(dmm(e.x))}${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`); }
+        out.push(`1${id}${c36(kind === "code39" ? n * 3 : n)}${c36(n)}${p3(dmm(bh / dpi * 25.4))}${p4(dmm(L.h - e.y) - dmm(bh / dpi * 25.4))}${p4(dmm(bx / dpi * 25.4))}${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`); }
       else if (lang === "FP") { const t = { code128: "CODE128", ean13: "EAN13", code39: "CODE39", "gs1-128": "EAN128" }[kind];
-        out.push(`PP ${x},${H - y}:DIR 1:AN 7:BT "${t}":BH ${bh}:BM ${n}:BF ON:PB "${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}"`); }
+        out.push(`PP ${bx},${H - y}:DIR 1:AN 7:BT "${t}":BH ${bh}:BM ${n}:BF ON:PB "${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}"`); }
       else if (lang === "SBPL") {
         const code = { code128: `<ESC>BG${p2(n)}${p3(bh)}>G${data}`, ean13: `<ESC>B3${p2(n)}${p3(bh)}${data}`, code39: `<ESC>B1${p2(n)}${p3(bh)}*${data}*`, "gs1-128": `<ESC>BI${p2(n)}${p3(bh)}>I>F${raw.replace(/\x1d/g, "")}` }[kind];
-        out.push(`<ESC>V${p4(y)}<ESC>H${p4(x)}${code}`);
+        out.push(`<ESC>V${p4(y)}<ESC>H${p4(bx)}${code}`);
         const hri = kind === "ean13" ? ean13Full(data) : kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : data;
-        out.push(`<ESC>V${p4(y + bh + 4)}<ESC>H${p4(x)}<ESC>$A,${Math.round(n * 7)},${Math.round(n * 8)},0<ESC>$=${hri}`); // SATO prints no human-readable line by default
+        out.push(`<ESC>V${p4(y + bh + 4)}<ESC>H${p4(bx)}<ESC>$A,${Math.round(n * 7)},${Math.round(n * 8)},0<ESC>$=${hri}`); // SATO prints no human-readable line by default
       } else {
         const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "UCCEAN128" }[kind];
-        out.push("BARCODE-TEXT 7 0 5", `BARCODE ${t} ${n} ${kind === "code39" ? 2 : 1} ${bh} ${x} ${y} ${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`, "BARCODE-TEXT OFF");
+        out.push("BARCODE-TEXT 7 0 5", `BARCODE ${t} ${n} ${kind === "code39" ? 2 : 1} ${bh} ${bx} ${y} ${kind === "gs1-128" ? raw.replace(/\x1d/g, "") : data}`, "BARCODE-TEXT OFF");
       }
     } else if (e.type === "line" || e.type === "box") {
       const th = Math.max(1, D(e.thickness || 0.3)), horiz = e.type === "line" && w >= h;
@@ -1462,22 +1463,23 @@ function layoutPRN(L, lang, dpi) {
       const raw = kind === "gs1-128" ? data.replace(/[()]/g, "") : data;
       const paren = kind === "gs1-128" ? (data.includes("(") ? data : gs1Paren("\x1d" + data)) : data;
       const mods = linearModules(bcid, kind === "gs1-128" ? paren : (kind === "ean13" ? ean13Full(data) : data)) || 80;
-      const n = Math.max(1, Math.min(10, Math.round(w / mods))), bh = Math.max(D(4), Math.round(h * 0.78));
+      let n = Math.max(1, Math.min(10, Math.round(w / mods))); if (n > 1 && mods * n > w * 1.08) n--;
+      const bh = Math.max(D(4), Math.round(h * 0.78)), bx = x + Math.max(0, Math.round((w - mods * n) / 2)); // centre the symbol in its box
       if (lang === "TSPL") {
         const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "EAN128" }[kind];
-        out.push(`BARCODE ${x},${y},"${t}",${bh},1,0,${n},${kind === "code39" ? n * 3 : n},"${tsplQ(kind === "gs1-128" ? raw : data)}"`);
+        out.push(`BARCODE ${bx},${y},"${t}",${bh},1,0,${n},${kind === "code39" ? n * 3 : n},"${tsplQ(kind === "gs1-128" ? raw : data)}"`);
       } else if (lang === "ZPL") {
-        if (kind === "ean13") out.push(`^BY${n}^FO${x},${y}^BEN,${bh},Y,N^FD${data}^FS`);
-        else if (kind === "code39") out.push(`^BY${n},3^FO${x},${y}^B3N,N,${bh},Y,N^FD${data}^FS`);
-        else if (kind === "gs1-128") out.push(`^BY${n}^FO${x},${y}^BCN,${bh},Y,N,N,D^FD${paren}^FS`);
-        else out.push(`^BY${n}^FO${x},${y}^BCN,${bh},Y,N,N^FD${data}^FS`);
+        if (kind === "ean13") out.push(`^BY${n}^FO${bx},${y}^BEN,${bh},Y,N^FD${data}^FS`);
+        else if (kind === "code39") out.push(`^BY${n},3^FO${bx},${y}^B3N,N,${bh},Y,N^FD${data}^FS`);
+        else if (kind === "gs1-128") out.push(`^BY${n}^FO${bx},${y}^BCN,${bh},Y,N,N,D^FD${paren}^FS`);
+        else out.push(`^BY${n}^FO${bx},${y}^BCN,${bh},Y,N,N^FD${data}^FS`);
       } else if (lang === "EPL2") {
         const t = { code128: "1", ean13: "E30", code39: "3", "gs1-128": "1E" }[kind];
-        out.push(`B${x},${y},0,${t},${n},${kind === "code39" ? n * 3 : n},${bh},B,"${kind === "gs1-128" ? raw : data}"`);
+        out.push(`B${bx},${y},0,${t},${n},${kind === "code39" ? n * 3 : n},${bh},B,"${kind === "gs1-128" ? raw : data}"`);
       } else {
         const t = { code128: "C128B", ean13: "EAN13", code39: "C3/9", "gs1-128": "UCC-128" }[kind];
         const hin = bh / dpi, tenth = Math.max(1, Math.floor(hin * 10)), extra = Math.max(0, bh - Math.round(tenth / 10 * dpi));
-        pgl.bars.push("BARCODE", `${t};H${tenth}${extra ? "." + extra : ""};${y};${x}`, `*${kind === "gs1-128" ? raw : data}*`, "PDF", "STOP");
+        pgl.bars.push("BARCODE", `${t};H${tenth}${extra ? "." + extra : ""};${y};${bx}`, `*${kind === "gs1-128" ? raw : data}*`, "PDF", "STOP");
       }
     } else if (e.type === "line" || e.type === "box") {
       const th = Math.max(1, D(e.thickness || 0.3));
@@ -1553,6 +1555,17 @@ function layoutFromAI(ai, wmm, hmm) {
     if (below) em = Math.min(em, (below.y - t.y) * 1.08);
     t.h = Math.max(0.8, em / 1.2);
   }
+  // the printer draws a barcode's human-readable line itself: drop text that repeats the barcode data
+  const norm = v => String(v || "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+  for (const b of items.filter(i => i.type === "barcode")) {
+    const d = norm(b.data); if (!d) continue;
+    for (let k = items.length - 1; k >= 0; k--) { const t = items[k]; if (t.type !== "text") continue;
+      const tx = norm(t.text), near = t.y < b.y + b.h + 12 && t.y + t.h > b.y - 12 && t.x < b.x + b.w + 6 && b.x < t.x + t.w + 6;
+      if (near && tx.length >= 4 && (tx === d || d.includes(tx) || tx.includes(d))) { items.splice(k, 1); const j = texts.indexOf(t); if (j >= 0) texts.splice(j, 1); } }
+  }
+  // two rules almost on top of each other are one rule seen twice
+  const rules = items.filter(i => i.type === "line" && i.w >= i.h);
+  for (const r of rules) for (const q of rules) if (r !== q && items.includes(r) && items.includes(q) && Math.abs(r.y - q.y) < 1.6 && Math.min(r.x + r.w, q.x + q.w) - Math.max(r.x, q.x) > 0.7 * Math.min(r.w, q.w)) { items.splice(items.indexOf(q), 1); r.thickness = Math.max(r.thickness, q.thickness); }
   // a rule that cuts through a line of text belongs just above or below it
   for (const l of items.filter(i => i.type === "line" && i.w >= i.h)) {
     const mid = l.y + l.h / 2, hit = texts.find(t => mid > t.y && mid < t.y + t.h * 1.2 && t.x < l.x + l.w && l.x < t.x + t.w);
