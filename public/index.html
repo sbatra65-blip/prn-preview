@@ -75,6 +75,7 @@ canvas#label { display: block; background: #fff; border-radius: 3px; box-shadow:
 .dim { position: absolute; font-family: var(--font-mono); font-size: 11px; color: #c7d2dc; white-space: nowrap; }
 .dim.w { top: -20px; left: 0; right: 0; text-align: center; }
 .dim.h { top: 0; bottom: 0; left: -26px; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; }
+.srcbadge { font-size: 12px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); padding: 4px 10px; border-radius: 999px; }
 .sizebar { border-top: 1px solid var(--line); padding-top: 10px; }
 .sizebar .lbl { font-size: 13px; font-weight: 600; color: var(--muted); }
 label.num { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -174,7 +175,7 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
   </div>
   <div class="panel">
     <h2>Photo → PRN · AI</h2>
-    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. The photo is read by Claude (Anthropic), with Google Gemini as backup, and is not stored.</p>
+    <p class="hint">Photo of an existing label becomes editable PRN code with real text, barcodes and lines. Crop the photo to the label edges and enter the real size for the best placement. One AI read covers every language: switch TSPL / ZPL / EPL2 / PGL or dpi afterwards without converting again. The photo is read by Claude (Anthropic), with Google Gemini as backup, and is not stored.</p>
     <div class="form">
       <div class="row">
         <label class="btn" for="aiFile">Choose photo</label>
@@ -236,6 +237,7 @@ section.create { padding: 0 24px 16px; display: grid; grid-template-columns: rep
         <label class="num" for="ovH">H <input type="number" id="ovH" min="5" max="500" step="0.5" placeholder="from file"> mm</label>
         <button type="button" class="btn" id="fitBtn">Fit to content</button>
         <button type="button" class="btn" id="sizeReset">Use file size</button>
+        <span class="srcbadge" id="srcBadge" hidden></span>
         <span class="detect" id="detectBadge" role="status" aria-live="polite"></span>
       </div>
       <div class="stage">
@@ -851,7 +853,7 @@ function syncButtons() {
 }
 function clearOv() { state.ov = { w: null, h: null, ox: 0, oy: 0 }; if ($("ovW")) { $("ovW").value = ""; $("ovH").value = ""; } }
 function loadFile() {
-  clearOv(); state.genNotes = [];
+  clearOv(); state.genNotes = []; state.source = null; if ($("srcBadge")) $("srcBadge").hidden = true;
   const t = currentTpl();
   $("prn").value = t.files[fileKey()];
   $("fileName").textContent = `${t.code}_${fileKey().replace("_", "_")}dpi.prn`.replace("PGL_", "PGL-Printronix_");
@@ -904,8 +906,12 @@ function draw() {
   $("notes").innerHTML = notes.map(n => `<div class="note">${n}</div>`).join("");
 }
 
-$("langSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.lang = b.dataset.lang; state.edited = false; syncButtons(); loadFile(); };
-$("dpiSeg").onclick = e => { const b = e.target.closest("button"); if (!b || b.disabled) return; state.dpi = +b.dataset.dpi; state.edited = false; syncButtons(); loadFile(); };
+$("langSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return;
+  if (state.source) { regenSource(b.dataset.lang, state.dpi); return; }
+  state.lang = b.dataset.lang; state.edited = false; syncButtons(); loadFile(); };
+$("dpiSeg").onclick = e => { const b = e.target.closest("button"); if (!b || b.disabled) return;
+  if (state.source) { regenSource(state.lang, +b.dataset.dpi); return; }
+  state.dpi = +b.dataset.dpi; state.edited = false; syncButtons(); loadFile(); };
 $("grid").onchange = draw;
 $("viewSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; state.view = b.dataset.view;
   [...$("viewSeg").children].forEach(x => x.setAttribute("aria-pressed", x === b)); draw(); };
@@ -919,12 +925,12 @@ $("fitBtn").onclick = () => {
 };
 $("sizeReset").onclick = () => { state.ov = { w: null, h: null, ox: 0, oy: 0 }; $("ovW").value = ""; $("ovH").value = ""; draw(); };
 $("redrawBtn").onclick = () => { draw(); toast("Label redrawn"); };
-let timer; $("prn").addEventListener("input", () => { state.edited = true; $("fileName").textContent = "Edited code"; clearTimeout(timer); timer = setTimeout(draw, 180); });
+let timer; $("prn").addEventListener("input", () => { state.edited = true; if (state.source) state.source.dirty = true; $("fileName").textContent = "Edited code"; clearTimeout(timer); timer = setTimeout(draw, 180); });
 $("resetBtn").onclick = () => { state.edited = false; loadFile(); };
 $("copyBtn").onclick = async () => { if (/@bmp\d+/.test($("prn").value)) { toast("This file has binary graphics: use Download .prn"); return; } try { await navigator.clipboard.writeText($("prn").value); toast("Code copied"); } catch (e) { $("prn").select(); toast("Select the code and press Ctrl+C"); } };
 $("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return; const buf = await f.arrayBuffer(); let txt;
   try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { txt = new TextDecoder("latin1").decode(buf); }
-  state.genNotes = []; $("prn").value = extractBinaries(txt); state.edited = true; clearOv(); $("fileName").textContent = f.name;
+  state.genNotes = []; state.source = null; $("srcBadge").hidden = true; $("prn").value = extractBinaries(txt); state.edited = true; clearOv(); $("fileName").textContent = f.name;
   const d = f.name.match(/(203|300)/); if (d) { state.dpi = +d[1]; syncButtons(); } draw(); };
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
 window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
@@ -1108,14 +1114,17 @@ function showGenerated(prn, name, notes) {
   document.querySelector("main").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 const segVal = id => { const b = $(id).querySelector('[aria-pressed="true"]'); return b && b.dataset.v; };
-for (const id of ["bmLang", "aiLang"]) $(id).onclick = e => { const b = e.target.closest("button"); if (!b) return; [...$(id).children].forEach(x => x.setAttribute("aria-pressed", x === b)); if (id === "bmLang" && p2l.gen) genBitmap(); };
+for (const id of ["bmLang", "aiLang"]) $(id).onclick = e => { const b = e.target.closest("button"); if (!b) return; [...$(id).children].forEach(x => x.setAttribute("aria-pressed", x === b));
+  if (id === "bmLang" && p2l.gen) { state.source = { kind: "bitmap" }; regenSource(b.dataset.v, state.dpi); }
+  if (id === "aiLang" && p2l.layout) { state.source = { kind: "ai" }; regenSource(b.dataset.v, state.dpi); } };
 function genBitmap() {
   if (!p2l.img) { $("bmStatus").textContent = "Choose an image first."; return; }
   const lang = segVal("bmLang"), dpi = lang === "EPL2" ? 203 : state.dpi;
   const o = { lw: +$("bmW").value || 50, lh: +$("bmH").value || 25, iw: +$("bmIW").value || 0, pos: $("bmPos").value, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked, name: p2l.name };
-  const prn = bitmapPRN(lang, dpi, o); p2l.gen = true;
+  const prn = bitmapPRN(lang, dpi, o); p2l.gen = true; state.dpi = dpi === 203 && lang === "EPL2" ? state.dpi : dpi;
   $("bmStatus").textContent = `${lang} bitmap at ${dpi} dpi · ${(prnBytes(prn).size / 1024).toFixed(1)} KB file`;
   showGenerated(prn, `${p2l.name.replace(/\.[^.]+$/, "")}_${lang}_${dpi}dpi.prn`);
+  state.source = { kind: "bitmap" }; srcBadge();
 }
 $("bmFile").onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
@@ -1144,16 +1153,35 @@ $("aiGo").onclick = async () => {
     // trust the browser's barcode decoder over the model for barcode data
     const bcs = L.items.filter(e => e.type === "barcode");
     barcodes.forEach((b, i) => { const t = bcs[i]; if (t) { t.data = b.value; t.symbology = b.format.replace("_", ""); } });
-    p2l.lastW = L.w; p2l.lastH = L.h;
-    const { prn, warn } = layoutPRN(L, lang, dpi);
-    const notes = ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn];
+    p2l.lastW = L.w; p2l.lastH = L.h; p2l.layout = L; p2l.provider = j.provider;
     const who = { claude: "Claude", gemini: "Gemini", "workers-ai": "Cloudflare Llama (backup)" }[j.provider] || j.provider || "AI";
     $("aiStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
-    showGenerated(prn, `pic2label_${lang}_${dpi}dpi.prn`, notes);
+    state.source = { kind: "ai" }; regenSource(lang, dpi, true);
   } catch (err) { $("aiStatus").textContent = "Conversion failed: " + err.message; }
   finally { $("aiGo").disabled = false; }
 };
 
+// One AI call (or one picture) -> any language and dpi: the layout is kept and re-emitted on demand
+function regenSource(lang, dpi, first) {
+  const src = state.source; if (!src) return;
+  if (src.dirty && !first) toast("Your code edits were replaced by fresh " + lang + " output");
+  if (src.kind === "bitmap") {
+    if (lang === "PGL") { toast("PGL has no bitmap command here: use ZPL (Printronix ZGL emulation)"); return; }
+    [...$("bmLang").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === lang));
+    state.dpi = dpi; genBitmap(); return;
+  }
+  const L = p2l.layout; if (!L) return;
+  const d = lang === "EPL2" ? 203 : dpi; if (lang !== "EPL2") state.dpi = dpi;
+  [...$("aiLang").children].forEach(x => x.setAttribute("aria-pressed", x.dataset.v === lang));
+  const { prn, warn } = layoutPRN(L, lang, d);
+  showGenerated(prn, `pic2label_${lang}_${d}dpi.prn`, ["AI draft from a photo: check every text line and barcode value against the original before printing.", ...warn]);
+  state.source = { kind: "ai" }; srcBadge();
+}
+function srcBadge() {
+  const src = state.source, el = $("srcBadge"); if (!el) return;
+  el.hidden = !src;
+  if (src) el.textContent = src.kind === "ai" ? "From AI layout · switch language or dpi freely, no new AI call" : "From picture · switch language or dpi to regenerate";
+}
 // Download with binary bitmaps restored, CRLF line ends
 function prnBytes(text) {
   const parts = text.replace(/\r?\n/g, "\r\n").split(/(@bmp\d+)/), enc = new TextEncoder(), chunks = [];
