@@ -2813,7 +2813,7 @@ function dzRenderItem(it, k, part, guide) {
     const th = +it.thickness || 0; part = part || "all"; // "outline" | "text" | "all"
     if (guide && !it.fill && !(th > 0)) { x.save(); x.setLineDash([4, 4]); x.strokeStyle = "rgba(194,65,12,.55)"; x.lineWidth = 1; dzShapePath(x, it, k, 0.2); x.stroke(); x.restore(); }
     if (part !== "text") { if (it.fill) { x.fillStyle = fillc; dzShapePath(x, it, k); x.fill(); if (th > 0 && live && it.color && it.color !== it.fillColor) { x.strokeStyle = ink; x.lineWidth = Math.max(1, th * k); dzShapePath(x, it, k, th / 2); x.stroke(); } } else if (th > 0) { x.strokeStyle = ink; x.lineWidth = Math.max(1, th * k); dzShapePath(x, it, k, th / 2); x.stroke(); } }
-    if (part !== "outline") { x.fillStyle = it.fill ? (live && it.textColor ? it.textColor : "#fff") : ink; x.textBaseline = "middle"; for (const l of dzFitText(it)) { x.font = dzFontCss(it, l.h * 1.2 * k); x.fillText(l.s, l.x * k, (l.y + l.h / 2) * k); } }
+    if (part !== "outline") { x.fillStyle = it.fill ? (live && it.textColor ? it.textColor : "#fff") : (live && it.textColor ? it.textColor : ink); x.textBaseline = "middle"; for (const l of dzFitText(it)) { x.font = dzFontCss(it, l.h * 1.2 * k); x.fillText(l.s, l.x * k, (l.y + l.h / 2) * k); } }
   } else if (it.type === "image") { x.fillStyle = "#fff"; x.fillRect(0, 0, W, H); x.drawImage(dzImg(it), 0, 0, W, H); }
   else if (it.type === "barcode") {
     let data = String(it.data || ""); const sym = it.symbology;
@@ -2921,7 +2921,10 @@ function dzProps() {
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
   { // colours: on screen and in the colour image; the printer prints in its ribbon colour
     const cl = (key, label, val) => `<label>${label}<input type="color" data-col="${key}" value="${val}" style="height:34px;padding:2px"></label>`;
-    if (it.type === "shape") { f.push(cl("color", it.fill ? "Outline" : "Outline / text", dzCol(it))); if (it.fill) { f.push(cl("fillColor", "Fill", dzCol(it, "fill"))); f.push(cl("textColor", "Text", it.textColor || "#ffffff")); } }
+    if (it.type === "shape") { const noLine = !it.fill && !(+it.thickness > 0);
+      if (!noLine) f.push(cl("color", "Outline colour", dzCol(it)));
+      if (it.fill) f.push(cl("fillColor", "Fill colour", dzCol(it, "fill")));
+      f.push(cl("textColor", "Text colour", it.textColor || (it.fill ? "#ffffff" : dzCol(it)))); }
     else f.push(cl("color", it.type === "text" ? "Text colour" : it.type === "barcode" ? "Bar colour" : it.type === "image" ? "Dot colour" : "Colour", dzCol(it)));
     if (it.color || it.fillColor || it.textColor) f.push(`<label style="align-self:end"><button type="button" class="btn sm" id="dzColReset">Use print colour</button></label>`);
   }
