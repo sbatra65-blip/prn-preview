@@ -249,6 +249,31 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 .dz-o canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 .dz-o .h { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; background: var(--accent); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; display: none; }
 .dz-o.sel .h { display: block; }
+body.appmode > .topbar, body.appmode > .wrap { display: none !important; }
+body.appmode dialog.dz[open] { position: fixed; inset: 0; z-index: 40; border: 0; }
+body.appmode #dzClose { display: none; }
+.dz-apponly { display: none; } body.appmode .dz-apponly { display: inline-flex; }
+.toast { z-index: 2000; }
+.dz-brand { display: flex; align-items: center; gap: 10px; }
+.dz-brand .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 13px var(--font-head); }
+.dz-brand span:last-child { color: var(--muted); font-weight: 500; }
+.dz-viewhost { flex: 1; overflow: auto; background: var(--bg); padding: 14px; }
+.dz-viewhost .viewer { margin: 0; }
+#dzDlg.viewing .dz-bar, #dzDlg.viewing .dz-stage, #dzDlg.viewing .dz-props { display: none; }
+#dzDlg.viewing .dz-body { grid-template-columns: 1fr; }
+#dzDlg.viewing .dz-viewhost { display: block; }
+.dz-welcome { position: absolute; inset: 0; background: rgba(16, 24, 40, .93); display: grid; place-content: center; padding: 30px; z-index: 6; }
+.dz-welcome[hidden] { display: none; }
+.dz-welcome h2 { color: #fff; font: 600 24px var(--font-head); text-align: center; margin: 0 0 18px; }
+.dz-welcome .wg { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: min(760px, calc(100vw - 40px)); }
+.dz-welcome { overflow: auto; align-content: start; }
+@media (min-height: 700px) { .dz-welcome { align-content: center; } }
+@media (max-width: 760px) { body.appmode #dzNew, body.appmode #dzPasteBtn, body.appmode #dzOpenBtn, body.appmode #dzPrn, body.appmode .dz-head .dz-apponly { display: none; } .dz-head .btn { min-height: 34px; padding: 0 10px; font-size: 13px; } }
+.dz-welcome button { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; color: var(--ink); font: 13px var(--font); }
+.dz-welcome button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.dz-welcome button b { font: 600 15px var(--font-head); }
+.dz-welcome button span { color: var(--muted); }
+.dz-stage { position: relative; }
 .dz-ribbon { background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 5; }
 .dz-ribbon .rt { display: flex; gap: 2px; padding: 4px 12px 0; border-bottom: 1px solid var(--line); background: var(--bg); }
 .dz-ribbon .rt button { border: 1px solid transparent; border-bottom: 0; background: none; font: 600 13px var(--font); color: var(--muted); padding: 7px 14px; border-radius: 8px 8px 0 0; cursor: pointer; margin-bottom: -1px; }
@@ -556,7 +581,8 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 </dialog>
 <dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
   <div class="dz-head">
-    <h2 id="dzTitle">Label designer</h2>
+    <h2 id="dzTitle" class="dz-brand"><span class="mark" aria-hidden="true">P2</span>Pic2Label <span>PRN Studio</span></h2>
+    <button type="button" class="btn dark dz-apponly" data-lead="talk">Talk to Infinite Solutions</button>
     <button type="button" class="btn" id="dzNew">New</button>
     <button type="button" class="btn" id="dzPasteBtn">Paste code</button>
     <button type="button" class="btn" id="dzOpenBtn">My designs</button>
@@ -602,7 +628,20 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
         <button type="button" class="btn" id="dzZoomFit">Fit</button>
         <button type="button" class="btn" id="dzZoomIn" aria-label="Zoom in">+</button>
       </div>
-      <div class="dz-stage" id="dzStage"><div class="dz-paper" id="dzPaperEl"></div></div>
+      <div class="dz-stage" id="dzStage"><div class="dz-paper" id="dzPaperEl"></div>
+        <div class="dz-welcome" id="dzWelcome" hidden>
+          <h2>What would you like to do?</h2>
+          <div class="wg">
+            <button type="button" data-w="new"><b>Design a new label</b><span>Pick the printer and label size, then add text, barcodes and shapes</span></button>
+            <button type="button" data-w="open"><b>Open a PRN file</b><span>See how a printer file will print, in any of 8 printer languages</span></button>
+            <button type="button" data-w="paste"><b>Paste printer code</b><span>Paste TSPL, ZPL, EPL or other code to preview or edit it</span></button>
+            <button type="button" data-w="pic"><b>Turn a picture into PRN</b><span>A logo becomes a printer graphic; a label photo becomes editable code with AI</span></button>
+            <button type="button" data-w="lib"><b>Start from the library</b><span>LMPC, GS1, courier, pharma, jewellery, asset and bin labels</span></button>
+            <button type="button" data-w="draft"><b>Continue my last design</b><span>Pick up where you left off</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="dz-viewhost" id="dzViewHost" hidden></div>
     </div>
 
     <aside class="dz-side dz-props" aria-label="Object properties">
@@ -1893,6 +1932,7 @@ function showGenerated(prn, name, notes, stay) {
   const lang = detect(prn); state.lang = lang === "UNKNOWN" ? state.lang : lang; syncButtons();
   state.genNotes = notes || []; draw();
   if (lang === "PGL") { state.ov = { w: p2l.lastW, h: p2l.lastH, ox: 0, oy: 0 }; $("ovW").value = p2l.lastW; $("ovH").value = p2l.lastH; draw(); }
+  if (typeof APP !== "undefined" && APP && !stay) setTimeout(dzShowViewer, 0);
   if (stay) return; // tweaking settings inside the picture dialog: keep it open
   if ($("picDlg").open) $("picDlg").close();
   $("viewer").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -2111,6 +2151,7 @@ function loadLibrary(code) {
   state.source = { kind: "ai", lib: e.code };
   regenSource(state.lang, state.dpi, true);
   state.genNotes = []; $("fileName").textContent = `${e.code}_${state.lang}_${state.lang === "EPL2" ? 203 : state.dpi}dpi.prn`; draw();
+  if (typeof APP !== "undefined" && APP) dzShowViewer();
 }
 
 /* ---------------- LMPC check of the current design ---------------- */
@@ -2439,11 +2480,18 @@ function dzUndo(step) {
 }
 function dzSave() { if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
 
+var APP = !new URLSearchParams(location.search).has("about");
+function dzShowViewer() {
+  if (!APP) return; const host = $("dzViewHost"); if ($("viewer").parentElement !== host) host.append($("viewer"));
+  host.hidden = false; $("dzDlg").classList.add("viewing"); $("dzWelcome").hidden = true; dz.tab = "Tools"; dzRibbonShow("Tools"); setTimeout(() => { try { draw(); } catch (e) {} }, 0);
+}
+function dzShowDesigner() { $("dzDlg").classList.remove("viewing"); $("dzViewHost").hidden = true; }
 function dzOpen() {
   if (!dz.D) { try { dz.D = JSON.parse(store.get("p2l-design")); } catch (e) {} if (!dz.D || !dz.D.items) dz.D = dzDefault(); }
   dz.seq = Math.max(1, ...dz.D.items.map(i => i.id)) + 1;
-  for (const d of document.querySelectorAll("dialog[open]")) d.close();
-  $("dzDlg").showModal(); for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
+  for (const d of document.querySelectorAll("dialog[open]")) if (d.id !== "dzDlg") d.close();
+  if (!$("dzDlg").open) { if (APP) $("dzDlg").show(); else $("dzDlg").showModal(); }
+  dzShowDesigner(); for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
 }
 
 /* setup panel */
@@ -3006,6 +3054,7 @@ function dzToViewer() {
   if (!dzCheck()) return;
   const D = dz.D;
   p2l.layout = dzLayout(); state.source = { kind: "ai", design: true };
+  if (APP) { regenSource(D.lang, D.dpi, true); return dzShowViewer(); }
   $("dzDlg").close(); regenSource(D.lang, D.dpi, true);
   $("viewer").scrollIntoView({ block: "start" });
 }
@@ -3081,7 +3130,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ["Close designer", click("dzClose")]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Barcode", () => dzAdd("barcode")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -3118,7 +3167,8 @@ const DZ_IC = { // 24x24 stroke icons, drawn for this app
   bold: "M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z", italic: "M10 5h8M6 19h8M14 5l-4 14", bigger: "M4 19L9 5l5 14M6 14h6M17 6v6M14 9h6", smaller: "M4 19L9 5l5 14M6 14h6M14 9h6",
   arcup: "M3 17a9 9 0 0 1 18 0", arcdn: "M3 7a9 9 0 0 0 18 0", ring: "M12 4a8 8 0 1 0 .01 0", wave: "M2 12c3-6 5-6 8 0s5 6 8 0 3-3 4-3", flat: "M4 12h16",
   grid: "M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16", zin: "M10 4a6 6 0 1 0 .01 0M15 15l5 5M7 10h6M10 7v6", zout: "M10 4a6 6 0 1 0 .01 0M15 15l5 5M7 10h6", fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
-  newdoc: "M6 3h9l4 4v14H6zM14 3v5h5M12 11v6M9 14h6", code: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16", printer: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5zM9 14h6",
+  newdoc: "M6 3h9l4 4v14H6zM14 3v5h5M12 11v6M9 14h6", openf: "M3 7h6l2 2h10v10H3zM12 12v5M9.5 14.5L12 12l2.5 2.5", lib: "M4 4h4v16H4zM10 4h4v16h-4zM16 5l4 1-3 14-4-1z",
+  check: "M5 12l4 4 10-10M4 4h16v16H4z", gs1: "M4 5h16v14H4zM8 9v6M11 9v6M14 9v6M17 9v6", pic: "M4 6h16v12H4zM7 15l3-3 2 2 3-4 3 5M12 2v3M3 21h18", back: "M10 6l-6 6 6 6M4 12h16", printers: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5z", code: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16", printer: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5zM9 14h6",
 };
 const dzIcon = (k, sz = 20) => `<svg aria-hidden="true" width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${DZ_IC[k] || ""}"/></svg>`;
 function dzRibbonDef() {
@@ -3141,6 +3191,11 @@ function dzRibbonDef() {
     Text: [["Font", [{ font: true }, B("bold", "Bold", () => dzToggle("bold"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
       ["Curve", [B("flat", "Straight", () => dzCurveTo(0), isText, () => isText() && !dzCurve(sel()) && !dzOnPath(sel())), B("arcup", "Arch up", () => dzCurveTo(180), isText, () => isText() && dzCurve(sel()) > 0), B("arcdn", "Arch down", () => dzCurveTo(-180), isText, () => isText() && dzCurve(sel()) < 0), B("ring", "Circle", () => dzPathTo("circle"), isText, () => isText() && sel().path === "circle")]],
       ["Along an outline", ["rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => B(k === "wave" ? "wave" : k, DZ_PATHS[k], () => dzPathTo(k), isText, () => isText() && sel().path === k))]],
+    Tools: [["Design", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing"), null, "Back to the label designer"), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing"), "Preview the design as printed")]],
+      ["Printer files", [B("openf", "Open PRN", () => $("fileIn").click(), null, null, "Open a .prn file"), B("code", "Paste code", () => { dzShowViewer(); $("pasteBtn").click(); }, null, null, "Paste printer code to view it"), B("pic", "From picture", () => $("picDlg").showModal(), null, null, "Logo or label photo to PRN")]],
+      ["Templates", [B("lib", "Library", () => openLibrary())]],
+      ["Check", [B("check", "LMPC check", () => { dzShowViewer(); setTimeout(() => $("lmpcBtn").click(), 50); }, null, null, "Check the label against LMPC rules"), B("gs1", "GS1 guide", () => window.open("gs1.html", "_blank"))]],
+      ["Infinite Solutions", [B("printers", "Printers", () => window.open("https://buytscprinters.com", "_blank")), B("vcard", "Talk to us", () => openLead("talk"))]]],
     View: [["Show", [B("grid", "Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, null, () => $("dzGrid").checked)]],
       ["Zoom", [B("zin", "Zoom in", click("dzZoomIn"), null, null, "Ctrl+="), B("zout", "Zoom out", click("dzZoomOut"), null, null, "Ctrl+-"), B("fit", "Fit", click("dzZoomFit"), null, null, "Ctrl+0")]],
       ["Snap", [{ snap: true }]]],
@@ -3169,7 +3224,7 @@ function dzRibbonShow(tab) {
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
-  for (const t of ["Label", "Home", "Insert", "Arrange", "Text", "View"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
+  for (const t of ["Label", "Home", "Insert", "Arrange", "Text", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
   document.addEventListener("click", e => { if (!e.target.closest(".dz-drop")) dzMenuClose(); });
   dzRibbonShow("Label");
 })();
@@ -3184,13 +3239,26 @@ $("dzDpi").addEventListener("change", () => { dz.D.dpi = +$("dzDpi").value; dzCa
 for (const id of ["dzMaxPW", "dzMaxMW"]) $(id).addEventListener("input", () => { dz.D.pw = +$("dzMaxPW").value || 104; dz.D.mw = +$("dzMaxMW").value || 112; dzCaps(); dzMedia(); });
 for (const id of ["dzPaper", "dzAcross", "dzHGap", "dzEdge", "dzH", "dzVGap"]) $(id).addEventListener("input", dzMedia);
 for (const b of document.querySelectorAll("[data-add]")) b.addEventListener("click", () => dzAdd(b.dataset.add));
+$("fileIn").addEventListener("change", () => { if (APP) setTimeout(dzShowViewer, 80); });
+$("dzWelcome").addEventListener("click", e => {
+  const b = e.target.closest("[data-w]"); if (!b) return; $("dzWelcome").hidden = true; store.set("p2l-welcomed", "1");
+  const w = b.dataset.w;
+  if (w === "new") { dz.D = dzDefault(); dz.D.items = []; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Label"); dzSave(); }
+  if (w === "open") $("fileIn").click(); if (w === "paste") { dzShowViewer(); $("pasteBtn").click(); }
+  if (w === "pic") $("picDlg").showModal(); if (w === "lib") openLibrary();
+});
+if (APP) {
+  document.body.classList.add("appmode"); document.title = "Pic2Label PRN Studio · label designer and PRN viewer";
+  const qs = new URLSearchParams(location.search), shared = location.hash.startsWith("#prn=") || qs.has("lib");
+  setTimeout(() => { dzOpen(); if (shared) dzShowViewer(); else if (!store.get("p2l-welcomed")) $("dzWelcome").hidden = false; }, 200);
+}
 $("dzGrid").addEventListener("change", dzDraw);
 $("dzStock").addEventListener("input", () => { dz.D.stock = $("dzStock").value; dzDraw(); dzSave(); });
 $("dzInk").addEventListener("input", () => { dz.D.ink = $("dzInk").value; dzDraw(); dzSave(); });
 $("dzZoomIn").onclick = () => { dz.zoom = Math.min(4, dz.zoom * 1.25); dzDraw(); };
 $("dzZoomOut").onclick = () => { dz.zoom = Math.max(0.3, dz.zoom / 1.25); dzDraw(); };
 $("dzZoomFit").onclick = dzFit;
-$("dzClose").onclick = () => $("dzDlg").close();
+$("dzClose").onclick = () => { if (!APP) $("dzDlg").close(); };
 $("dzToViewer").onclick = dzToViewer;
 $("dzPrn").onclick = dzDownload;
 $("dzNew").onclick = () => { if (!confirm("Start a new blank design? The current one in this browser is replaced.")) return; const p = dz.D; dz.D = Object.assign(dzDefault(), { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw, items: [] }); delete dz.D.cloud; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Label"); };
@@ -3360,7 +3428,7 @@ if ($("dzBack")) $("dzBack").onclick = () => {
   const notes = dzFromModel(m, state.lastLang || state.lang, m.dpi); dzOpen(); dzSave();
   $("dzStatus").textContent = `Brought in ${dz.D.items.length} objects from the viewer${notes.length ? " · " + notes.join(" · ") : ""}.`;
 };
-if (new URLSearchParams(location.search).has("design")) setTimeout(dzOpen, 300);
+if (!APP && new URLSearchParams(location.search).has("design")) setTimeout(dzOpen, 300);
 </script>
 </body>
 </html>
