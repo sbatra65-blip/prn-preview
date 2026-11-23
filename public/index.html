@@ -2669,7 +2669,27 @@ async function dzPickLocalFont() { // fonts installed on this computer (Chrome/E
     draw(); d.showModal(); q.focus();
   });
 }
-function dzTextW(it) { return dzMeasure(it, it.text, it.h); }
+function dzTextW(it) { return it.para ? Math.max(5, +it.bw || 40) : dzMeasure(it, it.text, it.h); }
+// Paragraph text: wraps inside a box of width it.bw; Enter starts a new line; it.lg = line spacing (× text size)
+function dzParaLines(it) {
+  const W = Math.max(5, +it.bw || 40), out = []; out.ends = new Set(); // ends: last line of each paragraph (never justified)
+  for (const para of String(it.text || "").split(/\r?\n/)) {
+    const words = para.split(/(\s+)/).filter(w => w !== ""); let line = "";
+    if (!words.length) { out.push(""); out.ends.add(out.length - 1); continue; }
+    for (const w of words) {
+      const t = line + w;
+      if (!line || dzMeasure(it, t.trimEnd(), it.h) <= W) { line = t; continue; }
+      out.push(line.trimEnd()); line = /^\s+$/.test(w) ? "" : w;
+      while (dzMeasure(it, line, it.h) > W && line.length > 1) { // a word longer than the box: break it
+        let n = line.length - 1; while (n > 1 && dzMeasure(it, line.slice(0, n), it.h) > W) n--;
+        out.push(line.slice(0, n)); line = line.slice(n);
+      }
+    }
+    out.push(line.trimEnd()); out.ends.add(out.length - 1);
+  }
+  return out;
+}
+const dzParaPitch = it => it.h * Math.max(0.8, Math.min(3, +it.lg || 1.25));
 function dzHist() { // snapshot after each change; Ctrl+Z / Ctrl+Y walk through it
   const snap = JSON.stringify(dz.D); dz.hist = dz.hist || []; if (dz.hi == null) dz.hi = -1;
   if (dz.hist[dz.hi] === snap) return;
@@ -2834,7 +2854,7 @@ function dzPaint(el, it, s) {
   const keep = el.querySelector(".h"), keepR = el.querySelector(".rh");
   if (it.type === "shape") {
     dzEnsureFont(it); const pr = Math.min(3, (window.devicePixelRatio || 1) * 1.5), c = dzRenderItem(it, s * pr, "all", true); c.style.cssText = "width:100%;height:100%;image-rendering:auto"; el.replaceChildren(c);
-  } else if (it.type === "text" && (dzCurve(it) || dzOnPath(it) || it.font || dzNonLatin(it))) {
+  } else if (it.type === "text" && (dzCurve(it) || dzOnPath(it) || it.font || dzNonLatin(it) || it.para)) {
     dzEnsureFont(it); const pr = Math.min(3, (window.devicePixelRatio || 1) * 1.5), c = dzRenderItem(it, s * pr, "all", true); c.style.cssText = "width:100%;height:100%;image-rendering:auto"; el.replaceChildren(c);
   } else if (it.type === "text") {
     const t = document.createElement("span"); t.className = "t"; t.textContent = it.text || " ";
@@ -2932,11 +2952,11 @@ function dzPathAt(g, d) { // point at distance d along the path (wraps when clos
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 function dzDims(it) { // the item's own size in mm, before any rotation
-  if (it.type === "text") { it.w = dzTextW(it); if (dzOnPath(it)) { const g = dzPathGeom(it); return { w: g.w, h: g.h }; } if (dzCurve(it)) { const a = dzArc(it); return { w: a.w, h: a.h }; } if (it.font || dzNonLatin(it)) return { w: it.w, h: it.h * 1.7 }; return { w: it.w, h: it.h }; }
+  if (it.type === "text") { it.w = dzTextW(it); if (it.para) return { w: it.w, h: Math.max(1, dzParaLines(it).length) * dzParaPitch(it) }; if (dzOnPath(it)) { const g = dzPathGeom(it); return { w: g.w, h: g.h }; } if (dzCurve(it)) { const a = dzArc(it); return { w: a.w, h: a.h }; } if (it.font || dzNonLatin(it)) return { w: it.w, h: it.h * 1.7 }; return { w: it.w, h: it.h }; }
   return { w: it.w, h: it.h };
 }
 function dzBox(it) { const d = dzDims(it), r = dzRot(it) * Math.PI / 180, c = Math.abs(Math.cos(r)), sn = Math.abs(Math.sin(r)); return { w: d.w * c + d.h * sn, h: d.w * sn + d.h * c }; }
-const dzNative = it => it.type !== "shape" && dzRot(it) % 90 === 0 && !dzCurve(it) && !dzOnPath(it) && !(it.type === "text" && (it.font || dzNonLatin(it))); // printers turn these themselves; others print as a graphic
+const dzNative = it => it.type !== "shape" && dzRot(it) % 90 === 0 && !dzCurve(it) && !dzOnPath(it) && !(it.type === "text" && (it.font || dzNonLatin(it) || it.para)); // printers turn these themselves; others print as a graphic
 function dzTurn(it, by) { // turn about the box centre so the item stays where it was
   const b = dzBox(it), cx = it.x + b.w / 2, cy = it.y + b.h / 2;
   it.rot = Math.round((((dzRot(it) + by) % 360) + 360) % 360 * 10) / 10; const n = dzBox(it);
@@ -3014,6 +3034,15 @@ function dzRenderItem(it, k, part, guide) {
       const c = d + ws[i] / 2, [px, py] = dzPathAt(g, c), a = dzPathAt(g, c - Math.max(ws[i], it.h) / 2), b = dzPathAt(g, c + Math.max(ws[i], it.h) / 2);
       x.save(); x.translate((px + g.m) * k, (py + g.m) * k); x.rotate(Math.atan2(b[1] - a[1], b[0] - a[0])); x.fillText(ch, 0, off * k); x.restore();
       d += ws[i] + track + spread;
+    });
+  } else if (it.type === "text" && it.para) {
+    x.font = dzFontCss(it, it.h * 1.2 * k); x.textBaseline = "middle"; const lines = dzParaLines(it), pitch = dzParaPitch(it) * k, al = it.align || "left";
+    lines.forEach((l, i) => {
+      const y = pitch * (i + 0.5), lw = x.measureText(l).width;
+      if (al === "justify" && !lines.ends.has(i) && l.includes(" ")) {
+        const ws = l.split(/\s+/), gap = (W - ws.reduce((a, w) => a + x.measureText(w).width, 0)) / Math.max(1, ws.length - 1); let px = 0;
+        for (const w of ws) { x.fillText(w, px, y); px += x.measureText(w).width + gap; }
+      } else x.fillText(l, al === "center" ? (W - lw) / 2 : al === "right" ? W - lw : 0, y);
     });
   } else if (it.type === "text") {
     x.font = dzFontCss(it, it.h * 1.2 * k); x.textBaseline = "middle";
@@ -3114,6 +3143,7 @@ function dzGrab(e, it, resize) {
     else if (resize && rr % 90) { const b = dzBox(Object.assign({}, it, o)), f = Math.max((b.w + dx) / b.w, (b.h + dy) / b.h); dx = o.w * (f - 1); dy = o.h * (f - 1); }
     if (!resize) { it.x = sn(o.x + dx); it.y = sn(o.y + dy); }
     else if (it.type === "text" && dzOnPath(it)) { it.pw = Math.max(5, sn(o.pw + dx)); if (it.path !== "circle") it.ph = Math.max(4, sn(o.ph + dy)); }
+    else if (it.type === "text" && it.para) it.bw = Math.max(5, sn((+o.bw || o.w) + dx));
     else if (it.type === "text") it.h = Math.max(1, sn(o.h + dy));
     else if (dzIs2D(it)) { const v = Math.max(4, sn(Math.max(o.w + dx, o.h + dy))); it.w = it.h = v; }
     else if (it.type === "line") { if (o.w >= o.h) it.w = Math.max(1, sn(o.w + dx)); else it.h = Math.max(1, sn(o.h + dy)); }
@@ -3207,14 +3237,25 @@ function dzProps() {
   }
   if (it.type === "text" && dzLinkSrc(it)) f.push(`<label class="full">Text (from the linked object)<input value="${(it.text || "").replace(/"/g, "&quot;")}" readonly></label>`);
   if (it.type === "text" && !dzLinkSrc(it)) {
-    f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
-    f.push(`<label>Font size, pt<input data-pt="h" type="number" min="3" max="400" step="0.5" value="${dzToPt(it.h)}" list="dzPtList"></label>`); f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
+    if (it.para) f.push(`<label class="full">Text (Enter for a new line; lines wrap to the box)<textarea data-k="text" style="min-height:90px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
+    else f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
+    f.push(`<label>Font size, pt<input data-pt="h" type="number" min="3" max="400" step="0.5" value="${dzToPt(it.h)}" list="dzPtList"></label>`);
+    if (it.para) {
+      f.push(`<label>Box width, mm<input id="dzBW" type="number" min="5" step="0.5" value="${r1(+it.bw || it.w)}"></label>`);
+      f.push(`<label>Align<select id="dzPAlign">${[["left", "Left"], ["center", "Centre"], ["right", "Right"], ["justify", "Justify"]].map(([v, n]) => `<option value="${v}"${(it.align || "left") === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
+      f.push(`<label>Line spacing<select id="dzPLg">${[[1, "Single (tight)"], [1.25, "Normal"], [1.5, "1.5 lines"], [2, "Double"]].map(([v, n]) => `<option value="${v}"${(+it.lg || 1.25) === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
+      f.push(`<label>Height, mm<input value="${r1(dzDims(it).h)}" readonly title="${dzParaLines(it).length} line(s)"></label>`);
+    } else f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
   } else if (it.type === "barcode") {
     f.push(`<label class="full">Type<select data-k="symbology">${DZ_SYMS.map(([v, n]) => `<option value="${v}"${v === it.symbology ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
     if (it.symbology === "qrcode") f.push(`<label class="full">QR holds<select data-k="qrKind"><option value="text"${it.qrKind !== "contact" ? " selected" : ""}>Text or link</option><option value="contact"${it.qrKind === "contact" ? " selected" : ""}>Contact card (vCard)</option></select></label>`);
     if (it.symbology === "qrcode" && it.qrKind === "contact") for (const [k, n] of DZ_CONTACT) f.push(`<label class="full">${n}<input data-c="${k}" value="${String((it.contact || {})[k] || "").replace(/"/g, "&quot;")}"${k === "tel" ? ' inputmode="tel"' : k === "email" ? ' inputmode="email"' : ""}></label>`);
     else if (dzLinkSrc(it)) f.push(`<label class="full">Data (from the linked object)<textarea readonly>${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
-    else f.push(`<label class="full">Data<textarea data-k="data">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
+    else {
+      f.push(`<label class="full">Data<textarea data-k="data" id="dzData">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
+      if (it.symbology === "gs1-128" || it.symbology === "datamatrix" || it.symbology === "qrcode")
+        f.push(`<div class="full" style="grid-column:1/-1"><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">${it.symbology === "qrcode" ? "" : DZ_AI_QUICK.map(a => `<button type="button" class="btn sm" data-ai="${a}" title="Insert (${a}) ${DZ_AI[a].n}" style="min-height:26px;padding:0 7px;font-size:12px">(${a}) ${DZ_AI[a].s}</button>`).join("")}</div><button type="button" class="btn sm soft" id="dzGs1">${it.symbology === "qrcode" ? "GS1 Digital Link builder…" : "GS1 builder: identifiers, check digits, dates…"}</button></div>`);
+    }
     if (dzIs2D(it)) num("w", "Size, mm", 0.5, 4); else { num("w", "Width, mm", 0.5, 5); num("h", "Height, mm", 0.5, 3); }
   } else if (it.type === "line") {
     const horiz = it.w >= it.h;
@@ -3266,7 +3307,7 @@ function dzProps() {
   }
   if (it.type === "text") {
     const pth = DZ_PATHS[it.path] ? it.path : (dzCurve(it) ? "arc" : "");
-    f.push(`<label class="full">Text follows<select id="dzPath"><option value=""${!pth ? " selected" : ""}>Straight line</option><option value="arc"${pth === "arc" ? " selected" : ""}>Arc / curve</option>${Object.entries(DZ_PATHS).map(([v, n]) => `<option value="${v}"${pth === v ? " selected" : ""}>${n} outline</option>`).join("")}</select></label>`);
+    f.push(`<label class="full">Text follows<select id="dzPath"><option value=""${!pth && !it.para ? " selected" : ""}>Straight line</option><option value="para"${it.para ? " selected" : ""}>Paragraph: wraps inside a box</option><option value="arc"${pth === "arc" ? " selected" : ""}>Arc / curve</option>${Object.entries(DZ_PATHS).map(([v, n]) => `<option value="${v}"${pth === v ? " selected" : ""}>${n} outline</option>`).join("")}</select></label>`);
     if (dzOnPath(it)) {
       f.push(`<label>Path width, mm<input id="dzPW" type="number" min="5" step="0.5" value="${+it.pw || 30}"></label>`);
       if (it.path !== "circle") f.push(`<label>Path height, mm<input id="dzPH" type="number" min="4" step="0.5" value="${+it.ph || 20}"></label>`);
@@ -3325,6 +3366,11 @@ function dzProps() {
     else it[k] = v;
     dzSave(); dzRefresh(it); if (inp.tagName === "SELECT" || inp.type === "checkbox") dzProps();
   });
+  for (const bt of box.querySelectorAll("[data-ai]")) bt.onclick = () => { // insert an application identifier where the cursor is
+    const ta = $("dzData"), ins = "(" + bt.dataset.ai + ")", a = ta.selectionStart ?? ta.value.length, z = ta.selectionEnd ?? a;
+    ta.value = ta.value.slice(0, a) + ins + ta.value.slice(z); ta.focus(); ta.selectionStart = ta.selectionEnd = a + ins.length; ta.dispatchEvent(new Event("input"));
+  };
+  if ($("dzGs1")) $("dzGs1").onclick = () => dzGs1Builder(it);
   if ($("dzLinkText")) $("dzLinkText").onclick = () => { // a separate text that always shows this barcode's data
     const b = dzBox(it), t = { id: dz.seq++, type: "text", x: it.x, y: r1(Math.min(dz.D.h - 4, it.y + b.h + 0.8)), h: 2.5, text: "", link: it.id };
     it.hri = "none"; dz.D.items.push(t); dzSyncLinks(); dz.sel = t.id; dzDraw(); dzProps(); dzSave();
@@ -3339,8 +3385,14 @@ function dzProps() {
   if ($("dzRot")) for (const b of $("dzRot").querySelectorAll("button")) b.onclick = () => { const want = +b.dataset.r; dzTurn(it, want - dzRot(it)); dzRefresh(it); dzProps(); dzSave(); };
   const setAng = (v, done) => { v = +v || 0; dzTurn(it, v - dzRot(it)); dzRefresh(it); dzSave(); if (done) dzProps(); else { $("dzAngle").value = dzRot(it); $("dzAngleR").value = Math.round(dzRot(it)); for (const b of $("dzRot").querySelectorAll("button")) b.setAttribute("aria-pressed", +b.dataset.r === dzRot(it)); } };
   if ($("dzAngle")) { $("dzAngle").addEventListener("input", e => setAng(e.target.value)); $("dzAngle").addEventListener("change", e => setAng(e.target.value, true)); $("dzAngleR").addEventListener("input", e => setAng(e.target.value)); $("dzAngleR").addEventListener("change", e => setAng(e.target.value, true)); }
+  if ($("dzBW")) $("dzBW").addEventListener("input", e => { it.bw = Math.max(5, +e.target.value || 5); dzRefresh(it); dzSave(); });
+  if ($("dzBW")) $("dzBW").addEventListener("change", () => dzProps());
+  if ($("dzPAlign")) $("dzPAlign").onchange = e => { it.align = e.target.value; dzRefresh(it); dzSave(); };
+  if ($("dzPLg")) $("dzPLg").onchange = e => { it.lg = +e.target.value; dzRefresh(it); dzSave(); dzProps(); };
   if ($("dzPath")) $("dzPath").onchange = e => {
     const v = e.target.value, b = dzBox(it), cx = it.x + b.w / 2, cy = it.y + b.h / 2;
+    if (v === "para") { delete it.path; delete it.pathArc; it.curve = 0; it.para = true; it.bw = r1(Math.max(15, Math.min(dzLW() - it.x - 1, Math.max(30, b.w)))); dzRefresh(it); dzSave(); return dzProps(); }
+    delete it.para;
     if (v === "arc") { delete it.path; it.pathArc = true; if (!dzCurve(it)) it.curve = 180; }
     else if (v) { it.path = v; delete it.pathArc; if (!it.pw) { it.pw = Math.max(20, Math.min(40, dzTextW(it) / 2.2)); it.ph = v === "wave" ? it.h * 1.2 : it.pw * (v === "rect" || v === "round" ? 0.6 : v === "ellipse" ? 0.6 : 1); } }
     else { delete it.path; delete it.pathArc; it.curve = 0; }
@@ -3374,7 +3426,9 @@ function dzAdd(kind) {
   if (kind.startsWith("shape:")) { const sk = kind.slice(6), sz = Math.min(30, lw - 6, D.h - 6);
     const it = { id, type: "shape", kind: sk, x: 3, y: 3, w: sk === "ellipse" || sk === "star" || sk === "hexagon" ? sz : Math.min(40, lw - 6), h: sz, thickness: 0.5, fill: false, text: sk === "star" ? "NEW" : "Text fits inside this shape", align: "center", maxH: 0 };
     D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave(); return; }
-  const base = { text: { type: "text", h: 3.5, text: "New text" }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
+  const base = { text: { type: "text", h: 3.5, text: "New text" },
+    para: { type: "text", h: 2.2, para: true, bw: r1(Math.max(15, Math.min(70, lw - 6))), align: "left", lg: 1.25, text: "Ingredients: wheat flour, sugar, edible vegetable oil, milk solids, salt.\nStore in a cool, dry place." },
+    gs1: { type: "barcode", symbology: "gs1-128", data: "(01)08901234567892(17)271231(10)B123", w: Math.min(80, lw - 4), h: 18 }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
     qrcode: { type: "barcode", symbology: "qrcode", data: "https://", w: 18, h: 18 },
     vcard: { type: "barcode", symbology: "qrcode", qrKind: "contact", contact: { name: "Your Name", org: "Company", tel: "+91 ", email: "", url: "", adr: "", title: "" }, w: Math.min(24, lw - 6, D.h - 6), h: Math.min(24, lw - 6, D.h - 6) }, datamatrix: { type: "barcode", symbology: "datamatrix", data: "(01)08901234567890", w: 15, h: 15 },
     line: { type: "line", w: Math.max(5, lw - 6), h: 0.4, thickness: 0.4 }, box: { type: "box", w: Math.min(30, lw - 6), h: Math.min(15, D.h - 6), thickness: 0.4 } }[kind];
@@ -3576,7 +3630,7 @@ function dzMenus() {
   return {
     File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
-    Insert: [["Text", () => dzAdd("text")], ["Barcode", () => dzAdd("barcode")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
+    Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
     Text: ["#Font / language", ...DZ_FONTS.map(f => typeof f === "string" ? f : [f[1], () => f[0] === "__local" ? dzPickLocalFont().then(v => v && dzSetFont(v)) : dzSetFont(f[0]), "", txt, () => { const it = dzSelTextLike(); return !!it && (it.font || "") === f[0]; }]), "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
     View: [["Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, "", null, () => $("dzGrid").checked], "#Snap", ...[["0", "No snap"], ["0.5", "0.5 mm"], ["1", "1 mm"]].map(([v, n]) => [n, () => { $("dzSnap").value = v; }, "", null, () => $("dzSnap").value === v]), "#Zoom", ["Zoom in", click("dzZoomIn"), "Ctrl+="], ["Zoom out", click("dzZoomOut"), "Ctrl+-"], ["Fit to window", click("dzZoomFit"), "Ctrl+0"]],
@@ -3625,7 +3679,7 @@ function dzRibbonDef() {
       ["Insert", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), B("qr", "QR code", () => dzAdd("qrcode")), B("image", "Image", () => $("dzImgFile").click())]],
       ["Arrange", [B("ac", "Centre", () => dzAlign("center"), has), B("front", "To front", () => dzOrder("front"), has), B("rotr", "Turn 90°", turn(90), turnable)]],
       ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
-    Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
+    Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
       ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box"))]],
       ["Shapes · text fits inside", Object.keys(DZ_SHAPES).map(k => B(k, DZ_SHAPES[k].split(" ")[0].replace("Circle", "Circle"), () => dzAdd("shape:" + k), null, null, DZ_SHAPES[k]))],
       ["Text shaped like (no outline)", ["rect", "ellipse", "star", "hexagon"].map(k => B(k, DZ_SHAPES[k].split(" ")[0], () => dzAdd("tshape:" + k), null, null, "Text in the form of a " + DZ_SHAPES[k].toLowerCase()))]],
@@ -4417,6 +4471,136 @@ document.getElementById("ldPrintX").onclick = () => document.getElementById("ldP
   if (rt) { const r = document.createElement("button"); r.type = "button"; r.className = "rprint"; r.title = b.title; r.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Print'; r.onclick = ldPrintOpen; rt.append(r); }
   document.getElementById("dzDlg").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); ldPrintOpen(); } });
 })();
+</script>
+
+<!-- GS1 builder: application identifiers (AIs), check digits and dates for GS1-128, GS1 DataMatrix and GS1 Digital Link QR -->
+<dialog id="dzGs1Dlg" aria-labelledby="dzGs1H" style="width:min(760px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)">
+  <div class="dlg-head"><div><h2 id="dzGs1H">GS1 builder</h2><div class="sub" id="dzGs1Sub">Pick identifiers and type the values. Check digits are added, dates and lengths are checked, and the FNC1 separators are put in for you when the label prints.</div></div><button type="button" class="x" id="dzGs1X" aria-label="Close">×</button></div>
+  <div class="ld-acct">
+    <div id="dzGs1Rows" style="display:grid;gap:8px"></div>
+    <div class="ld-row" style="margin:10px 0 4px"><button type="button" class="btn sm" id="dzGs1Add">+ Add identifier</button>
+      <label id="dzGs1DLWrap" class="ld-f" style="margin:0 0 0 auto;min-width:280px" hidden>Digital Link domain<input id="dzGs1Dom" value="https://id.gs1.org"></label></div>
+    <h3>Result</h3>
+    <div class="ld-secret" id="dzGs1Out" style="text-align:left"></div>
+    <p class="dz-cap" id="dzGs1Note" style="margin:0 0 10px"></p>
+    <p class="ld-err" id="dzGs1Err" role="alert"></p>
+    <div class="ld-row"><button type="button" class="btn primary" id="dzGs1Use">Use this data</button><button type="button" class="btn" id="dzGs1Cancel">Cancel</button></div>
+    <details class="ld-sec"><summary>About FNC1 and the special characters</summary>
+      <p class="dz-cap" style="margin-top:8px">In LabelDesk you type GS1 data with the identifier in brackets, e.g. <code>(01)08901234567892(17)271231(10)B123</code>. The brackets are only shown in the human-readable line; they are not encoded. When the label prints, LabelDesk puts FNC1 at the start of the barcode (that is what makes it GS1-128 / GS1 DataMatrix) and a group separator (FNC1 in GS1-128, ASCII 29 &lt;GS&gt; in DataMatrix) after each variable-length field such as batch (10) or serial (21), but not after the last one. Fixed-length fields (00, 01, 02, dates, weights) need no separator, so the builder puts them first to keep the barcode short. For a QR, GS1 asks for a Digital Link web address instead, e.g. <code>https://id.gs1.org/01/08901234567892/10/B123?17=271231</code>.</p>
+    </details>
+  </div>
+</dialog>
+<script>
+/* ---------- GS1 application identifiers ---------- */
+// f: n = digits, x = GS1 characters; len: fixed length; max: variable up to; cd: last digit is a check digit; date: YYMMDD
+const DZ_AI = {
+  "00": { n: "SSCC: serial shipping container code", s: "SSCC", f: "n", len: 18, cd: 1 },
+  "01": { n: "GTIN: product barcode number", s: "GTIN", f: "n", len: 14, cd: 1 },
+  "02": { n: "GTIN of items inside (with 37)", s: "Content", f: "n", len: 14, cd: 1 },
+  "10": { n: "Batch or lot number", s: "Batch", f: "x", max: 20 },
+  "11": { n: "Production date (YYMMDD)", s: "Mfg date", f: "n", len: 6, date: 1 },
+  "13": { n: "Packaging date (YYMMDD)", s: "Pack date", f: "n", len: 6, date: 1 },
+  "15": { n: "Best before date (YYMMDD)", s: "Best before", f: "n", len: 6, date: 1 },
+  "16": { n: "Sell by date (YYMMDD)", s: "Sell by", f: "n", len: 6, date: 1 },
+  "17": { n: "Expiry date (YYMMDD)", s: "Expiry", f: "n", len: 6, date: 1 },
+  "21": { n: "Serial number", s: "Serial", f: "x", max: 20 },
+  "22": { n: "Consumer product variant", s: "Variant", f: "x", max: 20 },
+  "30": { n: "Count of items (variable measure)", s: "Count", f: "n", max: 8 },
+  "37": { n: "Count of trade items inside", s: "Qty inside", f: "n", max: 8 },
+  "240": { n: "Additional product identification", s: "Add. ID", f: "x", max: 30 },
+  "241": { n: "Customer part number", s: "Cust. part", f: "x", max: 30 },
+  "250": { n: "Secondary serial number", s: "2nd serial", f: "x", max: 30 },
+  "3100": { n: "Net weight, kg (no decimals)", s: "kg", f: "n", len: 6, dec: 0 }, "3101": { n: "Net weight, kg (1 decimal)", s: "kg .0", f: "n", len: 6, dec: 1 },
+  "3102": { n: "Net weight, kg (2 decimals)", s: "kg .00", f: "n", len: 6, dec: 2 }, "3103": { n: "Net weight, kg (3 decimals)", s: "kg .000", f: "n", len: 6, dec: 3 },
+  "3300": { n: "Gross weight, kg (no decimals)", s: "Gross kg", f: "n", len: 6, dec: 0 }, "3302": { n: "Gross weight, kg (2 decimals)", s: "Gross .00", f: "n", len: 6, dec: 2 },
+  "400": { n: "Customer purchase order number", s: "PO no.", f: "x", max: 30 },
+  "401": { n: "Consignment number (GINC)", s: "GINC", f: "x", max: 30 },
+  "402": { n: "Shipment ID (GSIN)", s: "GSIN", f: "n", len: 17, cd: 1 },
+  "410": { n: "Ship-to GLN", s: "Ship to", f: "n", len: 13, cd: 1 }, "411": { n: "Bill-to GLN", s: "Bill to", f: "n", len: 13, cd: 1 },
+  "412": { n: "Purchased-from GLN", s: "From GLN", f: "n", len: 13, cd: 1 }, "413": { n: "Ship-for GLN", s: "Ship for", f: "n", len: 13, cd: 1 },
+  "414": { n: "Physical location GLN", s: "Location", f: "n", len: 13, cd: 1 }, "415": { n: "Invoicing party GLN", s: "Invoicer", f: "n", len: 13, cd: 1 },
+  "420": { n: "Ship-to postal code (PIN code)", s: "PIN code", f: "x", max: 20 },
+  "422": { n: "Country of origin (ISO number, India 356)", s: "Origin", f: "n", len: 3 },
+  "7003": { n: "Expiry date and time (YYMMDDhhmm)", s: "Expiry time", f: "n", len: 10 },
+  "8004": { n: "Asset ID (GIAI)", s: "GIAI", f: "x", max: 30 },
+  "90": { n: "Agreed between partners", s: "90", f: "x", max: 30 },
+  "91": { n: "Company internal (91)", s: "91", f: "x", max: 90 }, "92": { n: "Company internal (92)", s: "92", f: "x", max: 90 },
+};
+const DZ_AI_QUICK = ["01", "10", "11", "17", "21", "00", "3103", "37"];
+const DZ_AI_PREDEF = ai => /^(00|01|02|03|04|1[1-9]|20|3[1-6]\d\d|41\d)$/.test(ai); // fixed-length by GS1's table: no separator needed
+function gs1CheckDigit(body) { let s = 0; for (let i = 0; i < body.length; i++) s += +body[body.length - 1 - i] * (i % 2 ? 1 : 3); return (10 - s % 10) % 10; }
+// Returns { v, err, info } for one identifier's value
+function dzGs1Value(ai, raw) {
+  const d = DZ_AI[ai] || { f: "x", max: 90 }; let v = String(raw || "").trim();
+  if (!v) return { v, err: "Enter a value" };
+  if (d.f === "n") {
+    if (d.dec != null && /[.,]/.test(v)) { const x = Number(v.replace(",", ".")); if (!isFinite(x)) return { v, err: "Numbers only" }; v = String(Math.round(x * 10 ** d.dec)).padStart(d.len, "0"); }
+    v = v.replace(/\s/g, ""); if (!/^\d*$/.test(v)) return { v, err: "Digits only" };
+    if (d.cd && v.length === d.len - 1) { v += gs1CheckDigit(v); return { v, info: "check digit " + v.slice(-1) + " added" }; }
+    if (d.cd && ai === "01" && v.length < 13 && v.length >= 7) { v = v.padStart(13, "0"); v += gs1CheckDigit(v); return { v, info: "padded to 14 digits with check digit" }; }
+    if (d.len && v.length !== d.len) return { v, err: `Needs ${d.len} digits${d.cd ? ` (or ${d.len - 1} and the check digit is added)` : ""}` };
+    if (d.max && v.length > d.max) return { v, err: `At most ${d.max} digits` };
+    if (d.cd && +v.slice(-1) !== gs1CheckDigit(v.slice(0, -1))) return { v, err: `Check digit should be ${gs1CheckDigit(v.slice(0, -1))}` };
+    if (d.date) { const mm = +v.slice(2, 4), dd = +v.slice(4, 6); if (mm < 1 || mm > 12 || dd > 31) return { v, err: "Date must be YYMMDD, e.g. 271231" }; return { v, info: dd ? `20${v.slice(0, 2)}-${v.slice(2, 4)}-${v.slice(4)}` : `month 20${v.slice(0, 2)}-${v.slice(2, 4)} (day 00 = end of month)` }; }
+    if (d.dec != null) return { v, info: (+v / 10 ** d.dec).toFixed(d.dec) + " kg" };
+    return { v };
+  }
+  if (/[()]/.test(v)) return { v, err: "Brackets are not allowed inside a value" };
+  if (!/^[!"%&'*+,\-./0-9:;<=>?A-Z_a-z]*$/.test(v)) return { v, err: "Use letters A–Z, a–z, digits and !\"%&'*+,-./:;<=>?_ only" };
+  if (v.length > d.max) return { v, err: `At most ${d.max} characters` };
+  return { v };
+}
+function dzGs1Parse(data) {
+  data = String(data || "").trim(); const rows = [];
+  const dl = data.match(/^https?:\/\/[^/]+\/(.*)$/i);
+  if (dl) { const [path, q] = dl[1].split("?"); const seg = path.split("/").filter(Boolean); for (let i = 0; i + 1 < seg.length; i += 2) if (/^\d{2,4}$/.test(seg[i])) rows.push([seg[i], decodeURIComponent(seg[i + 1])]);
+    for (const [k, v] of new URLSearchParams(q || "")) if (/^\d{2,4}$/.test(k)) rows.push([k, v]); return { rows, base: data.match(/^https?:\/\/[^/]+/i)[0] }; }
+  for (const m of data.matchAll(/\((\d{2,4})\)([^(]*)/g)) rows.push([m[1], m[2]]);
+  return { rows };
+}
+function dzGs1Builder(it) {
+  const dlg = $("dzGs1Dlg"), qr = it.symbology === "qrcode", box = $("dzGs1Rows");
+  const parsed = dzGs1Parse(it.data); let rows = parsed.rows.length ? parsed.rows : qr ? [["01", ""]] : [["01", ""], ["17", ""], ["10", ""]];
+  $("dzGs1H").textContent = qr ? "GS1 Digital Link for a QR code" : it.symbology === "datamatrix" ? "GS1 DataMatrix builder" : "GS1-128 builder";
+  $("dzGs1DLWrap").hidden = !qr; if (parsed.base) $("dzGs1Dom").value = parsed.base;
+  const opts = sel => Object.entries(DZ_AI).map(([a, d]) => `<option value="${a}"${a === sel ? " selected" : ""}>(${a}) ${d.n}</option>`).join("");
+  const draw = () => {
+    box.innerHTML = rows.map(([a, v], i) => `<div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px;align-items:start">
+      <select data-i="${i}" data-r="ai" aria-label="Identifier">${opts(a)}</select>
+      <div><input data-i="${i}" data-r="v" value="${String(v).replace(/"/g, "&quot;")}" aria-label="Value" style="width:100%" placeholder="${DZ_AI[a] ? (DZ_AI[a].date ? "YYMMDD" : DZ_AI[a].f === "n" ? (DZ_AI[a].len ? DZ_AI[a].len + " digits" : "digits") : "up to " + DZ_AI[a].max + " characters") : ""}"><small data-m="${i}" style="display:block;font-size:12px;margin-top:2px"></small></div>
+      <button type="button" class="btn sm" data-del="${i}" aria-label="Remove">×</button></div>`).join("");
+    for (const el of box.querySelectorAll("[data-r]")) el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => { const i = +el.dataset.i; rows[i][el.dataset.r === "ai" ? 0 : 1] = el.value; if (el.tagName === "SELECT") draw(); else calc(); });
+    for (const b of box.querySelectorAll("[data-del]")) b.onclick = () => { rows.splice(+b.dataset.del, 1); draw(); };
+    calc();
+  };
+  let result = "";
+  const calc = () => {
+    const errs = [], good = [];
+    rows.forEach(([a, v], i) => { const r = dzGs1Value(a, v), m = box.querySelector(`[data-m="${i}"]`); m.textContent = r.err || r.info || "OK"; m.style.color = r.err ? "#b42318" : "var(--muted)"; if (r.err) errs.push(`(${a}) ${r.err}`); else good.push([a, r.v]); });
+    const seen = new Set(); for (const [a] of good) { if (seen.has(a)) errs.push(`(${a}) is used twice`); seen.add(a); }
+    if (rows.some(r => r[0] === "02") && !rows.some(r => r[0] === "37")) errs.push("(02) needs (37), the count inside");
+    if (qr) {
+      const keys = ["01", "00", "414", "8004"], key = good.find(([a]) => keys.includes(a));
+      if (!key) errs.push("A Digital Link needs a primary key: (01) GTIN, (00) SSCC, (414) GLN or (8004) GIAI");
+      const qual = ["22", "10", "21"].map(a => good.find(r => r[0] === a)).filter(Boolean), rest = good.filter(r => r !== key && !qual.includes(r));
+      const base = ($("dzGs1Dom").value || "https://id.gs1.org").replace(/\/+$/, "");
+      result = key ? base + [key, ...(key[0] === "01" ? qual : [])].map(([a, v]) => `/${a}/${encodeURIComponent(v)}`).join("") + (rest.length || (key[0] !== "01" && qual.length) ? "?" + [...(key[0] === "01" ? [] : qual), ...rest].map(([a, v]) => `${a}=${encodeURIComponent(v)}`).join("&") : "") : "";
+      $("dzGs1Note").textContent = "Phones open this address; GS1-aware scanners read the identifiers from it. Use your own domain if you run a product page.";
+    } else {
+      const fixed = good.filter(([a]) => DZ_AI_PREDEF(a)), vari = good.filter(([a]) => !DZ_AI_PREDEF(a)); // fixed-length first: fewer separators
+      result = [...fixed, ...vari].map(([a, v]) => `(${a})${v}`).join("");
+      const chars = [...fixed, ...vari].reduce((n, [a, v]) => n + a.length + v.length, 0) + Math.max(0, vari.length - 1);
+      $("dzGs1Note").textContent = it.symbology === "gs1-128" ? `${chars} data characters (GS1-128 allows 48)${vari.length > 1 ? ` · ${vari.length - 1} FNC1 separator(s) added between variable-length fields` : ""}${chars > 48 ? " · too long: split into two barcodes" : ""}` : `GS1 DataMatrix · ${vari.length > 1 ? vari.length - 1 + " <GS> separator(s) added" : "no separators needed"}`;
+      if (it.symbology === "gs1-128" && chars > 48) errs.push("Too long for one GS1-128 barcode (48 characters)");
+    }
+    $("dzGs1Out").textContent = result || "—"; $("dzGs1Err").textContent = errs.join(" · "); $("dzGs1Use").disabled = !!errs.length || !result;
+  };
+  $("dzGs1Dom").oninput = calc;
+  $("dzGs1Add").onclick = () => { const used = new Set(rows.map(r => r[0])); rows.push([Object.keys(DZ_AI).find(a => !used.has(a)) || "90", ""]); draw(); box.querySelector(`[data-i="${rows.length - 1}"][data-r="v"]`).focus(); };
+  $("dzGs1Use").onclick = () => { it.data = result; delete it.link; dzSyncLinks(); dzRefresh(it); dzSave(); dlg.close(); dzProps(); toast("GS1 data set"); };
+  $("dzGs1Cancel").onclick = $("dzGs1X").onclick = () => dlg.close();
+  draw(); dlg.showModal();
+}
 </script>
 
 </body>
