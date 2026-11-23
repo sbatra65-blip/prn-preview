@@ -355,6 +355,20 @@ async function aiCounted(request, env, run) {
 const pic2label = (r, e) => aiCounted(r, e, pic2labelRun);
 const designAI = (r, e) => aiCounted(r, e, designAIRun);
 
+// QZ Tray (local print helper): hand out LabelDesk's certificate and sign print requests with its key,
+// so QZ Tray prints without asking. Secrets QZ_CERT (PEM) and QZ_PRIVATE_KEY (PKCS#8 PEM) come from QZ Industries.
+async function qzTray(request, env, url) {
+  if (url.pathname === "/api/qz/cert") return new Response(env.QZ_CERT || "", { status: env.QZ_CERT ? 200 : 404, headers: { "content-type": "text/plain", "cache-control": "no-store" } });
+  if (url.pathname !== "/api/qz/sign" || request.method !== "POST" || request.headers.get("x-ld") !== "1") return json({ error: "Bad request" }, 400);
+  if (!env.QZ_PRIVATE_KEY) return json({ signature: "" });
+  if (env.DESIGN_KEY) { let sc = null; try { sc = await scope(env, request); } catch (e) {} if (!sc) return json({ error: "Please sign in." }, 401); }
+  let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400); }
+  const msg = String(b.request || ""); if (!msg || msg.length > 200000) return json({ error: "Nothing to sign" }, 400);
+  const der = Uint8Array.from(atob(env.QZ_PRIVATE_KEY.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "")), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("pkcs8", der, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-512" }, false, ["sign"]);
+  return json({ signature: b64e(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(msg))) });
+}
+
 const APP_HOST = "labeldesk.app", OLD_HOST = "labels.infinitesolutions.co.in";
 
 export default {
@@ -370,6 +384,7 @@ export default {
     if (url.pathname === "/api/leads") return listLeads(request, env);
     if (url.pathname === "/api/design-ai") return designAI(request, env);
     if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
+    if (url.pathname.startsWith("/api/qz/")) return qzTray(request, env, url);
     if (url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/company") || url.pathname.startsWith("/api/admin/")) return accounts(request, env, url);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);

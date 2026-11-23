@@ -3439,7 +3439,7 @@ function dzToViewer() {
   $("dzDlg").close(); regenSource(D.lang, D.dpi, true);
   $("viewer").scrollIntoView({ block: "start" });
 }
-function dzColourPNG() {
+function dzColourPNG(ret) {
   const D = dz.D, k = 12, lw = dzLW(), c = document.createElement("canvas"); c.width = Math.round(D.paper * k); c.height = Math.round((D.h + 2 * D.vgap) * k);
   const x = c.getContext("2d"); x.fillStyle = "#e7e2d6"; x.fillRect(0, 0, c.width, c.height); dz.colourOut = true;
   try {
@@ -3460,6 +3460,7 @@ function dzColourPNG() {
       x.restore();
     }
   } finally { dz.colourOut = false; }
+  if (ret === true) return c;
   const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = `label-design-colour-${D.across}up.png`; a.click();
 }
 function dzDownload() {
@@ -3573,7 +3574,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Barcode", () => dzAdd("barcode")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -4006,6 +4007,9 @@ if (!APP && new URLSearchParams(location.search).has("design")) setTimeout(dzOpe
 /* account chip in the ribbon tab row */
 .dz-ribbon .rt .ldchip { margin-left: auto; align-self: center; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px 4px 4px; font: 500 13px var(--font-body, inherit); color: var(--ink); cursor: pointer; margin-bottom: 4px; max-width: 360px; }
 .dz-ribbon .rt .ldchip:hover { border-color: var(--accent); }
+.dz-ribbon .rt .rprint { margin-left: auto; align-self: center; margin-bottom: 4px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: 600 13px var(--font-body, inherit); padding: 6px 14px; cursor: pointer; }
+.dz-ribbon .rt .rprint:hover { background: var(--accent-ink); }
+.dz-ribbon .rt .rprint ~ .ldchip { margin-left: 8px; }
 .ldchip .code { font: 700 11px var(--font-mono, monospace); background: var(--accent); color: #fff; border-radius: 999px; padding: 3px 8px; }
 .ldchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ldchip .ai { font-size: 11px; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 7px; white-space: nowrap; }
@@ -4268,6 +4272,119 @@ async function ldBoot() {
   await ldAfterSignin();
 }
 if (typeof APP !== "undefined" && APP) ldBoot();
+</script>
+
+<!-- LabelDesk one-click printing through QZ Tray (the same local print helper Amazon Seller Central uses) -->
+<dialog id="ldPrint" aria-labelledby="ldPrintH">
+  <div class="dlg-head"><div><h2 id="ldPrintH">Print labels</h2><div class="sub" id="ldPrintSub">Sends the label straight to the printer through QZ Tray: no print dialog, no resizing.</div></div><button type="button" class="x" id="ldPrintX" aria-label="Close">×</button></div>
+  <div class="ld-acct">
+    <div id="ldPrintBody"></div>
+  </div>
+</dialog>
+<script>
+/* ---------- QZ Tray printing ---------- */
+const LDQ = { lib: null, ready: false, printers: [] };
+function ldQzLoad() {
+  if (window.qz) return Promise.resolve();
+  if (LDQ.lib) return LDQ.lib;
+  return LDQ.lib = new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/qz-tray@2.2.6/qz-tray.js"; s.onload = ok; s.onerror = () => { LDQ.lib = null; bad(new Error("Could not load the QZ Tray library (check the internet connection).")); }; document.head.append(s); });
+}
+async function ldQzConnect() {
+  await ldQzLoad();
+  if (qz.websocket.isActive()) return;
+  // Signed printing (no "allow this site?" pop-up) once LabelDesk's QZ certificate is installed on the server;
+  // until then QZ Tray asks the user to allow labeldesk.app.
+  qz.security.setCertificatePromise((ok, bad) => fetch("/api/qz/cert", { cache: "no-store" }).then(r => r.ok ? r.text() : "").then(ok, () => ok("")));
+  qz.security.setSignatureAlgorithm("SHA512");
+  qz.security.setSignaturePromise(toSign => (ok, bad) => fetch("/api/qz/sign", { method: "POST", headers: { "content-type": "application/json", "x-ld": "1" }, body: JSON.stringify({ request: toSign }) })
+    .then(r => r.ok ? r.json() : {}).then(j => ok(j.signature || ""), () => ok("")));
+  await qz.websocket.connect({ retries: 1, delay: 1 });
+}
+const ldB64 = async blob => { const u = new Uint8Array(await blob.arrayBuffer()); let s = ""; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); };
+// Put the quantity into the printer's own copy command, so 500 labels are one short job.
+function ldWithQty(prn, lang, rows) {
+  const n = Math.max(1, rows | 0); let done = true;
+  if (lang === "TSPL" && /PRINT 1,1\s*$/.test(prn)) prn = prn.replace(/PRINT 1,1(\s*)$/, `PRINT ${n},1$1`);
+  else if (lang === "ZPL" && /\^PQ1\b/.test(prn)) prn = prn.replace(/\^PQ1\b(?![\s\S]*\^PQ1\b)/, `^PQ${n}`);
+  else if (lang === "EPL2" && /\nP1\s*$/.test(prn)) prn = prn.replace(/\nP1(\s*)$/, `\nP${n}$1`);
+  else if (lang === "DPL" && /Q0001/.test(prn)) prn = prn.replace(/Q0001(?![\s\S]*Q0001)/, "Q" + String(Math.min(n, 9999)).padStart(4, "0"));
+  else if (lang === "PGL" && /~EXECUTE;([^;\s]+);1/.test(prn)) prn = prn.replace(/~EXECUTE;([^;\s]+);1/, `~EXECUTE;$1;${n}`);
+  else done = false;
+  return { prn, done };
+}
+const ldPrKey = () => "ld-printer:" + dzPrinter().id;
+async function ldPrintOpen() {
+  const dlg = document.getElementById("ldPrint"), body = document.getElementById("ldPrintBody"), D = dz.D, p = dzPrinter();
+  if (!dlg.open) dlg.showModal();
+  body.innerHTML = '<p class="dz-empty">Connecting to QZ Tray on this computer…</p>';
+  try { await ldQzConnect(); LDQ.printers = await qz.printers.find(); }
+  catch (e) {
+    body.innerHTML = `<p style="margin:0 0 10px"><b>QZ Tray is not running on this computer.</b></p>
+      <ol class="ld-steps"><li>Download QZ Tray (free) from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a> and install it. Amazon sellers often have it already.</li>
+      <li>Start QZ Tray: it sits in the system tray, next to the clock.</li>
+      <li>Click <b>Try again</b>. The first time, QZ Tray asks you to allow labeldesk.app: tick “Remember” and click Allow.</li></ol>
+      <p class="dz-cap">${ldEsc(e && e.message || "")}</p>
+      <div class="ld-row"><button type="button" class="btn primary" id="ldQzRetry">Try again</button><button type="button" class="btn" id="ldQzPrn">Download .prn instead</button></div>`;
+    document.getElementById("ldQzRetry").onclick = ldPrintOpen; document.getElementById("ldQzPrn").onclick = () => { dlg.close(); dzDownload(); };
+    return;
+  }
+  const saved = store.get(ldPrKey()), guess = LDQ.printers.find(n => n === saved) || LDQ.printers.find(n => new RegExp(p.brand === "Any" ? "^$" : p.brand, "i").test(n) || new RegExp(p.model.split(" ")[0].replace(/\W/g, ""), "i").test(n.replace(/\W/g, ""))) || LDQ.printers[0];
+  const colourOnly = p.driver, per = D.across;
+  body.innerHTML = `
+    <div class="ld-grid2">
+      <label class="ld-f">Printer on this computer<select id="ldPrName">${LDQ.printers.map(n => `<option${n === guess ? " selected" : ""}>${ldEsc(n)}</option>`).join("")}</select></label>
+      <label class="ld-f">Number of labels<input id="ldPrQty" type="number" min="1" max="99999" value="${per}" step="1"></label>
+    </div>
+    <div class="ld-grid2">
+      <label class="ld-f">Send as<select id="ldPrMode">
+        ${colourOnly ? "" : `<option value="raw" selected>${ldEsc(D.lang)} commands, ${D.lang === "EPL2" ? 203 : D.dpi} dpi (sharpest)</option>`}
+        <option value="image"${colourOnly ? " selected" : ""}>Image via driver${p.colour ? " (colour)" : ""}</option></select></label>
+      <div class="ld-f">Label<small id="ldPrInfo"></small></div>
+    </div>
+    <p class="ld-err" id="ldPrErr" role="alert"></p>
+    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo">Print</button><button type="button" class="btn" id="ldPrTest">Print 1 test label</button></div>
+    <p class="dz-cap" style="margin-top:12px">Printer language mode needs the Windows printer set to a “Generic / Text Only” or the maker's driver with raw pass-through, which is the normal set-up for thermal printers. Image mode works with any driver; set the driver's label size to ${r1(D.paper)} × ${r1(D.h)} mm.</p>`;
+  const info = () => { const q = Math.max(1, +document.getElementById("ldPrQty").value || 1), rows = Math.ceil(q / per);
+    document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm${per > 1 ? `, ${per} across: ${rows} row(s) = ${rows * per} labels` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
+  document.getElementById("ldPrQty").oninput = info; info();
+  document.getElementById("ldPrGo").onclick = () => ldPrintRun(false);
+  document.getElementById("ldPrTest").onclick = () => ldPrintRun(true);
+}
+async function ldPrintRun(test) {
+  const D = dz.D, err = document.getElementById("ldPrErr"), btns = document.querySelectorAll("#ldPrintBody button"); err.textContent = "";
+  const name = document.getElementById("ldPrName").value, mode = document.getElementById("ldPrMode").value;
+  const qty = test ? D.across : Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1)), rows = Math.ceil(qty / D.across);
+  if (!name) { err.textContent = "No printer found on this computer."; return; }
+  if (!test && rows > 50 && !confirm(`Print ${rows * D.across} labels on ${name}?`)) return;
+  btns.forEach(b => b.disabled = true);
+  try {
+    store.set(ldPrKey(), name);
+    if (mode === "raw") {
+      if (!dzCheck()) throw new Error("Fix the problems shown on the label first.");
+      const dpi = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayout(), D.lang, dpi), q = ldWithQty(prn, D.lang, rows);
+      const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
+      await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
+    } else {
+      const full = dzColourPNG(true), k = full.width / D.paper, c = document.createElement("canvas"); // just the label row, without the gaps
+      c.width = full.width; c.height = Math.round(D.h * k); c.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * k));
+      const px = c.toDataURL("image/png").split(",")[1];
+      await qz.print(qz.configs.create(name, { size: { width: D.paper, height: D.h }, units: "mm", margins: 0, scaleContent: false, copies: rows, colorType: dzPrinter().colour ? "color" : "blackwhite" }),
+        [{ type: "pixel", format: "image", flavor: "base64", data: px }]);
+    }
+    toast(test ? `Test label sent to ${name}` : `${rows * D.across} label(s) sent to ${name}`);
+    if (!test) document.getElementById("ldPrint").close();
+  } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); }
+  finally { btns.forEach(b => b.disabled = false); }
+}
+document.getElementById("ldPrintX").onclick = () => document.getElementById("ldPrint").close();
+(function () { // Print button next to Download .prn, plus Ctrl+P in the designer
+  const prn = document.getElementById("dzPrn"); if (!prn) return;
+  const b = document.createElement("button"); b.type = "button"; b.className = "btn primary"; b.id = "dzPrint"; b.textContent = "Print"; b.title = "Print straight to the label printer (Ctrl+P)";
+  b.onclick = ldPrintOpen; prn.before(b);
+  const rt = document.querySelector("#dzRibbon .rt"); // in the app the header is hidden: put Print in the ribbon row too
+  if (rt) { const r = document.createElement("button"); r.type = "button"; r.className = "rprint"; r.title = b.title; r.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Print'; r.onclick = ldPrintOpen; rt.append(r); }
+  document.getElementById("dzDlg").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); ldPrintOpen(); } });
+})();
 </script>
 
 </body>
