@@ -515,6 +515,7 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
         <button type="button" class="btn" data-add="text">Text</button>
         <button type="button" class="btn" data-add="barcode">Barcode</button>
         <button type="button" class="btn" data-add="qrcode">QR code</button>
+        <button type="button" class="btn" data-add="vcard">Contact QR</button>
         <button type="button" class="btn" data-add="datamatrix">DataMatrix</button>
         <button type="button" class="btn" data-add="line">Line</button>
         <button type="button" class="btn" data-add="box">Box</button>
@@ -1651,8 +1652,8 @@ function layoutPRN(L, lang, dpi) {
       if (sym === "qrcode" || sym === "datamatrix") {
         const mods = twoDModules(sym, data) || 25, cell = Math.max(1, Math.round(Math.min(w, h) / mods));
         const g1 = sym === "datamatrix" && /^\(\d{2,4}\)/.test(data);
-        if (lang === "TSPL") out.push(sym === "qrcode" ? `QRCODE ${x},${y},M,${cell},A,0,"${tsplQ(data)}"` : g1 ? `DMATRIX ${x},${y},${w},${h},c126,x${cell},"~1${gs1Raw(data, "~1")}"` : `DMATRIX ${x},${y},${w},${h},x${cell},"${tsplQ(data)}"`);
-        else if (lang === "ZPL") out.push(sym === "qrcode" ? `^FO${x},${y}^BQN,2,${cell}^FDMA,${data}^FS` : g1 ? `^FO${x},${y}^BXN,${cell},200,,,,~^FD~1${gs1Raw(data, "~1")}^FS` : `^FO${x},${y}^BXN,${cell},200^FD${data}^FS`);
+        if (lang === "TSPL") out.push(sym === "qrcode" ? `QRCODE ${x},${y},M,${cell},A,0,"${tsplQ(data).replace(/\r?\n/g, "\\[R]\\[L]")}"` : g1 ? `DMATRIX ${x},${y},${w},${h},c126,x${cell},"~1${gs1Raw(data, "~1")}"` : `DMATRIX ${x},${y},${w},${h},x${cell},"${tsplQ(data)}"`);
+        else if (lang === "ZPL") out.push(sym === "qrcode" ? (/[\r\n^~_]/.test(data) ? `^FO${x},${y}^BQN,2,${cell}^FH_^FDMA,${data.replace(/[_^~\r\n]/g, c => "_" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"))}^FS` : `^FO${x},${y}^BQN,2,${cell}^FDMA,${data}^FS`) : g1 ? `^FO${x},${y}^BXN,${cell},200,,,,~^FD~1${gs1Raw(data, "~1")}^FS` : `^FO${x},${y}^BXN,${cell},200^FD${data}^FS`);
         else warn.push(`${sym === "qrcode" ? "QR code" : "DataMatrix"} is not written in ${lang}; use TSPL or ZPL for 2D codes.`);
         continue;
       }
@@ -2455,7 +2456,9 @@ function dzProps() {
     num("h", "Text height, mm", 0.5, 1); f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
   } else if (it.type === "barcode") {
     f.push(`<label class="full">Type<select data-k="symbology">${DZ_SYMS.map(([v, n]) => `<option value="${v}"${v === it.symbology ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
-    f.push(`<label class="full">Data<textarea data-k="data">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
+    if (it.symbology === "qrcode") f.push(`<label class="full">QR holds<select data-k="qrKind"><option value="text"${it.qrKind !== "contact" ? " selected" : ""}>Text or link</option><option value="contact"${it.qrKind === "contact" ? " selected" : ""}>Contact card (vCard)</option></select></label>`);
+    if (it.symbology === "qrcode" && it.qrKind === "contact") for (const [k, n] of DZ_CONTACT) f.push(`<label class="full">${n}<input data-c="${k}" value="${String((it.contact || {})[k] || "").replace(/"/g, "&quot;")}"${k === "tel" ? ' inputmode="tel"' : k === "email" ? ' inputmode="email"' : ""}></label>`);
+    else f.push(`<label class="full">Data<textarea data-k="data">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
     if (dzIs2D(it)) num("w", "Size, mm", 0.5, 4); else { num("w", "Width, mm", 0.5, 5); num("h", "Height, mm", 0.5, 3); }
   } else if (it.type === "line") {
     const horiz = it.w >= it.h;
@@ -2469,8 +2472,8 @@ function dzProps() {
     f.push(`<label>Threshold<input data-k="threshold" type="range" min="1" max="254" value="${it.threshold ?? 128}"></label>`);
     f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);align-self:end"><input type="checkbox" data-k="invert" style="width:auto"${it.invert ? " checked" : ""}> Invert</label>`);
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
-  const hints = { ean13: "12 digits; the check digit is added.", upca: "11 digits; the check digit is added.", "gs1-128": "Use (AI) brackets, e.g. (01)08901234567890(10)AB12.", datamatrix: "For GS1 DataMatrix start with (01)…" };
-  box.innerHTML = `<div class="dz-f">${f.join("")}</div>${it.type === "barcode" && hints[it.symbology] ? `<p class="dz-cap">${hints[it.symbology]}</p>` : ""}
+  const hints = { contact: "Scanning adds the contact to the phone. TSPL and ZPL carry a full vCard; other printer languages get the one-line MECARD form. Keep the QR at least 20 mm and print a test to check it scans.", ean13: "12 digits; the check digit is added.", upca: "11 digits; the check digit is added.", "gs1-128": "Use (AI) brackets, e.g. (01)08901234567890(10)AB12.", datamatrix: "For GS1 DataMatrix start with (01)…" };
+  box.innerHTML = `<div class="dz-f">${f.join("")}</div>${it.type === "barcode" && (it.qrKind === "contact" && it.symbology === "qrcode" ? `<p class="dz-cap">${hints.contact}</p>` : hints[it.symbology] ? `<p class="dz-cap">${hints[it.symbology]}</p>` : "")}
     <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzDup">Duplicate</button><button type="button" class="btn" id="dzCenter">Centre across</button><button type="button" class="btn" id="dzDel" style="color:var(--bad)">Delete</button></div>`;
   for (const inp of box.querySelectorAll("[data-k]")) inp.addEventListener(inp.tagName === "SELECT" || inp.type === "checkbox" ? "change" : "input", () => {
     const k = inp.dataset.k, v = inp.value;
@@ -2480,6 +2483,7 @@ function dzProps() {
       dzRefresh(it); dzSave(); return;
     }
     if (it.type === "image" && it.lock !== false && (k === "w" || k === "h")) { const n = +v || 1; if (k === "w") { it.w = n; it.h = r1(n * it.ratio); } else { it.h = n; it.w = r1(n / it.ratio); } dzRefresh(it); dzSave(); return; }
+    if (k === "qrKind") { it.qrKind = v; if (v === "contact") { it.contact = it.contact || { name: "", org: "", tel: "", email: "", url: "", adr: "", title: "" }; it.data = dzContact(it); } dzRefresh(it); dzSave(); return dzProps(); }
     if (k === "text" || k === "data") it[k] = v;
     else if (k === "symbology") { const was2 = dzIs2D(it); it.symbology = v; if (dzIs2D(it) && !was2) it.w = it.h = Math.min(it.w, 20); if (!dzIs2D(it) && was2) { it.w = 50; it.h = 15; } dzRefresh(it); dzSave(); return dzProps(); }
     else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
@@ -2488,15 +2492,33 @@ function dzProps() {
     else { it[k] = +v || 0; if (k === "w" && dzIs2D(it)) it.h = it.w; }
     dzRefresh(it); dzSave();
   });
+  for (const inp of box.querySelectorAll("[data-c]")) inp.addEventListener("input", () => { it.contact = Object.assign({}, it.contact, { [inp.dataset.c]: inp.value }); it.data = dzContact(it); dzRefresh(it); dzSave(); });
   $("dzDel").onclick = () => dzDelete(); $("dzDup").onclick = () => dzDuplicate();
   $("dzCenter").onclick = () => { it.x = r1((dzLW() - it.w) / 2); dzRefresh(it); dzProps(); dzSave(); };
+}
+const DZ_CONTACT = [["name", "Full name"], ["org", "Company"], ["title", "Job title"], ["tel", "Phone"], ["email", "Email"], ["url", "Website"], ["adr", "Address"]];
+function dzContact(it, fmt) { // vCard 3.0 (multi-line, read by every phone) or MECARD (one line, for printer languages that cannot carry line breaks)
+  const c = it.contact || {}, v = k => String(c[k] || "").trim(), parts = v("name").split(/\s+/).filter(Boolean);
+  const last = parts.length > 1 ? parts.pop() : "", first = parts.join(" ");
+  if (fmt === "mecard") {
+    const e = t => t.replace(/([\\;,])/g, "\\$1");
+    return "MECARD:" + [["N", last ? `${e(last)},${e(first)}` : e(first)], ["ORG", e(v("org"))], ["TEL", e(v("tel"))], ["EMAIL", e(v("email"))], ["URL", e(v("url"))], ["ADR", e(v("adr"))], ["NOTE", e(v("title"))]].filter(([, x]) => x).map(([k, x]) => `${k}:${x};`).join("") + ";";
+  }
+  const e = t => t.replace(/([\\;,])/g, "\\$1");
+  const L = ["BEGIN:VCARD", "VERSION:3.0", `N:${e(last)};${e(first)};;;`, `FN:${e(v("name"))}`];
+  if (v("org")) L.push(`ORG:${e(v("org"))}`); if (v("title")) L.push(`TITLE:${e(v("title"))}`);
+  if (v("tel")) L.push(`TEL;TYPE=CELL:${v("tel")}`); if (v("email")) L.push(`EMAIL:${v("email")}`);
+  if (v("url")) L.push(`URL:${v("url")}`); if (v("adr")) L.push(`ADR;TYPE=WORK:;;${e(v("adr"))};;;;`);
+  L.push("END:VCARD"); return L.join("\r\n");
 }
 function dzAdd(kind) {
   const lw = dzLW(), D = dz.D, id = dz.seq++;
   const base = { text: { type: "text", h: 3.5, text: "New text" }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
-    qrcode: { type: "barcode", symbology: "qrcode", data: "https://", w: 18, h: 18 }, datamatrix: { type: "barcode", symbology: "datamatrix", data: "(01)08901234567890", w: 15, h: 15 },
+    qrcode: { type: "barcode", symbology: "qrcode", data: "https://", w: 18, h: 18 },
+    vcard: { type: "barcode", symbology: "qrcode", qrKind: "contact", contact: { name: "Your Name", org: "Company", tel: "+91 ", email: "", url: "", adr: "", title: "" }, w: Math.min(24, lw - 6, D.h - 6), h: Math.min(24, lw - 6, D.h - 6) }, datamatrix: { type: "barcode", symbology: "datamatrix", data: "(01)08901234567890", w: 15, h: 15 },
     line: { type: "line", w: Math.max(5, lw - 6), h: 0.4, thickness: 0.4 }, box: { type: "box", w: Math.min(30, lw - 6), h: Math.min(15, D.h - 6), thickness: 0.4 } }[kind];
   const it = Object.assign({ id, x: 3, y: Math.min(D.h - 5, 3 + (D.items.length % 6) * 4) }, base);
+  if (it.qrKind === "contact") it.data = dzContact(it);
   D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave();
 }
 function dzDelete() { const D = dz.D; D.items = D.items.filter(i => i.id !== dz.sel); dz.sel = null; dzDraw(); dzProps(); dzSave(); }
@@ -2510,6 +2532,7 @@ function dzLayout() {
     for (const it of D.items) {
       const o = Object.assign({}, it, { x: r1(it.x + ox), y: r1(it.y) });
       if (o.type === "image") { o.imgEl = dzImg(it); delete o.src; }
+      if (o.qrKind === "contact" && o.symbology === "qrcode") o.data = dzContact(it, D.lang === "TSPL" || D.lang === "ZPL" ? "vcard" : "mecard");
       if (o.type === "barcode" && o.symbology === "upca") { o.data = "0" + String(o.data || "").replace(/\D/g, "").slice(0, 11); o.symbology = "ean13"; }
       items.push(o);
     }
