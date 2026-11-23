@@ -3804,6 +3804,7 @@ function dzRibbonDef() {
       ["Along an outline", ["rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => B(k === "wave" ? "wave" : k, DZ_PATHS[k], () => dzPathTo(k), isText, () => isText() && sel().path === k))]],
     Data: [["Database", [B("folder", "Connect file", () => $("dzDbFile").click(), null, null, "CSV, Excel, JSON or XML file as the label's database"), B("lib", "Tally", () => dzTally(), null, null, "TallyPrime stock items: from a Tally export now, live through the LabelDesk agent"), B("cloud", "Zoho Inventory", () => dzZoho(), null, null, "Items from your Zoho Inventory organisation"), B("del", "Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db), null, "Disconnect the database"), { dbinfo: true }]],
       ["Fields: click to link the selected object", [{ dbfields: true }]],
+      ["Counters", [B("dup", "Serial number", () => { let it = dz.D.items.find(i => i.id === dz.sel && (i.type === "text" || i.type === "barcode")); if (!it) { dzAdd("text"); it = dz.D.items[dz.D.items.length - 1]; it.text = "SN000001"; } const sel = document.querySelector("#dzSrc"); if (sel) { sel.value = "serial"; sel.dispatchEvent(new Event("change")); } }, null, null, "Make the selected object (or a new text) a serial number")]],
       ["ERP and live data", [B("cloud", "SAP / Oracle / ERP", () => ldConnOpen(), null, null, "SAP S/4HANA Cloud, SAP Business One, Oracle Fusion, Dynamics 365 Business Central, Odoo, Zoho, any REST/OData API"), B("printers", "ODBC / SQL", () => dzDbLiveInfo(), null, null, "SQL Server, MySQL, Oracle, Tally and other ODBC databases through the LabelDesk agent")]]],
     Tools: [["Design", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing"), null, "Back to the label designer"), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing"), "Preview the design as printed")]],
       ["Printer files", [B("openf", "Open PRN", () => $("fileIn").click(), null, null, "Open a .prn file"), B("code", "Paste code", () => { dzShowViewer(); $("pasteBtn").click(); }, null, null, "Paste printer code to view it"), B("pic", "From picture", () => $("picDlg").showModal(), null, null, "Logo or label photo to PRN")]],
@@ -4502,7 +4503,7 @@ function ldWithQty(prn, lang, rows) {
 async function ldPrintPDF() {
   const D = dz.D, err = document.getElementById("ldPrErr"), btn = document.getElementById("ldPdfGo"), mode = document.getElementById("ldPdfMode").value; err.textContent = "";
   const q0 = Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1));
-  let labels; try { labels = ldLabels(q0); } catch (e) { err.textContent = e.message; return; }
+  let labels; try { ldSerialApply(); labels = ldLabels(q0); } catch (e) { err.textContent = e.message; dz.serialStart = null; return; }
   if (!labels.length) { err.textContent = "Nothing to print."; return; }
   if (labels.length > 1500 && !confirm(`Make a PDF of ${labels.length} labels? Large PDFs take a while.`)) return;
   btn.disabled = true; btn.textContent = "Making PDF…";
@@ -4526,10 +4527,10 @@ async function ldPrintPDF() {
       }
       if (r % 20 === 19) await new Promise(ok => setTimeout(ok, 0)); // keep the page responsive on long runs
     }
-    doc.save(`labels_${labels.length}_${mode === "a4" ? "A4" : mode === "label" ? "single" : "roll"}.pdf`);
+    doc.save(`labels_${labels.length}_${mode === "a4" ? "A4" : mode === "label" ? "single" : "roll"}.pdf`); ldSerialSave(labels);
     toast(`PDF with ${labels.length} label(s)${mode === "a4" ? `, ${perRow * perCol} per A4 page` : ""}`);
   } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); }
-  finally { dz.ctx = null; dz.gfx = null; btn.disabled = false; btn.textContent = "Download PDF"; }
+  finally { dz.ctx = null; dz.gfx = null; dz.serialStart = null; btn.disabled = false; btn.textContent = "Download PDF"; }
 }
 const ldPrKey = () => "ld-printer:" + dzPrinter().id;
 // Which resolution and language does this Windows printer need? Saved choice first, then clues in its name and driver.
@@ -4609,6 +4610,7 @@ async function ldPrintRun(test, to) {
   btns.forEach(b => b.disabled = true);
   try {
     if (name) store.set(ldPrKey(), name);
+    let printed = null; ldSerialApply();
     if (mode === "raw" || to === "file") {
       if (!dzCheck()) throw new Error("Fix the problems shown on the label first.");
       const lang = document.getElementById("ldPrLang").value, dpi = lang === "EPL2" ? 203 : +document.getElementById("ldPrDpi").value;
@@ -4618,11 +4620,12 @@ async function ldPrintRun(test, to) {
         let labels = ldLabels(test ? 1 : qty); if (test) labels = labels.filter(l => !l.blank).slice(0, D.across);
         if (!labels.length) throw new Error("Nothing to print: the file has no rows, or every qty is 0.");
         if (!test && labels.length > 2000 && !confirm(`Print ${labels.length} labels on ${name}?`)) return;
-        const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; toast(`${labels.length} label(s) prepared`);
+        const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; if (!test) printed = labels; toast(`${labels.filter(l => !l.blank).length} label(s) prepared`);
       } else { const { prn } = layoutPRN(dzLayout(), lang, dpi); q = ldWithQty(prn, lang, rows); }
-      if (to === "file") { const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(q.prn)); a.download = `labels_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("Printer file downloaded"); return; }
+      if (to === "file") { const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(q.prn)); a.download = `labels_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); if (printed) ldSerialSave(printed); toast("Printer file downloaded"); return; }
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
+      if (printed) ldSerialSave(printed);
     } else {
       if (dzVarNeeds().any) throw new Error("Fields and serial numbers print in printer-language mode. Choose “Printer commands”, or remove the parts.");
       const full = dzColourPNG(true), k = full.width / D.paper, c = document.createElement("canvas"); // just the label row, without the gaps
@@ -4634,7 +4637,7 @@ async function ldPrintRun(test, to) {
     toast(test ? `Test label sent to ${name}` : `${rows * D.across} label(s) sent to ${name}`);
     if (!test) document.getElementById("ldPrint").close();
   } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); }
-  finally { btns.forEach(b => b.disabled = false); }
+  finally { btns.forEach(b => b.disabled = false); dz.serialStart = null; }
 }
 document.getElementById("ldPrintX").onclick = () => document.getElementById("ldPrint").close();
 (function () { // Print button next to Download .prn, plus Ctrl+P in the designer
@@ -4805,14 +4808,24 @@ function dzFmtDate(p, when) {
 const dzFields = () => (dz.D.fields = dz.D.fields || []);
 const dzHasSpecial = it => (it.parts || []).some(p => p.t === "special");
 // One label's content: rec = { field: value }, n = label number in the run (0, 1, 2 …)
+// Serial numbers: decimal, letters, letters+digits or hex; up or down by a step; each value on N labels
+const DZ_SER_BASES = { dec: ["0-9", "0123456789"], alpha: ["A-Z", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"], alnum: ["0-9 A-Z", "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"], hex: ["Hex 0-F", "0123456789ABCDEF"] };
+function dzSerParse(str, base) { const set = DZ_SER_BASES[base || "dec"][1], s = String(str ?? "").toUpperCase().replace(/\s/g, ""); let v = 0; for (const ch of s) { const d = set.indexOf(ch); if (d < 0) return NaN; v = v * set.length + d; } return s ? v : 0; }
+function dzSerFormat(v, base, width) { const set = DZ_SER_BASES[base || "dec"][1], B = set.length; v = Math.max(0, Math.floor(v)); let s = ""; do { s = set[v % B] + s; v = Math.floor(v / B); } while (v > 0); return s.padStart(+width || 0, set[0]); }
+function dzSerialAt(p, n, key) {
+  const ov = dz.serialStart && dz.serialStart[key], start = ov != null ? ov : dzSerParse(p.start ?? 1, p.base), step = Math.max(1, +p.step || 1) * (p.dir === "down" ? -1 : 1);
+  const v = (isNaN(start) ? 0 : start) + step * Math.floor((n || 0) / Math.max(1, +p.every || 1));
+  return v < 0 ? "-" + dzSerFormat(-v, p.base, p.width) : dzSerFormat(v, p.base, p.width);
+}
+const dzSerialParts = () => dz.D.items.flatMap(it => (it.parts || []).map((p, k) => p.t === "serial" ? { it, p, k } : null).filter(Boolean));
 function dzCompose(it, rec, n) {
   const bar = it.type === "barcode", esc = bar && dzHasSpecial(it), lit = v => esc ? String(v).replace(/\^/g, "^094") : String(v);
-  return (it.parts || []).map(p => {
+  return (it.parts || []).map((p, pi) => {
     if (p.t === "text") return lit(p.v || "");
     if (p.t === "field") { const f = dzFields().find(x => x.name === p.name); const v = rec && rec[p.name] != null && rec[p.name] !== "" ? rec[p.name] : f ? f.sample : ""; return lit(v ?? ""); }
     if (p.t === "special") return bar ? (DZ_SPECIAL[p.c] || [, ""])[1] : (p.c === "lf" || p.c === "crlf" || p.c === "cr" ? "\n" : p.c === "tab" ? "\t" : "");
     if (p.t === "date") return lit(dzFmtDate(p));
-    if (p.t === "serial") { const v = (+p.start || 0) + (+p.step || 1) * (n || 0); return lit(String(v).padStart(+p.width || 0, "0")); }
+    if (p.t === "serial") return lit(dzSerialAt(p, n, it.id + ":" + pi));
     return "";
   }).join("");
 }
@@ -4847,7 +4860,7 @@ function dzVarBuilder(it) {
     if (p.t === "field") { const f = fields.find(x => x.name === p.name) || {}; ins = `<select data-i="${i}" data-p="name" style="flex:1">${fOpts(p.name)}</select><input data-f="${ldEsc(p.name || "")}" value="${ldEsc(f.sample || "")}" placeholder="Sample value" title="Shown on screen and used when nothing is typed" style="flex:1">`; }
     if (p.t === "special") ins = `<select data-i="${i}" data-p="c" style="flex:1">${Object.entries(DZ_SPECIAL).map(([k, [n]]) => `<option value="${k}"${k === p.c ? " selected" : ""}>${n}</option>`).join("")}</select>`;
     if (p.t === "date") ins = `<select data-i="${i}" data-p="fmt">${DZ_DATEF.map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">today +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="days"${p.unit !== "months" ? " selected" : ""}>days</option><option value="months"${p.unit === "months" ? " selected" : ""}>months</option></select>`;
-    if (p.t === "serial") ins = `<span style="align-self:center">start</span><input data-i="${i}" data-p="start" type="number" value="${p.start ?? 1}" style="width:100px"><span style="align-self:center">step</span><input data-i="${i}" data-p="step" type="number" value="${p.step ?? 1}" style="width:70px"><span style="align-self:center">digits</span><input data-i="${i}" data-p="width" type="number" min="0" max="20" value="${p.width ?? 6}" style="width:70px">`;
+    if (p.t === "serial") ins = `<span style="align-self:center">start</span><input data-i="${i}" data-p="start" value="${ldEsc(p.start ?? 1)}" style="width:100px"><select data-i="${i}" data-p="dir"><option value="up"${p.dir !== "down" ? " selected" : ""}>increase</option><option value="down"${p.dir === "down" ? " selected" : ""}>decrease</option></select><span style="align-self:center">by</span><input data-i="${i}" data-p="step" type="number" min="1" value="${p.step ?? 1}" style="width:60px"><span style="align-self:center">digits</span><input data-i="${i}" data-p="width" type="number" min="0" max="20" value="${p.width ?? 6}" style="width:60px"><select data-i="${i}" data-p="base">${Object.entries(DZ_SER_BASES).map(([k, v]) => `<option value="${k}"${(p.base || "dec") === k ? " selected" : ""}>${v[0]}</option>`).join("")}</select><span style="align-self:center">same no. on</span><input data-i="${i}" data-p="every" type="number" min="1" value="${p.every ?? 1}" style="width:56px"><span style="align-self:center">label(s)</span>`;
     const lab = { text: "Text", field: "Field", special: "Special", date: "Date", serial: "Serial" }[p.t];
     return `<div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:6px 8px"><b style="align-self:center;min-width:56px;font-size:12px;color:var(--muted)">${i + 1}. ${lab}</b>${ins}
       <span style="display:flex;gap:4px;margin-left:auto"><button type="button" class="btn sm" data-mv="${i}:-1" aria-label="Move up">↑</button><button type="button" class="btn sm" data-mv="${i}:1" aria-label="Move down">↓</button><button type="button" class="btn sm" data-rm="${i}" aria-label="Remove">×</button></span></div>`;
@@ -4939,6 +4952,25 @@ async function ldReadTable(file) {
   if (/\.xml$/i.test(file.name)) return ldFromXML(await file.text());
   return ldParseCSV(await file.text());
 }
+// Serial numbers at print time: start where you want, or carry on from the last number printed
+const ldSerKey = (it, k) => `ld-ser:${dz.D.cloud && dz.D.cloud.id || "local"}:${it.id}:${k}`;
+function ldSerialPanel() {
+  return `<div style="margin-top:8px"><b style="font-size:13px">Serial numbers</b>${dzSerialParts().map(({ it, p, k }) => {
+    let last = null; try { last = JSON.parse(store.get(ldSerKey(it, k)) || "null"); } catch (e) {}
+    const name = dzObjName(it).slice(0, 30);
+    return `<div class="ld-grid2" style="margin-top:6px"><label class="ld-f">${ldEsc(name)}: start at<input data-ss="${it.id}:${k}" value="${ldEsc(last ? dzSerFormat(last.next, p.base, p.width) : p.start ?? 1)}"></label>
+      <div class="ld-f">&nbsp;<small>${p.dir === "down" ? "Decreases" : "Increases"} by ${p.step || 1}${+p.every > 1 ? `, each number on ${p.every} labels` : ""}${last ? ` · last printed ${ldEsc(dzSerFormat(last.lastv, p.base, p.width))} on ${ldEsc(last.at)}` : " · first print of this design"}</small></div></div>`; }).join("")}</div>`;
+}
+function ldSerialApply() { // read the start boxes into the serial override used while printing
+  dz.serialStart = {}; for (const el of document.querySelectorAll("[data-ss]")) { const [id, k] = el.dataset.ss.split(":"), it = dz.D.items.find(i => i.id === +id), p = it && it.parts[+k]; if (!p) continue;
+    const v = dzSerParse(el.value, p.base); if (isNaN(v)) throw new Error(`Serial start "${el.value}" does not fit ${DZ_SER_BASES[p.base || "dec"][0]}.`); dz.serialStart[el.dataset.ss] = v; }
+}
+function ldSerialSave(labels) { // remember where to carry on next time
+  const n = labels.filter(l => !l.blank).length; if (!n) return;
+  for (const { it, p, k } of dzSerialParts()) { const key = it.id + ":" + k, start = dz.serialStart && dz.serialStart[key] != null ? dz.serialStart[key] : dzSerParse(p.start ?? 1, p.base), step = Math.max(1, +p.step || 1) * (p.dir === "down" ? -1 : 1), lastN = n - 1;
+    const lastv = start + step * Math.floor(lastN / Math.max(1, +p.every || 1)), next = start + step * Math.ceil(n / Math.max(1, +p.every || 1));
+    store.set(ldSerKey(it, k), JSON.stringify({ lastv, next: Math.max(0, next), at: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) })); }
+}
 function ldVarPanel() {
   const need = dzVarNeeds(); if (!need.any) return "";
   return `<div class="ld-sec" style="margin-top:4px"><b style="font-size:14px">Data for this print</b>
@@ -4947,7 +4979,7 @@ function ldVarPanel() {
     <div id="ldVarTyped" class="ld-grid2"${dz.db ? " hidden" : ""}>${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
     <div class="ld-row" id="ldPickRow" style="margin:6px 0"${dz.db ? "" : " hidden"}><button type="button" class="btn sm soft" id="ldPickGo">Choose records to print…</button><span class="dz-cap" id="ldPickInfo" style="margin:0"></span></div>
     <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods,.json,.xml"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
-    ${need.serial ? `<p class="dz-cap">Serial numbers go up on every label in this print.</p>` : ""}</div>`;
+    ${need.serial ? ldSerialPanel() : ""}</div>`;
 }
 function ldVarWire(onChange) {
   const need = dzVarNeeds(); if (!need.fields.length) return;
@@ -5071,16 +5103,33 @@ function dzLinkField(it, name, pre, post) {
   it.parts = [pre ? { t: "text", v: pre } : null, { t: "field", name }, post ? { t: "text", v: post } : null].filter(Boolean);
   delete it.link; delete it.linkPre; delete it.linkPost; dzApplySample(it); dzSave();
 }
+function dzOneSerial(it) { // parts [text?, serial, text?]
+  const p = it.parts || [], sr = p.filter(x => x.t === "serial"); if (sr.length !== 1 || p.some(x => x.t !== "serial" && x.t !== "text") || p.length > 3) return null;
+  const i = p.indexOf(sr[0]); if (i > 1 || p.length - i - 1 > 1) return null;
+  return { s: sr[0], pre: i ? p[0].v || "" : "", post: p[i + 1] ? p[i + 1].v || "" : "" };
+}
+function dzSetSerial(it, o) { it.parts = [o.pre ? { t: "text", v: o.pre } : null, Object.assign({ t: "serial" }, o.s), o.post ? { t: "text", v: o.post } : null].filter(Boolean); delete it.link; dzApplySample(it); dzSave(); }
 function dzSrcPanel(it) {
-  const one = dzOneField(it), names = dzFieldNames(), cur = !it.parts ? "" : one ? "f:" + one.name : "parts", db = dz.D.db;
+  const one = dzOneField(it), ser = dzOneSerial(it), names = dzFieldNames(), cur = !it.parts ? "" : one ? "f:" + one.name : ser ? "serial" : "parts", db = dz.D.db;
   return `<div class="full" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px">
     <label class="full" style="margin:0">Content comes from<select id="dzSrc">
       <option value=""${cur === "" ? " selected" : ""}>Typed here (fixed)</option>
       ${names.length ? `<optgroup label="${db ? ldEsc(db.kind + ": " + db.name) : "Fields"}">${names.map(n => `<option value="f:${ldEsc(n)}"${cur === "f:" + n ? " selected" : ""}>Field: ${ldEsc(n)}</option>`).join("")}</optgroup>` : ""}
+      <option value="serial"${cur === "serial" ? " selected" : ""}>Serial number (counts on each label)</option>
       <option value="new">+ New field…</option>
       <option value="parts"${cur === "parts" ? " selected" : ""}>Several parts: fields, FNC1/GS, dates, serials…</option>
     </select></label>
     ${one ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label style="margin:0">Text before<input id="dzSrcPre" value="${ldEsc(one.pre)}" placeholder="e.g. Batch: "></label><label style="margin:0">Text after<input id="dzSrcPost" value="${ldEsc(one.post)}" placeholder="e.g. kg"></label></div>` : ""}
+    ${ser ? `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <label style="margin:0">Prefix<input data-sr="pre" value="${ldEsc(ser.pre)}" placeholder="e.g. SN-"></label>
+      <label style="margin:0">Start at<input data-sr="start" value="${ldEsc(ser.s.start ?? 1)}"></label>
+      <label style="margin:0">Suffix<input data-sr="post" value="${ldEsc(ser.post)}" placeholder="e.g. /A"></label>
+      <label style="margin:0">Counting<select data-sr="dir"><option value="up"${ser.s.dir !== "down" ? " selected" : ""}>Increase</option><option value="down"${ser.s.dir === "down" ? " selected" : ""}>Decrease</option></select></label>
+      <label style="margin:0">Step<input data-sr="step" type="number" min="1" value="${ser.s.step ?? 1}"></label>
+      <label style="margin:0">Digits (zeros)<input data-sr="width" type="number" min="0" max="20" value="${ser.s.width ?? 6}"></label>
+      <label style="margin:0">Characters<select data-sr="base">${Object.entries(DZ_SER_BASES).map(([k, v]) => `<option value="${k}"${(ser.s.base || "dec") === k ? " selected" : ""}>${v[0]}</option>`).join("")}</select></label>
+      <label style="margin:0;grid-column:span 2">Same number on<span style="display:flex;gap:6px;align-items:center"><input data-sr="every" type="number" min="1" value="${ser.s.every ?? 1}" style="width:70px"> label(s), then next</span></label></div>
+      <p class="dz-cap" style="margin:0">Labels print as <b id="dzSerPrev">${ldEsc([0, 1, 2].map(n => ser.pre + dzSerialAt(ser.s, n * Math.max(1, +ser.s.every || 1), "_") + ser.post).join(", "))}, …</b> The print window lets you change the start or continue from the last number printed.</p>` : ""}
     ${cur === "parts" ? `<button type="button" class="btn sm soft" id="dzParts">Edit the ${it.parts.length} parts…</button>` : ""}
     ${!db ? `<p class="dz-cap" style="margin:0">Connect a database on the <b>Data</b> tab to pick its fields here.</p>` : ""}
   </div>`;
@@ -5090,10 +5139,17 @@ function dzSrcWire(it) {
   s.onchange = () => { const v = s.value;
     if (v === "") { if (it.parts) { const shown = dzContentOf(it); delete it.parts; delete it.esc; it[dzKeyOf(it)] = shown; dzRefresh(it); dzSave(); } return dzProps(); }
     if (v === "parts") return dzVarBuilder(it);
+    if (v === "serial") { const keep = String(dzContentOf(it)).match(/^(.*?)(\d+)(\D*)$/); dzSetSerial(it, { pre: keep ? keep[1] : "", post: keep ? keep[3] : "", s: { start: keep ? keep[2] : "1", step: 1, width: keep ? keep[2].length : 6, dir: "up", base: "dec", every: 1 } }); return dzProps(); }
     if (v === "new") { const n = (prompt("Field name (the database column it reads), e.g. batch, mrp, gtin") || "").trim().replace(/[^\w ]/g, "").slice(0, 40); if (!n) return dzProps(); dzLinkField(it, n, "", ""); return dzProps(); }
     const one = dzOneField(it); dzLinkField(it, v.slice(2), one ? one.pre : "", one ? one.post : ""); dzProps(); };
   const upd = () => { const one = dzOneField(it); if (one) dzLinkField(it, one.name, $("dzSrcPre").value, $("dzSrcPost").value); };
   if ($("dzSrcPre")) { $("dzSrcPre").oninput = upd; $("dzSrcPost").oninput = upd; }
+  for (const el of document.querySelectorAll("#dzProps [data-sr]")) el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => {
+    const o = dzOneSerial(it); if (!o) return; const k = el.dataset.sr, v = el.value;
+    if (k === "pre" || k === "post") o[k] = v; else o.s[k] = ["step", "width", "every"].includes(k) ? Math.max(k === "width" ? 0 : 1, +v || 0) : v;
+    if (k === "base" && isNaN(dzSerParse(o.s.start, v))) o.s.start = DZ_SER_BASES[v][1][1];
+    dzSetSerial(it, o); const pv = $("dzSerPrev"); if (pv) pv.textContent = [0, 1, 2].map(n => o.pre + dzSerialAt(o.s, n * Math.max(1, +o.s.every || 1), "_") + o.post).join(", ") + ", …";
+    if (el.tagName === "SELECT") dzProps(); });
 }
 $("dzDbFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) dzDbConnect(f); });
 function dzDbLiveInfo() {
