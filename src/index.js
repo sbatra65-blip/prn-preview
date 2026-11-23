@@ -174,12 +174,76 @@ async function listLeads(request, env) {
   return new Response(JSON.stringify({ leads: results }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
 
+
+/* ---------- cloud designs: AES-256-GCM at rest, owner-scoped ---------- */
+// The key comes from the DESIGN_KEY secret and never leaves the Worker. GCM's tag means any change to a
+// stored design (or moving it to another row/owner, via the additional data) makes it fail to open.
+const b64e = buf => { const u = new Uint8Array(buf); let s = ""; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s); };
+const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function sha256hex(t) { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, "0")).join(""); }
+async function designKey(env) {
+  if (!env.DESIGN_KEY || env.DESIGN_KEY.length < 16) return null;
+  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("p2l-designs-v1:" + env.DESIGN_KEY));
+  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+async function seal(key, id, owner, obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(id + "|" + owner) }, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return { iv: b64e(iv), data: b64e(ct) };
+}
+async function unseal(key, row) {
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(row.iv), additionalData: new TextEncoder().encode(row.id + "|" + row.owner) }, key, b64d(row.data));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+const MAX_DESIGN = 1200000; // keeps a row under D1's size limit after encryption and base64
+async function designs(request, env, url) {
+  if (!env.LEADS) return json({ error: "Cloud storage is not set up" }, 503);
+  const key = await designKey(env);
+  if (!key) return json({ error: "Cloud saving is not switched on yet (the DESIGN_KEY secret is missing)." }, 503);
+  const tok = request.headers.get("x-owner") || "";
+  if (!/^[A-Za-z0-9_-]{32,128}$/.test(tok)) return json({ error: "Missing workspace key" }, 401);
+  if (env.DESIGN_LIMITER) { const { success } = await env.DESIGN_LIMITER.limit({ key: tok }); if (!success) return json({ error: "Too many saves; wait a minute." }, 429); }
+  const owner = await sha256hex("owner:" + tok), id = url.pathname.split("/")[3] || "", m = request.method;
+  if (id && !/^[A-Za-z0-9]{12}$/.test(id)) return json({ error: "Bad design id" }, 400);
+  if (!id && m === "GET") {
+    const { results } = await env.LEADS.prepare("SELECT id, name, size, updated FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 200").bind(owner).all();
+    return json({ designs: results });
+  }
+  if (m === "GET" || m === "DELETE") {
+    const row = await env.LEADS.prepare("SELECT * FROM designs WHERE id = ?1 AND owner = ?2").bind(id, owner).first();
+    if (!row) return json({ error: "Design not found" }, 404);
+    if (m === "DELETE") { await env.LEADS.prepare("DELETE FROM designs WHERE id = ?1 AND owner = ?2").bind(id, owner).run(); return json({ ok: true }); }
+    try { return json({ id, name: row.name, updated: row.updated, design: await unseal(key, row) }); }
+    catch (e) { return json({ error: "This design failed its integrity check and was not opened." }, 409); }
+  }
+  if (m === "POST" || m === "PUT") {
+    const text = await request.text();
+    if (text.length > MAX_DESIGN) return json({ error: "Design is too large to save (images make it big: use smaller images)." }, 413);
+    let b; try { b = JSON.parse(text); } catch (e) { return json({ error: "Bad JSON" }, 400); }
+    if (!b.design || !Array.isArray(b.design.items)) return json({ error: "Not a label design" }, 400);
+    const name = String(b.name || "Untitled label").slice(0, 80);
+    if (m === "PUT") {
+      const ok = await env.LEADS.prepare("SELECT id FROM designs WHERE id = ?1 AND owner = ?2").bind(id, owner).first();
+      if (!ok) return json({ error: "Design not found" }, 404);
+      const sl = await seal(key, id, owner, b.design);
+      await env.LEADS.prepare("UPDATE designs SET name = ?1, iv = ?2, data = ?3, size = ?4, updated = datetime('now') WHERE id = ?5 AND owner = ?6").bind(name, sl.iv, sl.data, text.length, id, owner).run();
+      return json({ id, name });
+    }
+    const nid = [...crypto.getRandomValues(new Uint8Array(12))].map(b => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"[b % 56]).join("");
+    const sl = await seal(key, nid, owner, b.design);
+    await env.LEADS.prepare("INSERT INTO designs (id, owner, name, iv, data, size) VALUES (?1,?2,?3,?4,?5,?6)").bind(nid, owner, name, sl.iv, sl.data, text.length).run();
+    return json({ id: nid, name });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/pic2label") return pic2label(request, env);
     if (url.pathname === "/api/lead") return saveLead(request, env);
     if (url.pathname === "/api/leads") return listLeads(request, env);
+    if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);
   },

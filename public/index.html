@@ -475,13 +475,24 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
   </div>
   <div class="dlg-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)"><button type="button" class="btn" id="dzPasteCancel">Cancel</button><button type="button" class="btn primary" id="dzPasteGo">Bring into designer</button></div>
 </dialog>
+<dialog id="dzCloudDlg" aria-labelledby="dzCloudTitle">
+  <div class="dlg-head"><div><h2 id="dzCloudTitle">My designs</h2><div class="sub">Stored encrypted in the cloud. Only this workspace key can list, open or change them.</div></div><button type="button" class="x" id="dzCloudClose" aria-label="Close">×</button></div>
+  <div class="dlg-body" style="padding:16px 20px;overflow:auto">
+    <div id="dzCloudList"><p class="dz-empty">Loading…</p></div>
+    <details style="margin-top:18px"><summary style="cursor:pointer;font-weight:600">Workspace key · use these designs on another device</summary>
+      <p class="dz-cap">Anyone with this key can open and change these designs, so keep it private. Losing it means losing access.</p>
+      <div class="dz-f" style="margin-top:8px"><label class="full">This browser's key<input id="dzKeyShow" readonly></label></div>
+      <div class="dz-tools" style="margin-top:8px"><button type="button" class="btn" id="dzKeyCopy">Copy key</button><button type="button" class="btn" id="dzKeyUse">Use a key from another device</button></div>
+    </details>
+  </div>
+</dialog>
 <dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
   <div class="dz-head">
     <h2 id="dzTitle">Label designer</h2>
     <button type="button" class="btn" id="dzNew">New</button>
     <button type="button" class="btn" id="dzPasteBtn">Paste code</button>
-    <label class="btn" for="dzOpenFile">Open design</label><input type="file" id="dzOpenFile" accept=".json,.p2l" hidden>
-    <button type="button" class="btn" id="dzSave">Save design</button>
+    <button type="button" class="btn" id="dzOpenBtn">My designs</button>
+    <button type="button" class="btn" id="dzSave">Save to cloud</button>
     <button type="button" class="btn primary" id="dzToViewer">Preview as printed</button>
     <button type="button" class="btn" id="dzPrn">Download .prn</button>
     <button type="button" class="x" id="dzClose" aria-label="Close designer">×</button>
@@ -2292,7 +2303,7 @@ const dzPrinter = () => DZ_PRINTERS.find(p => p.id === dz.D.printer) || DZ_PRINT
 const dzLW = (D = dz.D) => (D.paper - 2 * D.edge - (D.across - 1) * D.hgap) / D.across;
 const dzIs2D = it => it.type === "barcode" && (it.symbology === "qrcode" || it.symbology === "datamatrix");
 function dzTextW(it) { return measureEm(it.text || " ", it.h * 1.2 * 20) / 20 * 1.02; }
-function dzSave() { try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = "Saved in this browser as you work."; }
+function dzSave() { try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
 
 function dzOpen() {
   if (!dz.D) { try { dz.D = JSON.parse(store.get("p2l-design")); } catch (e) {} if (!dz.D || !dz.D.items) dz.D = dzDefault(); }
@@ -2573,13 +2584,52 @@ $("dzZoomFit").onclick = dzFit;
 $("dzClose").onclick = () => $("dzDlg").close();
 $("dzToViewer").onclick = dzToViewer;
 $("dzPrn").onclick = dzDownload;
-$("dzNew").onclick = () => { if (!confirm("Start a new blank design? The current one in this browser is replaced.")) return; const p = dz.D; dz.D = Object.assign(dzDefault(), { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw, items: [] }); dz.sel = null; dzSetupForm(); dzProps(); };
-$("dzSave").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(dz.D, null, 1)], { type: "application/json" })); a.download = "label-design.p2l.json"; a.click(); };
-$("dzOpenFile").addEventListener("change", async e => {
-  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
-  try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.items)) throw 0; dz.D = Object.assign(dzDefault(), d); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1; dzSetupForm(); dzProps(); dzSave(); }
-  catch (err) { toast("That file is not a label design"); }
+$("dzNew").onclick = () => { if (!confirm("Start a new blank design? The current one in this browser is replaced.")) return; const p = dz.D; dz.D = Object.assign(dzDefault(), { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw, items: [] }); delete dz.D.cloud; dz.sel = null; dzSetupForm(); dzProps(); };
+/* cloud designs: the Worker encrypts them (AES-256-GCM); this browser holds the workspace key that owns them */
+function dzOwner() {
+  let k = store.get("p2l-owner");
+  if (!k || !/^[A-Za-z0-9_-]{32,128}$/.test(k)) { k = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); store.set("p2l-owner", k); }
+  return k;
+}
+async function dzApi(path, opts = {}) {
+  const r = await fetch("/api/designs" + path, Object.assign({}, opts, { headers: Object.assign({ "x-owner": dzOwner(), "content-type": "application/json" }, opts.headers || {}) }));
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || `Cloud error ${r.status}`);
+  return j;
+}
+async function dzCloudSave() {
+  const D = dz.D, cur = D.cloud;
+  const name = cur && cur.name || prompt("Name this design", "Label " + new Date().toLocaleDateString());
+  if (!name) return;
+  const design = Object.assign({}, D); delete design.cloud;
+  $("dzStatus").textContent = "Saving to cloud…";
+  try {
+    const body = JSON.stringify({ name, design });
+    const j = cur && cur.id ? await dzApi("/" + cur.id, { method: "PUT", body }).catch(e => /not found/i.test(e.message) ? dzApi("", { method: "POST", body }) : Promise.reject(e)) : await dzApi("", { method: "POST", body });
+    D.cloud = { id: j.id, name: j.name }; dzSave();
+    $("dzStatus").textContent = `Saved to cloud as “${j.name}” (encrypted).`; toast("Saved to cloud");
+  } catch (e) { $("dzStatus").textContent = e.message; toast(e.message); }
+}
+async function dzCloudList() {
+  const box = $("dzCloudList"); box.innerHTML = '<p class="dz-empty">Loading…</p>'; $("dzKeyShow").value = dzOwner();
+  try {
+    const { designs } = await dzApi("");
+    if (!designs.length) { box.innerHTML = '<p class="dz-empty">No designs saved yet. Use “Save to cloud” in the designer.</p>'; return; }
+    box.innerHTML = `<table class="tbl" style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr><th style="text-align:left;padding:6px">Name</th><th style="text-align:left;padding:6px">Saved</th><th></th></tr></thead><tbody>${designs.map(d => `<tr style="border-top:1px solid var(--line)"><td style="padding:8px 6px">${d.name.replace(/</g, "&lt;")}</td><td style="padding:8px 6px;color:var(--muted)">${new Date(d.updated.replace(" ", "T") + "Z").toLocaleString()}</td><td style="padding:8px 6px;text-align:right;white-space:nowrap"><button type="button" class="btn sm primary" data-open-id="${d.id}">Open</button> <button type="button" class="btn sm" data-del-id="${d.id}" data-name="${d.name.replace(/"/g, "&quot;")}">Delete</button></td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { box.innerHTML = `<p class="dz-warn">${e.message}</p>`; }
+}
+$("dzCloudList").addEventListener("click", async e => {
+  const o = e.target.closest("[data-open-id]"), d = e.target.closest("[data-del-id]");
+  try {
+    if (o) { const j = await dzApi("/" + o.dataset.openId); dz.D = Object.assign(dzDefault(), j.design, { cloud: { id: j.id, name: j.name } }); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1; $("dzCloudDlg").close(); dzSetupForm(); dzProps(); dzSave(); $("dzStatus").textContent = `Opened “${j.name}” from the cloud.`; }
+    if (d && confirm(`Delete “${d.dataset.name}” from the cloud? This cannot be undone.`)) { await dzApi("/" + d.dataset.delId, { method: "DELETE" }); if (dz.D.cloud && dz.D.cloud.id === d.dataset.delId) { delete dz.D.cloud; dzSave(); } dzCloudList(); }
+  } catch (err) { toast(err.message); }
 });
+$("dzSave").onclick = dzCloudSave;
+$("dzOpenBtn").onclick = () => { $("dzCloudDlg").showModal(); dzCloudList(); };
+$("dzCloudClose").onclick = () => $("dzCloudDlg").close();
+$("dzKeyCopy").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(dzOwner()).then(() => toast("Key copied"), () => {}); };
+$("dzKeyUse").onclick = () => { const k = (prompt("Paste the workspace key from your other device") || "").trim(); if (!k) return; if (!/^[A-Za-z0-9_-]{32,128}$/.test(k)) return toast("That is not a workspace key"); store.set("p2l-owner", k); delete dz.D.cloud; dzSave(); dzCloudList(); };
 $("dzDlg").addEventListener("keydown", e => {
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || dz.sel == null) return;
   const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return;
