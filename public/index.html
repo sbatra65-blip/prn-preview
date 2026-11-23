@@ -4502,12 +4502,12 @@ function ldWithQty(prn, lang, rows) {
 async function ldPrintPDF() {
   const D = dz.D, err = document.getElementById("ldPrErr"), btn = document.getElementById("ldPdfGo"), mode = document.getElementById("ldPdfMode").value; err.textContent = "";
   const q0 = Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1));
-  let labels; try { labels = dzVarNeeds().any ? ldVarLabels(q0) : Array.from({ length: q0 }, (_, n) => ({ rec: null, n })); } catch (e) { err.textContent = e.message; return; }
+  let labels; try { labels = ldLabels(q0); } catch (e) { err.textContent = e.message; return; }
   if (!labels.length) { err.textContent = "Nothing to print."; return; }
   if (labels.length > 1500 && !confirm(`Make a PDF of ${labels.length} labels? Large PDFs take a while.`)) return;
   btn.disabled = true; btn.textContent = "Making PDF…";
   try {
-    const jsPDF = await loadJsPDF(), k = 12, lw = dzLW(), rows = Math.ceil(labels.length / D.across), var_ = dzVarNeeds().any, mono = !dzPrinter().colour && !D.items.some(i => i.color || i.fillColor || i.textColor);
+    const jsPDF = await loadJsPDF(), k = 12, lw = dzLW(), rows = Math.ceil(labels.length / D.across), var_ = dzVarNeeds().any || labels.some(l => l.blank), mono = !dzPrinter().colour && !D.items.some(i => i.color || i.fillColor || i.textColor);
     let doc = null, cache = {}, placed = 0;
     const A4 = { w: 210, h: 297, m: 8, gx: Math.max(2, D.hgap || 0), gy: Math.max(2, D.vgap || 0) }, perRow = Math.max(1, Math.floor((A4.w - 2 * A4.m + A4.gx) / (lw + A4.gx))), perCol = Math.max(1, Math.floor((A4.h - 2 * A4.m + A4.gy) / (D.h + A4.gy)));
     const page = (w, h) => { const o = w > h ? "l" : "p"; if (!doc) doc = new jsPDF({ unit: "mm", format: [w, h], orientation: o, compress: true }); else doc.addPage([w, h], o); };
@@ -4559,6 +4559,7 @@ async function ldPrintOpen() {
       <label class="ld-f">Number of labels<input id="ldPrQty" type="number" min="1" max="99999" value="${per}" step="1"></label>
     </div>
     ${ldVarPanel()}
+    <div class="ld-grid2"><label class="ld-f">Start at label position <small>Skip labels already used on a sheet or a part-printed row</small><input id="ldPrSkip" type="number" min="1" max="999" value="1"></label><div class="ld-f">&nbsp;<small id="ldPrSkipInfo"></small></div></div>
     <div class="ld-grid2" id="ldPrRawRow">
       <label class="ld-f">Printer resolution <small>Must match the printer, or labels print the wrong size</small><select id="ldPrDpi"><option value="203">203 dpi (8 dots/mm)</option><option value="300">300 dpi (12 dots/mm)</option><option value="600">600 dpi (24 dots/mm)</option></select></label>
       <label class="ld-f">Printer language<select id="ldPrLang">${Object.keys(DZ_LANG_NAME).map(l => `<option value="${l}">${ldEsc(DZ_LANG_NAME[l])}</option>`).join("")}</select></label>
@@ -4576,9 +4577,10 @@ async function ldPrintOpen() {
       <select id="ldPdfMode" aria-label="PDF pages" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><option value="row">PDF: labels as on the roll</option><option value="label">PDF: one label per page</option><option value="a4">PDF: A4 sheet of labels</option></select>
       <button type="button" class="btn" id="ldPdfGo">Download PDF</button><button type="button" class="btn" id="ldPrnGo">Download .prn</button></div>
     <p class="dz-cap" style="margin-top:12px">Printer language mode needs the Windows printer set to a “Generic / Text Only” or the maker's driver with raw pass-through, which is the normal set-up for thermal printers. Image mode works with any driver; set the driver's label size to ${r1(D.paper)} × ${r1(D.h)} mm.</p>`;
-  const info = () => { const q0 = Math.max(1, +document.getElementById("ldPrQty").value || 1); let q = q0; if (dzVarNeeds().any) { try { q = ldVarLabels(q0).length || q0; } catch (e) {} } const rows = Math.ceil(q / per);
+  const info = () => { const q0 = Math.max(1, +document.getElementById("ldPrQty").value || 1); let q = q0; if (dzVarNeeds().any) { try { q = ldVarLabels(q0).length || q0; } catch (e) {} } const sk = ldSkip(), rows = Math.ceil((q + sk) / per);
+    const si = document.getElementById("ldPrSkipInfo"); if (si) si.textContent = sk ? `${sk} label position(s) left blank first` : per > 1 ? `Positions 1–${per} across each row` : "";
     document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm · ${q} label(s)${per > 1 ? ` on ${rows} row(s), ${per} across` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
-  document.getElementById("ldPrQty").oninput = info; info();
+  document.getElementById("ldPrQty").oninput = info; document.getElementById("ldPrSkip").oninput = info; info();
   ldVarWire(() => { const file = /^(file|db)$/.test((document.querySelector('input[name="ldVarSrc"]:checked') || {}).value); document.querySelector('label:has(#ldPrQty)').firstChild.textContent = file ? "Copies of each record" : "Number of labels"; info(); });
   const $p = id => document.getElementById(id);
   const fit = () => { // per Windows printer: saved choice, else read from its name/driver, else the design's own settings
@@ -4612,8 +4614,8 @@ async function ldPrintRun(test, to) {
       const lang = document.getElementById("ldPrLang").value, dpi = lang === "EPL2" ? 203 : +document.getElementById("ldPrDpi").value;
       if (name) store.set("ld-pr:" + name, JSON.stringify({ dpi, lang }));
       let q;
-      if (dzVarNeeds().any) { // fields, serial numbers: every label gets its own data
-        let labels = ldVarLabels(test ? 1 : qty); if (test) labels = labels.slice(0, D.across);
+      if (dzVarNeeds().any || ldSkip() > 0) { // fields, serial numbers, a start position: every label gets its own data
+        let labels = ldLabels(test ? 1 : qty); if (test) labels = labels.filter(l => !l.blank).slice(0, D.across);
         if (!labels.length) throw new Error("Nothing to print: the file has no rows, or every qty is 0.");
         if (!test && labels.length > 2000 && !confirm(`Print ${labels.length} labels on ${name}?`)) return;
         const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; toast(`${labels.length} label(s) prepared`);
@@ -4819,7 +4821,7 @@ const dzKeyOf = it => it.type === "barcode" ? "data" : "text";
 function dzResolveCol(col) {
   const items = dz.D.items, ctx = dz.ctx; if (!ctx) return items;
   const idx = ctx.base + col; if (ctx.labels && idx >= ctx.labels.length) return []; // last row not full: leave the label blank
-  const lab = ctx.labels ? ctx.labels[idx] : { rec: ctx.rec, n: idx };
+  const lab = ctx.labels ? ctx.labels[idx] : { rec: ctx.rec, n: idx }; if (lab && lab.blank) return []; // skipped position on a used sheet / row
   const out = items.map(it => it.parts && it.parts.length ? Object.assign({}, it, { [dzKeyOf(it)]: dzCompose(it, lab.rec, lab.n), esc: it.type === "barcode" && dzHasSpecial(it) }) : it);
   for (let pass = 0; pass < 3; pass++) for (let i = 0; i < out.length; i++) {
     const it = out[i]; if (!it.link) continue; const src = out.find(o => o.id === it.link && o.id !== it.id); if (!src) continue;
@@ -4943,16 +4945,20 @@ function ldVarPanel() {
     ${need.fields.length ? `<div class="ld-row" style="margin:8px 0">${dz.db ? `<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="db" checked> Database: ${ldEsc(dz.db.name)} (${dz.db.rows.length})</label>` : ""}<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed"${dz.db ? "" : " checked"}> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
     ${dz.db ? `<div id="ldVarDb" class="ld-grid2"><label class="ld-f">From record<input id="ldDbFrom" type="number" min="1" max="${dz.db.rows.length}" value="1"></label><label class="ld-f">To record<input id="ldDbTo" type="number" min="1" max="${dz.db.rows.length}" value="${dz.db.rows.length}"></label></div>` : ""}
     <div id="ldVarTyped" class="ld-grid2"${dz.db ? " hidden" : ""}>${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
+    <div class="ld-row" id="ldPickRow" style="margin:6px 0"${dz.db ? "" : " hidden"}><button type="button" class="btn sm soft" id="ldPickGo">Choose records to print…</button><span class="dz-cap" id="ldPickInfo" style="margin:0"></span></div>
     <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods,.json,.xml"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
     ${need.serial ? `<p class="dz-cap">Serial numbers go up on every label in this print.</p>` : ""}</div>`;
 }
 function ldVarWire(onChange) {
   const need = dzVarNeeds(); if (!need.fields.length) return;
   const src = () => (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value;
-  for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; if ($("ldVarDb")) $("ldVarDb").hidden = src() !== "db"; onChange(); };
+  const pickRow = () => { const s = src(), ok = s === "db" ? !!dz.db : s === "file" && !!(LDV.recs && LDV.recs.length); $("ldPickRow").hidden = !ok; ldPickInfo(); };
+  for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; if ($("ldVarDb")) $("ldVarDb").hidden = src() !== "db"; pickRow(); onChange(); };
+  $("ldPickGo").onclick = () => ldPickRecords(onChange); LDV.onPick = () => { pickRow(); onChange(); }; pickRow();
   for (const id of ["ldDbFrom", "ldDbTo"]) if ($(id)) $(id).oninput = onChange;
   $("ldVarIn").onchange = async e => { const f = e.target.files[0]; if (!f) return;
     try { LDV.recs = await ldReadTable(f); LDV.file = f.name; const cols = Object.keys(LDV.recs[0] || {}), miss = need.fields.filter(x => !cols.includes(x.name)).map(x => x.name);
+      LDV.pick = null; if (LDV.onPick) LDV.onPick();
       $("ldVarInfo").innerHTML = `<b>${LDV.recs.length} record(s)</b> from ${ldEsc(f.name)}.${miss.length ? ` <span style="color:#b42318">No column for: ${miss.map(ldEsc).join(", ")} (their sample value is used).</span>` : " All fields matched."}`; }
     catch (x) { LDV.recs = null; $("ldVarInfo").textContent = x.message; } onChange(); };
 }
@@ -4960,7 +4966,9 @@ function ldVarWire(onChange) {
 function ldVarLabels(qty) {
   const need = dzVarNeeds(), src = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value, out = [];
   if (src === "file" || src === "db") {
-    const recs = src === "db" ? (dz.db ? dz.db.rows.slice(Math.max(0, (+$("ldDbFrom").value || 1) - 1), Math.max(1, +$("ldDbTo").value || dz.db.rows.length)) : []) : LDV.recs;
+    const all = src === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [], pick = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null;
+    if (pick) { for (const [i, q] of pick.sel) for (let c = 0; c < q; c++) out.push({ rec: all[i], n: out.length }); if (!out.length) throw new Error("No records are ticked in Choose records."); return out; }
+    const recs = src === "db" ? all.slice(Math.max(0, (+$("ldDbFrom").value || 1) - 1), Math.max(1, +$("ldDbTo").value || all.length)) : all;
     if (!recs || !recs.length) throw new Error(src === "db" ? "No records in that range." : "Choose a CSV or Excel file with the records first.");
     for (const r of recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: r, n: out.length }); }
     return out;
@@ -4968,6 +4976,41 @@ function ldVarLabels(qty) {
   const rec = {}; for (const el of document.querySelectorAll("[data-fv]")) rec[el.dataset.fv] = el.value;
   for (let i = 0; i < qty; i++) out.push({ rec, n: i });
   return out;
+}
+const ldSrcKey = () => { const s = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value; return s === "db" ? "db:" + (dz.db ? dz.db.name : "") : s === "file" ? "file:" + LDV.file : s || ""; };
+const ldSkip = () => Math.max(0, Math.min(998, (+(document.getElementById("ldPrSkip") || {}).value || 1) - 1));
+// Everything to print, in order: blank positions to skip, then each label with its record and serial number
+function ldLabels(qty) {
+  const base = dzVarNeeds().any ? ldVarLabels(qty) : Array.from({ length: qty }, (_, n) => ({ rec: null, n }));
+  return [...Array.from({ length: ldSkip() }, () => ({ blank: true })), ...base];
+}
+function ldPickInfo() {
+  const el = $("ldPickInfo"); if (!el) return; const p = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null;
+  el.textContent = p ? `${p.sel.size} record(s) chosen, ${[...p.sel.values()].reduce((a, b) => a + b, 0)} label(s)` : "All records in the range above are printed";
+}
+// Pick records one by one, with a quantity for each (search, tick all shown, none)
+function ldPickRecords(done) {
+  const s = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value, rows = s === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [];
+  if (!rows.length) return toast("No records yet");
+  const key = ldSrcKey(), defq = Math.max(1, +document.getElementById("ldPrQty").value || 1);
+  const sel = new Map(LDV.pick && LDV.pick.src === key ? LDV.pick.sel : []);
+  const cols = Object.keys(rows[0]).slice(0, 6), qtyCol = Object.keys(rows[0]).find(c => /^(qty|quantity)$/i.test(c));
+  let d = $("ldPickDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldPickDlg"; d.style.cssText = "width:min(980px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)"; document.body.append(d); }
+  d.innerHTML = `<div class="dlg-head"><div><h2>Choose records to print</h2><div class="sub">Tick the records and set how many labels each one gets.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div class="ld-acct"><div class="ld-row" style="margin-bottom:8px"><input id="ldPkQ" placeholder="Search any field…" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <button type="button" class="btn sm" id="ldPkAll">Tick all shown</button><button type="button" class="btn sm" id="ldPkNone">Clear</button><span class="dz-cap" id="ldPkN" style="margin:0"></span></div>
+    <div style="max-height:56vh;overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="ld-tbl" style="margin:0"><thead style="position:sticky;top:0;background:var(--surface)"><tr><th style="width:30px"></th><th>#</th>${cols.map(c => `<th>${ldEsc(c)}</th>`).join("")}<th style="width:90px">Labels</th></tr></thead><tbody id="ldPkBody"></tbody></table></div>
+    <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldPkOk">Use these records</button><button type="button" class="btn" id="ldPkReset">Print all records instead</button></div></div>`;
+  const qOf = i => sel.get(i) ?? (qtyCol ? parseInt(rows[i][qtyCol], 10) || defq : defq);
+  const shown = () => { const q = $("ldPkQ").value.trim().toLowerCase(); const out = []; for (let i = 0; i < rows.length && out.length < 500; i++) if (!q || Object.values(rows[i]).some(v => String(v).toLowerCase().includes(q))) out.push(i); return out; };
+  const count = () => { $("ldPkN").textContent = `${sel.size} ticked · ${[...sel.values()].reduce((a, b) => a + b, 0)} label(s)${rows.length > 500 ? " · search to find records beyond the first 500" : ""}`; };
+  const draw = () => { $("ldPkBody").innerHTML = shown().map(i => `<tr><td><input type="checkbox" data-pk="${i}"${sel.has(i) ? " checked" : ""}></td><td>${i + 1}</td>${cols.map(c => `<td>${ldEsc(String(rows[i][c] ?? "").slice(0, 40))}</td>`).join("")}<td><input type="number" min="1" max="99999" data-pq="${i}" value="${qOf(i)}" style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join(""); count(); };
+  d.onchange = d.oninput = e => { const t = e.target; if (t.id === "ldPkQ") return; if (t.dataset.pk != null) { const i = +t.dataset.pk; if (t.checked) sel.set(i, qOf(i)); else sel.delete(i); count(); } if (t.dataset.pq != null) { const i = +t.dataset.pq, v = Math.max(1, +t.value || 1); if (sel.has(i)) sel.set(i, v); else { sel.set(i, v); d.querySelector(`[data-pk="${i}"]`).checked = true; } count(); } };
+  d.querySelector(".x").onclick = () => d.close(); $("ldPkQ").oninput = draw;
+  $("ldPkAll").onclick = () => { for (const i of shown()) sel.set(i, qOf(i)); draw(); }; $("ldPkNone").onclick = () => { sel.clear(); draw(); };
+  $("ldPkOk").onclick = () => { LDV.pick = sel.size ? { src: key, sel: new Map([...sel].sort((a, b) => a[0] - b[0])) } : null; d.close(); if (LDV.onPick) LDV.onPick(); else if (done) done(); };
+  $("ldPkReset").onclick = () => { LDV.pick = null; d.close(); if (LDV.onPick) LDV.onPick(); };
+  draw(); d.showModal(); $("ldPkQ").focus();
 }
 // Printer commands for every label; identical rows in a row are merged into one copy command
 function ldVarPRN(labels, lang, dpi) {
