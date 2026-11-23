@@ -288,7 +288,7 @@ async function geminiText(env, model, system, prompt) {
     method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
     body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "low" } } }),
-    signal: AbortSignal.timeout(25000),
+    signal: AbortSignal.timeout(45000),
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);

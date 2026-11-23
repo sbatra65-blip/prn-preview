@@ -695,6 +695,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <span id="dzInfo" style="font-size:13px;color:var(--muted)"></span>
         <span id="dzWarn" style="font-size:13px;color:var(--ink)"></span>
         <span class="sp"></span>
+        <select id="dzViewSel" aria-label="Show the label" title="How the label is shown on screen; printing is not affected"><option value="auto">As designed</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
         <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="dzGrid" checked> Grid</label>
         <select id="dzSnap" aria-label="Snap"><option value="0">No snap</option><option value="0.5" selected>Snap 0.5 mm</option><option value="1">Snap 1 mm</option></select>
         <button type="button" class="btn" id="dzZoomOut" aria-label="Zoom out">−</button>
@@ -2706,13 +2707,25 @@ function dzMedia() {
 
 /* canvas */
 function dzFit() { dz.zoom = 1; dzDraw(); }
+function dzView() { // 0 = as designed, 90 = shown turned clockwise (printing is not affected)
+  const D = dz.D, m = D.viewMode || "auto"; if (m === "auto") return 0;
+  const land = dzLW() >= D.h; if ((m === "landscape") === land) return 0;
+  // turn the screen the way that makes most text read upright
+  let cw = 0, ccw = 0; for (const it of D.items) { const r = dzRot(it); if (r === 90) cw++; if (r === 270) ccw++; }
+  return cw > ccw ? -90 : 90;
+}
 function dzScale() {
-  const st = $("dzStage"), D = dz.D, avail = Math.max(200, st.clientWidth - 80), availH = Math.max(200, st.clientHeight - 80);
-  return Math.max(1.5, Math.min(24, Math.min(avail / D.paper, availH / (D.h + 2 * D.vgap)))) * dz.zoom;
+  const st = $("dzStage"), D = dz.D, avail = Math.max(200, st.clientWidth - 80), availH = Math.max(200, st.clientHeight - 80), v = dzView();
+  const W = v ? D.h + 2 * D.vgap : D.paper, H = v ? D.paper : D.h + 2 * D.vgap;
+  return Math.max(1.5, Math.min(24, Math.min(avail / W, availH / H))) * dz.zoom;
 }
 function dzDraw() {
   const D = dz.D, s = dzScale(), lw = dzLW(), paper = $("dzPaperEl"); dz.s = s;
   paper.style.width = D.paper * s + "px"; paper.style.height = (D.h + 2 * D.vgap) * s + "px";
+  { const v = dzView(), Wp = D.paper * s, Hp = (D.h + 2 * D.vgap) * s, st = $("dzStage");
+    paper.style.transformOrigin = "0 0"; paper.style.transform = v === 90 ? `translate(${Hp}px,0) rotate(90deg)` : v === -90 ? `translate(0,${Wp}px) rotate(-90deg)` : "";
+    paper.style.marginLeft = v ? Math.max(0, (st.clientWidth - 80 - Hp) / 2) + "px" : ""; paper.style.marginRight = v ? "0" : "";
+    paper.style.marginBottom = v ? Math.max(0, Wp - Hp) + "px" : ""; if ($("dzViewSel")) $("dzViewSel").value = D.viewMode || "auto"; }
   paper.replaceChildren();
   const ruler = document.createElement("div"); ruler.className = "dz-ruler";
   const step = s > 8 ? 5 : s > 4 ? 10 : 20;
@@ -3036,6 +3049,7 @@ function dzGrab(e, it, resize) {
   const sn = v => snap ? Math.round(v / snap) * snap : r1(v);
   const move = ev => {
     let dx = (ev.clientX - sx) / s, dy = (ev.clientY - sy) / s;
+    { const v = dzView(); if (v === 90) [dx, dy] = [dy, -dx]; else if (v === -90) [dx, dy] = [-dy, dx]; } // screen shows the label turned: map the drag back
     if (group) {
       for (const g of gs) { g.it.x = sn(g.x + dx); g.it.y = sn(g.y + dy); for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${g.it.id}"]`)) { el.style.left = g.it.x * s + "px"; el.style.top = g.it.y * s + "px"; dzMark(el, g.it); } }
       dzWarnCount(); return;
@@ -3059,9 +3073,10 @@ function dzGrab(e, it, resize) {
   addEventListener("pointermove", move); addEventListener("pointerup", up);
 }
 function dzMarquee(e, lab) { // drag on empty label space to select everything the box touches
-  e.preventDefault(); const add = e.shiftKey || e.ctrlKey || e.metaKey, r0 = lab.getBoundingClientRect(), s = dz.s, x0 = e.clientX - r0.left, y0 = e.clientY - r0.top;
+  e.preventDefault(); const add = e.shiftKey || e.ctrlKey || e.metaKey, r0 = lab.getBoundingClientRect(), s = dz.s, v = dzView();
+  const loc = ev => v === 90 ? [ev.clientY - r0.top, r0.right - ev.clientX] : v === -90 ? [r0.bottom - ev.clientY, ev.clientX - r0.left] : [ev.clientX - r0.left, ev.clientY - r0.top], [x0, y0] = loc(e);
   const m = document.createElement("div"); m.className = "dz-marq"; lab.append(m); let moved = false;
-  const box = ev => { const x1 = ev.clientX - r0.left, y1 = ev.clientY - r0.top; return [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)]; };
+  const box = ev => { const [x1, y1] = loc(ev); return [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)]; };
   const move = ev => { const [l, t, w, h] = box(ev); if (w + h > 4) moved = true; Object.assign(m.style, { left: l + "px", top: t + "px", width: w + "px", height: h + "px" }); };
   const up = ev => {
     removeEventListener("pointermove", move); removeEventListener("pointerup", up); m.remove();
@@ -3075,7 +3090,7 @@ function dzSpin(e, it) { // drag the round handle to turn; snaps to right angles
   e.preventDefault(); e.stopPropagation(); dzSelect(it.id);
   const el = e.target.parentElement, rc = el.getBoundingClientRect(), cx = rc.left + rc.width / 2, cy = rc.top + rc.height / 2;
   const move = ev => {
-    let a = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90; a = ((a % 360) + 360) % 360;
+    let a = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90 - dzView(); a = ((a % 360) + 360) % 360;
     a = ev.shiftKey ? Math.round(a / 15) * 15 : Math.round(a); const near = Math.round(a / 90) * 90; if (Math.abs(a - near) <= 2) a = near;
     dzTurn(it, a % 360 - dzRot(it)); dzRefresh(it);
   };
@@ -3089,6 +3104,7 @@ function dzMultiPanel(ids) {
   return `<p style="margin:0 0 10px;font-weight:600">${ids.length} objects selected</p>
     <h3>Align with each other</h3><div class="dz-mgrid">${btn("al", "Left", "left")}${btn("ac", "Centre", "center")}${btn("ar", "Right", "right")}${btn("at", "Top", "top")}${btn("am", "Middle", "middle")}${btn("ab", "Bottom", "bottom")}</div>
     <h3>Space evenly</h3><div class="dz-mgrid">${btn("dh", "Across", "dx")}${btn("dv", "Down", "dy")}</div>
+    <h3>Turn together</h3><div class="dz-mgrid">${btn("rotr", "90° right", "tr")}${btn("rotl", "90° left", "tl")}${btn("straight", "180°", "t2")}</div>
     <h3>Align on the label</h3><div class="dz-mgrid">${btn("ac", "Centre across", "lcenter")}${btn("am", "Middle", "lmiddle")}</div>
     <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzMDup">Duplicate</button><button type="button" class="btn" id="dzMDel" style="color:var(--bad)">Delete</button></div>
     <p class="dz-cap">Shift or Ctrl + click adds or removes an object. Drag on empty label space to select a group. Arrow keys move them together.</p>`;
@@ -3103,7 +3119,7 @@ function dzProps() {
   { const ids = dz.D ? dzSelIds() : []; if (ids.length > 1) {
     if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
     const box = $("dzProps"); box.innerHTML = dzMultiPanel(ids) + dzObjList(); dzObjWire(); dzWarnCount();
-    for (const b of box.querySelectorAll("[data-m]")) b.onclick = () => { const m = b.dataset.m; if (m === "dx") dzDistribute("x"); else if (m === "dy") dzDistribute("y"); else if (m[0] === "l" && m !== "left") dzGroupToLabel(m); else dzAlignMany(m, ids); };
+    for (const b of box.querySelectorAll("[data-m]")) b.onclick = () => { const m = b.dataset.m; if (m === "tr") dzTurnGroup(90); else if (m === "tl") dzTurnGroup(-90); else if (m === "t2") dzTurnGroup(180); else if (m === "dx") dzDistribute("x"); else if (m === "dy") dzDistribute("y"); else if (m[0] === "l" && m !== "left") dzGroupToLabel(m); else dzAlignMany(m, ids); };
     $("dzMDup").onclick = dzDuplicate; $("dzMDel").onclick = dzDelete; return;
   } }
   if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
@@ -3401,6 +3417,21 @@ function dzAlignMany(where, ids) { // line objects up with each other: edges or 
     if (where === "top") it.y = r1(T); if (where === "bottom") it.y = r1(B - b.h); if (where === "middle") it.y = r1((T + B) / 2 - b.h / 2); });
   its.forEach(dzRefresh); dzProps(); dzSave();
 }
+function dzTurnGroup(by) { // the selection turns as one block about its centre, then is kept on the label
+  const its = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(Boolean); if (!its.length) return;
+  const bs = its.map(dzBox), L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
+  if ((((by % 360) + 360) % 360) === 180) { dzTurnGroup(90); return dzTurnGroup(90); }
+  const cx = (L + R) / 2, cy = (T + B) / 2, cw = ((by % 360) + 360) % 360 === 90;
+  its.forEach((it, k) => {
+    const b = bs[k], ix = it.x + b.w / 2 - cx, iy = it.y + b.h / 2 - cy, nx = cw ? -iy : iy, ny = cw ? ix : -ix;
+    if (it.type === "line" || it.type === "box") { const w = it.w; it.w = it.h; it.h = w; } else it.rot = (((dzRot(it) + by) % 360) + 360) % 360;
+    const nb = dzBox(it); it.x = cx + nx - nb.w / 2; it.y = cy + ny - nb.h / 2;
+  });
+  const nbs = its.map(dzBox), L2 = Math.min(...its.map(i => i.x)), R2 = Math.max(...its.map((i, k) => i.x + nbs[k].w)), T2 = Math.min(...its.map(i => i.y)), B2 = Math.max(...its.map((i, k) => i.y + nbs[k].h));
+  const lw = dzLW(), H = dz.D.h, dx = R2 - L2 <= lw ? Math.min(Math.max(0, -L2 + 1), lw - 1 - R2) || (L2 < 0 ? -L2 : R2 > lw ? lw - R2 : 0) : (lw - (R2 - L2)) / 2 - L2, dy = B2 - T2 <= H ? (T2 < 0 ? -T2 + 1 : B2 > H ? H - 1 - B2 : 0) : (H - (B2 - T2)) / 2 - T2;
+  its.forEach(it => { it.x = r1(it.x + dx); it.y = r1(it.y + dy); });
+  dzDraw(); dzMarkSel(); dzProps(); dzSave();
+}
 function dzDistribute(axis) { // equal gaps between three or more objects
   const ids = dzSelIds(); if (ids.length < 3) return toast("Select three or more objects to space them evenly");
   const its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), pos = axis === "x" ? "x" : "y", size = it => axis === "x" ? dzBox(it).w : dzBox(it).h;
@@ -3483,7 +3514,7 @@ const DZ_IC = { // 24x24 stroke icons, drawn for this app
 const dzIcon = (k, sz = 20) => `<svg aria-hidden="true" width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${DZ_IC[k] || ""}"/></svg>`;
 function dzRibbonDef() {
   const sel = () => dz.D && dz.D.items.find(i => i.id === dz.sel), has = () => !!sel(), txt = () => !!dzSelTextLike(), isText = () => !!sel() && sel().type === "text", click = id => () => $(id).click();
-  const turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box", turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
+  const turnable = () => dzSelIds().length > 1 || (!!sel() && sel().type !== "line" && sel().type !== "box"), turn = by => () => { if (dzSelIds().length > 1) return dzTurnGroup(by); const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   const B = (ic, label, run, en, ck, title) => ({ ic, label, run, en, ck, title });
   return {
     Home: [["Clipboard", [B("paste", "Paste", dzPaste, () => !!dz.clip, null, "Paste (Ctrl+V)"), B("copy", "Copy", dzCopy, has, null, "Copy (Ctrl+C)"), B("dup", "Duplicate", dzDuplicate, has, null, "Duplicate (Ctrl+D)"), B("del", "Delete", dzDelete, has, null, "Delete (Del)")]],
@@ -3507,7 +3538,7 @@ function dzRibbonDef() {
       ["Templates", [B("lib", "Library", () => openLibrary())]],
       ["Check", [B("check", "LMPC check", () => lmpcCheck(false, $("dzDlg").classList.contains("viewing") ? "viewer" : "design"), null, null, "Check this label against LMPC rules: report only, the label is not changed"), B("gs1", "GS1 guide", () => window.open("gs1.html", "_blank"))]],
       ["Infinite Solutions", [B("printers", "Printers", () => window.open("https://buytscprinters.com", "_blank")), B("vcard", "Talk to us", () => openLead("talk"))]]],
-    View: [["Show", [B("grid", "Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, null, () => $("dzGrid").checked)]],
+    View: [["Show the label", [B("fit", "As designed", () => { dz.D.viewMode = "auto"; dzDraw(); dzSave(); }, null, () => (dz.D.viewMode || "auto") === "auto"), B("rect", "Portrait", () => { dz.D.viewMode = "portrait"; dzDraw(); dzSave(); }, null, () => dz.D.viewMode === "portrait"), B("box", "Landscape", () => { dz.D.viewMode = "landscape"; dzDraw(); dzSave(); }, null, () => dz.D.viewMode === "landscape")]], ["Show", [B("grid", "Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, null, () => $("dzGrid").checked)]],
       ["Zoom", [B("zin", "Zoom in", click("dzZoomIn"), null, null, "Ctrl+="), B("zout", "Zoom out", click("dzZoomOut"), null, null, "Ctrl+-"), B("fit", "Fit", click("dzZoomFit"), null, null, "Ctrl+0")]],
       ["Snap", [{ snap: true }]]],
   };
@@ -3620,6 +3651,7 @@ if (APP) {
   setTimeout(() => { dzOpen(); if (shared) dzShowViewer(); else if (!store.get("p2l-welcomed")) $("dzWelcome").hidden = false; }, 200);
 }
 $("dzGrid").addEventListener("change", dzDraw);
+$("dzViewSel").addEventListener("change", () => { dz.D.viewMode = $("dzViewSel").value; dzDraw(); dzSave(); });
 $("dzTurnLabel").onclick = () => { // the whole label turns clockwise: width and height swap, every object turns with it
   const D = dz.D, lw = dzLW(), H = D.h; clearTimeout(dzSave.t); dzHist();
   for (const it of D.items) {
@@ -3723,6 +3755,7 @@ $("dzDlg").addEventListener("keydown", e => {
   const st = e.shiftKey ? 5 : 0.5, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
   if (mv) { e.preventDefault(); for (const id of dzSelIds()) { const o = dz.D.items.find(i => i.id === id); if (!o) continue; o.x = r1(o.x + mv[0]); o.y = r1(o.y + mv[1]); dzRefresh(o); } dzProps(); dzSave(); }
   else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); dzDelete(); }
+  else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && dzSelIds().length > 1) { e.preventDefault(); dzTurnGroup(e.shiftKey ? -90 : 90); }
   else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && it.type !== "line" && it.type !== "box") { e.preventDefault(); dzTurn(it, e.shiftKey ? -90 : 90); dzRefresh(it); dzProps(); dzSave(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); dzDuplicate(); }
 });
