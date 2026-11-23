@@ -254,6 +254,12 @@ body.appmode dialog.dz[open] { position: fixed; inset: 0; z-index: 40; border: 0
 body.appmode #dzClose { display: none; }
 .dz-apponly { display: none; } body.appmode .dz-apponly { display: inline-flex; }
 .toast { z-index: 2000; }
+.dz-head > .btn, .dz-head > label.btn { display: none !important; }
+body.appmode .dz-head { display: none; }
+.dz-ribbon .rt .rbrand { display: none; text-decoration: none; align-items: center; gap: 8px; margin-right: 10px; padding-bottom: 5px; font: 700 14px var(--font-head); color: var(--ink); white-space: nowrap; }
+body.appmode .dz-ribbon .rt .rbrand { display: flex; }
+.dz-ribbon .rt .rbrand .mark { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 11px; }
+.dz-ribbon .rt .rbrand span:last-child { color: var(--muted); font-weight: 500; }
 .dz-brand { display: flex; align-items: center; gap: 10px; }
 .dz-brand .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: #fff; display: grid; place-items: center; font: 700 13px var(--font-head); }
 .dz-brand span:last-child { color: var(--muted); font-weight: 500; }
@@ -268,7 +274,7 @@ body.appmode #dzClose { display: none; }
 .dz-welcome .wg { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; width: min(760px, calc(100vw - 40px)); }
 .dz-welcome { overflow: auto; align-content: start; }
 @media (min-height: 700px) { .dz-welcome { align-content: center; } }
-@media (max-width: 760px) { body.appmode #dzNew, body.appmode #dzPasteBtn, body.appmode #dzOpenBtn, body.appmode #dzPrn, body.appmode .dz-head .dz-apponly { display: none; } .dz-head .btn { min-height: 34px; padding: 0 10px; font-size: 13px; } }
+@media (max-width: 760px) { .dz-ribbon .rt .rbrand span:last-child { display: none; } }
 .dz-welcome button { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; color: var(--ink); font: 13px var(--font); }
 .dz-welcome button:hover { border-color: var(--accent); background: var(--accent-soft); }
 .dz-welcome button b { font: 600 15px var(--font-head); }
@@ -3244,6 +3250,7 @@ function dzRibbonShow(tab) {
 }
 (function dzBuildRibbon() {
   const r = $("dzRibbon"), tabs = r.querySelector(".rt");
+  tabs.insertAdjacentHTML("afterbegin", '<a class="rbrand" href="./?about" title="About Pic2Label PRN Studio"><span class="mark" aria-hidden="true">P2</span>Pic2Label <span>PRN Studio</span></a>');
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
