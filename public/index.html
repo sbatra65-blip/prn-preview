@@ -3725,10 +3725,10 @@ function dzRibbonDef() {
   return {
     Home: [["Clipboard", [B("paste", "Paste", dzPaste, () => !!dz.clip, null, "Paste (Ctrl+V)"), B("copy", "Copy", dzCopy, has, null, "Copy (Ctrl+C)"), B("dup", "Duplicate", dzDuplicate, has, null, "Duplicate (Ctrl+D)"), B("del", "Delete", dzDelete, has, null, "Delete (Del)")]],
       ["History", [B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
-      ["Insert", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), B("qr", "QR code", () => dzAdd("qrcode")), B("image", "Image", () => $("dzImgFile").click())]],
+      ["Insert", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("qr", "QR code", () => dzAdd("qrcode")), B("image", "Image", () => $("dzImgFile").click())]],
       ["Arrange", [B("ac", "Centre", () => dzAlign("center"), has), B("front", "To front", () => dzOrder("front"), has), B("rotr", "Turn 90°", turn(90), turnable)]],
       ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
-    Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
+    Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
       ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box"))]],
       ["Shapes · text fits inside", Object.keys(DZ_SHAPES).map(k => B(k, DZ_SHAPES[k].split(" ")[0].replace("Circle", "Circle"), () => dzAdd("shape:" + k), null, null, DZ_SHAPES[k]))],
       ["Text shaped like (no outline)", ["rect", "ellipse", "star", "hexagon"].map(k => B(k, DZ_SHAPES[k].split(" ")[0], () => dzAdd("tshape:" + k), null, null, "Text in the form of a " + DZ_SHAPES[k].toLowerCase()))]],
@@ -3762,6 +3762,17 @@ function dzRibbonShow(tab) {
         const one = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h));
         w.innerHTML = `<input type="number" min="3" max="400" step="0.5" list="dzPtList" aria-label="Font size in points" value="${one.length && one.every(v => v === one[0]) ? one[0] : ""}" placeholder="pt"${dzSelIds().length ? "" : " disabled"}><span>pt</span>`;
         const inp = w.querySelector("input"); inp.onchange = () => dzSetPt(inp.value); row.append(w); continue; }
+      if (b.symsel) { // pick any barcode type and insert it; with a barcode selected, change its type
+        const w = document.createElement("div"); w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center";
+        const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Barcode type"); s.style.maxWidth = "230px";
+        const cur = dz.D && dz.D.items.find(i => i.id === dz.sel && i.type === "barcode");
+        s.innerHTML = `<option value="">${cur ? "Change type: " + (DZ_SYM[cur.symbology] || { name: "" }).name : "Insert barcode type…"}</option>` + dzSymOptions("");
+        s.onchange = () => { const v = s.value; if (!v) return; const it = dz.D.items.find(i => i.id === dz.sel && i.type === "barcode");
+          if (it) { const p = document.querySelector('select[data-k="symbology"]'); if (p) { p.value = v; p.dispatchEvent(new Event("change")); } }
+          else { dzAdd("barcode"); const n = dz.D.items[dz.D.items.length - 1], sel = document.querySelector('select[data-k="symbology"]'); if (n && sel) { sel.value = v; sel.dispatchEvent(new Event("change")); } }
+          s.value = ""; };
+        const l = document.createElement("small"); l.textContent = `${DZ_SYMS.length} barcode types`; l.style.cssText = "font-size:11px;color:var(--muted);text-align:center";
+        w.append(s, l); row.append(w); continue; }
       if (b.snap) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Snap"); s.innerHTML = [["0", "No snap"], ["0.5", "Snap 0.5 mm"], ["1", "Snap 1 mm"]].map(([v, n]) => `<option value="${v}"${$("dzSnap").value === v ? " selected" : ""}>${n}</option>`).join(""); s.onchange = () => { $("dzSnap").value = s.value; }; row.append(s); continue; }
       const el = document.createElement("button"); el.type = "button"; el.className = "rb"; el.title = b.title || b.label;
       el.innerHTML = `${dzIcon(b.ic)}<span></span>`; el.lastChild.textContent = b.label;
