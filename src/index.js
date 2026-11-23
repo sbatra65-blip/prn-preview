@@ -263,12 +263,64 @@ async function designs(request, env, url) {
   return json({ error: "Method not allowed" }, 405);
 }
 
+
+/* ---------- design by prompt: text (or speech) -> label design in the designer's own format ---------- */
+const DESIGN_SYSTEM = `You design thermal-printer labels. Reply with JSON only, no prose outside it:
+{"reply": "<one short sentence saying what you made or changed>",
+ "label": {"w": <label width mm>, "h": <label height mm>, "across": <labels across, default 1>},
+ "items": [ ...objects... ]}
+All positions and sizes are in millimetres from the label's top-left corner. Every object must sit fully inside the label with at least 1.5 mm margin.
+Object types (use only these fields):
+- {"type":"text","x","y","h": glyph height mm (min 1.6; headings 4-8),"text","bold"?:bool,"rot"?:0|90|180|270,"curve"?: -360..360 arc degrees,"path"?:"circle"|"ellipse"|"rect"|"star"|"wave","pw"?,"ph"?}
+  A text's width is about 0.5 * h * number of characters (condensed bold font); keep it inside the label.
+- {"type":"barcode","symbology":"code128"|"gs1-128"|"ean13"|"upca"|"code39"|"qrcode"|"datamatrix","data","x","y","w","h","rot"?}
+  Linear barcodes: w at least 25 mm, h 8-20 mm (the human-readable digits print inside h). EAN-13 data = 12 or 13 digits. GS1 data uses (AI) brackets, e.g. (01)08901234567890(17)271231(10)AB12. QR/DataMatrix: square, w = h, at least 12 mm for QR.
+  A contact-card QR: {"type":"barcode","symbology":"qrcode","qrKind":"contact","contact":{"name","org","title","tel","email","url","adr"},"x","y","w","h"}
+- {"type":"line","x","y","w","h","thickness"}: horizontal line has h = thickness (0.3-0.6), vertical has w = thickness.
+- {"type":"box","x","y","w","h","thickness"}
+- {"type":"shape","kind":"rect"|"round"|"ellipse"|"triangle"|"diamond"|"hexagon"|"star","x","y","w","h","thickness","fill":bool,"text","align":"center"} (text inside a shape is wrapped and sized automatically; thickness 0 hides the outline)
+Optional on any object: "color": "#rrggbb" (only if the user asks for colour).
+Good layout: clear hierarchy (one large heading), aligned left edges, consistent gaps, nothing overlapping.
+For retail packs sold in India follow the Legal Metrology (Packaged Commodities) Rules when relevant: name and address of manufacturer/packer, commodity name, net quantity, month and year of manufacture, MRP "inclusive of all taxes", consumer care details; letters at least 1.5 mm on small labels. Use realistic placeholder values when the user gives none, and never invent real company names, GTINs or licence numbers; use obvious placeholders like 8901234567890.
+When a current design is given, apply the user's change to it and return the complete updated design (keep objects the user did not mention, unchanged).`;
+async function geminiText(env, model, system, prompt) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: "low" } } }),
+    signal: AbortSignal.timeout(25000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`HTTP ${r.status} ${j.error && j.error.message || ""}`);
+  const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+  return parts.filter(p => p.text && !p.thought).map(p => p.text).join("");
+}
+async function designAI(request, env) {
+  if (request.method !== "POST") return json({ error: "Use POST" }, 405);
+  if (!env.GEMINI_API_KEY) return json({ error: "AI is not set up on this site" }, 503);
+  if (env.LIMITER) { const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") || "anon" }); if (!success) return json({ error: "Too many requests; wait a minute." }, 429); }
+  let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400); }
+  const ask = String(b.prompt || "").trim().slice(0, 2000); if (!ask) return json({ error: "Say what label you want" }, 400);
+  const cur = b.design ? JSON.stringify(b.design).slice(0, 30000) : "";
+  const prompt = (cur ? `Current design (label ${b.design.label ? JSON.stringify(b.design.label) : ""}):\n${cur}\n\n` : "") + `Printer: ${b.printer || "203 dpi thermal"}.\nRequest: ${ask}`;
+  let lastErr = "";
+  for (const model of GEMINI_MODELS) {
+    try {
+      const out = extractJSON(await geminiText(env, model, DESIGN_SYSTEM, prompt));
+      if (out && Array.isArray(out.items)) return json(Object.assign(out, { model }));
+      lastErr = "The AI reply was not a design";
+    } catch (e) { lastErr = e.message; }
+  }
+  return json({ error: "AI could not design that just now: " + lastErr.slice(0, 160) }, 502);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/pic2label") return pic2label(request, env);
     if (url.pathname === "/api/lead") return saveLead(request, env);
     if (url.pathname === "/api/leads") return listLeads(request, env);
+    if (url.pathname === "/api/design-ai") return designAI(request, env);
     if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);

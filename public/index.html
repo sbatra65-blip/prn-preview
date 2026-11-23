@@ -280,6 +280,15 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-welcome button b { font: 600 15px var(--font-head); }
 .dz-welcome button span { color: var(--muted); }
 .dz-stage { position: relative; }
+.dz-ask { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: linear-gradient(90deg, var(--accent-soft), #fff); border-bottom: 1px solid var(--line); }
+.dz-ask .ai { font: 700 11px var(--font); color: #fff; background: var(--accent); border-radius: 6px; padding: 4px 6px; }
+.dz-ask input#dzAskIn { flex: 1 1 320px; min-width: 0; font: 14px var(--font); padding: 8px 10px; border: 1px solid var(--accent-line); border-radius: 8px; background: #fff; }
+.dz-ask select { font: 13px var(--font); padding: 6px; border: 1px solid var(--line); border-radius: 8px; }
+.dz-ask .ed { font-size: 12.5px; color: var(--muted); display: flex; gap: 5px; align-items: center; }
+.dz-ask #dzMic.on { background: var(--bad); color: #fff; border-color: var(--bad); }
+.dz-ask .msg { flex-basis: 100%; font-size: 12.5px; color: var(--muted); min-height: 0; }
+.dz-ask .msg:empty { display: none; }
+#dzDlg.viewing .dz-ask { display: none; }
 .dz-ribbon { background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 5; }
 .dz-ribbon .rt { display: flex; gap: 2px; padding: 4px 12px 0; border-bottom: 1px solid var(--line); background: var(--bg); }
 .dz-ribbon .rt button { border: 1px solid transparent; border-bottom: 0; background: none; font: 600 13px var(--font); color: var(--muted); padding: 7px 14px; border-radius: 8px 8px 0 0; cursor: pointer; margin-bottom: -1px; }
@@ -624,6 +633,15 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 </div>
   <div class="dz-body">
     <div class="dz-main">
+      <form class="dz-ask" id="dzAsk" autocomplete="off">
+        <span class="ai" aria-hidden="true">AI</span>
+        <input id="dzAskIn" placeholder="Describe a label or a change, e.g. 100×50 mm rice bag label with MRP, batch and EAN-13" aria-label="Describe the label you want">
+        <select id="dzAskLang" aria-label="Speech language" title="Language you will speak"><option value="en-IN">English</option><option value="hi-IN">हिंदी</option></select>
+        <button type="button" class="btn sm" id="dzMic" title="Speak your request" aria-label="Speak">🎤</button>
+        <label class="ed"><input type="checkbox" id="dzAskEdit" checked> change current</label>
+        <button type="submit" class="btn sm primary" id="dzAskGo">Design it</button>
+        <div class="msg" id="dzAskMsg" aria-live="polite"></div>
+      </form>
       <div class="dz-bar">
         <span id="dzInfo" style="font-size:13px;color:var(--muted)"></span>
         <span id="dzWarn" style="font-size:13px;color:var(--ink)"></span>
@@ -638,6 +656,7 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
         <div class="dz-welcome" id="dzWelcome" hidden>
           <h2>What would you like to do?</h2>
           <div class="wg">
+            <button type="button" data-w="ai"><b>Describe it, AI designs it</b><span>Type or speak: “100×50 mm label for 1 kg rice with MRP and EAN-13”</span></button>
             <button type="button" data-w="new"><b>Design a new label</b><span>Pick the printer and label size, then add text, barcodes and shapes</span></button>
             <button type="button" data-w="open"><b>Open a PRN file</b><span>See how a printer file will print, in any of 8 printer languages</span></button>
             <button type="button" data-w="paste"><b>Paste printer code</b><span>Paste TSPL, ZPL, EPL or other code to preview or edit it</span></button>
@@ -3262,6 +3281,54 @@ function dzRibbonShow(tab) {
 for (const el of document.querySelectorAll(".dz-box [data-ic]")) el.insertAdjacentHTML("afterbegin", dzIcon(el.dataset.ic, 22));
 
 
+/* design by prompt (typed or spoken) */
+function dzForAI() { // the design as the AI sees it: no image data, rounded numbers
+  const D = dz.D, keep = ["id", "type", "x", "y", "w", "h", "text", "data", "symbology", "thickness", "rot", "curve", "path", "pw", "ph", "kind", "fill", "align", "color", "fillColor", "textColor", "bold", "qrKind", "contact", "name"];
+  return { label: { w: r1(dzLW()), h: D.h, across: D.across }, items: D.items.map(it => Object.fromEntries(Object.entries(it).filter(([k]) => keep.includes(k)).map(([k, v]) => [k, typeof v === "number" ? r1(v) : v]))) };
+}
+async function dzAsk(text) {
+  text = String(text || "").trim(); if (!text) return;
+  const D = dz.D, edit = $("dzAskEdit").checked && D.items.length, msg = $("dzAskMsg"), go = $("dzAskGo");
+  go.disabled = true; msg.textContent = "Designing…";
+  try {
+    const p = dzPrinter(), r = await fetch("/api/design-ai", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prompt: text, design: edit ? dzForAI() : null, printer: `${p.brand} ${p.model}, ${D.dpi} dpi, prints ${D.pw} mm wide, ${DZ_LANG_NAME[D.lang]}` }) });
+    const j = await r.json().catch(() => ({})); if (!r.ok || !Array.isArray(j.items)) throw new Error(j.error || "AI did not return a design");
+    clearTimeout(dzSave.t); dzHist(); // so Undo brings the old design back
+    const old = Object.fromEntries(D.items.map(i => [i.id, i])), L = j.label || {};
+    if (L.h > 4) D.h = Math.min(400, +L.h);
+    if (!edit && L.across >= 1) D.across = Math.min(20, Math.round(L.across));
+    if (L.w > 4) { const want = r1(+L.w * D.across + 2 * D.edge + (D.across - 1) * D.hgap); D.paper = Math.min(320, want); }
+    let id = 1; const num = v => (typeof v === "number" && isFinite(v) ? v : +v || 0);
+    D.items = j.items.filter(o => o && typeof o === "object" && ["text", "barcode", "line", "box", "shape", "image"].includes(o.type)).map(o => {
+      const it = Object.assign({}, o); for (const k of ["x", "y", "w", "h", "thickness", "rot", "curve", "pw", "ph"]) if (k in it) it[k] = num(it[k]);
+      const prev = old[o.id]; if (it.type === "image") { if (!prev || !prev.src) return null; Object.assign(it, { src: prev.src, ratio: prev.ratio, method: prev.method, threshold: prev.threshold }); }
+      if (it.type === "barcode" && it.qrKind === "contact") it.data = dzContact(it);
+      if (it.type === "shape") Object.assign(it, { align: it.align || "center", maxH: 0, thickness: "thickness" in it ? it.thickness : 0.5 });
+      if (it.type === "text" && !(it.h > 0)) it.h = 3; it.id = id++; return it;
+    }).filter(Boolean);
+    dz.seq = id; dz.sel = null; dzSetupForm(); dzProps(); dzSave(); for (const it of D.items) dzEnsureFont(it);
+    msg.textContent = (j.reply || "Done.") + " · Undo (Ctrl+Z) to go back"; $("dzAskEdit").checked = true; $("dzAskIn").value = "";
+    if (D.paper > D.mw) msg.textContent += ` · Note: ${D.paper} mm liner is wider than this printer takes.`;
+  } catch (e) { msg.textContent = e.message; }
+  finally { go.disabled = false; }
+}
+$("dzAsk").addEventListener("submit", e => { e.preventDefault(); dzAsk($("dzAskIn").value); });
+(function dzVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $("dzMic");
+  if (!SR) { mic.title = "Speaking needs Chrome or Edge"; mic.onclick = () => toast("Speaking needs Chrome or Edge; type your request instead"); return; }
+  let rec = null;
+  mic.onclick = () => {
+    if (rec) { rec.stop(); return; }
+    rec = new SR(); rec.lang = $("dzAskLang").value; rec.interimResults = true; rec.continuous = false;
+    let final = ""; mic.classList.add("on"); $("dzAskMsg").textContent = "Listening… speak your label or change";
+    rec.onresult = ev => { let t = ""; for (const r of ev.results) { t += r[0].transcript; if (r.isFinal) final = t; } $("dzAskIn").value = t; };
+    rec.onerror = ev => { $("dzAskMsg").textContent = ev.error === "not-allowed" ? "Microphone permission was refused." : "Could not hear that: " + ev.error; };
+    rec.onend = () => { mic.classList.remove("on"); rec = null; if (final.trim()) dzAsk(final); };
+    rec.start();
+  };
+})();
+
 /* wiring */
 $("dzPrinter").addEventListener("change", () => { dzPrinterChanged(false); dzDraw(); dzSave(); });
 $("dzLang").addEventListener("change", () => { dz.D.lang = $("dzLang").value; dzDraw(); dzSave(); });
@@ -3271,6 +3338,7 @@ for (const id of ["dzPaper", "dzAcross", "dzHGap", "dzEdge", "dzH", "dzVGap"]) $
 for (const b of document.querySelectorAll("[data-add]")) b.addEventListener("click", () => dzAdd(b.dataset.add));
 $("fileIn").addEventListener("change", () => { if (APP) setTimeout(dzShowViewer, 80); });
 $("dzWelcome").addEventListener("click", e => {
+  if (e.target.closest("[data-w='ai']")) { $("dzWelcome").hidden = true; store.set("p2l-welcomed", "1"); $("dzAskEdit").checked = false; $("dzAskIn").focus(); return; }
   const b = e.target.closest("[data-w]"); if (!b) return; $("dzWelcome").hidden = true; store.set("p2l-welcomed", "1");
   const w = b.dataset.w;
   if (w === "new") { dz.D = dzDefault(); dz.D.items = []; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Label"); dzSave(); }
