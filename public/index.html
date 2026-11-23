@@ -235,6 +235,10 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 .dz-o { position: absolute; cursor: move; user-select: none; touch-action: none; color: #000; }
 .dz-o.sel { outline: 1.5px dashed var(--accent); outline-offset: 1px; z-index: 2; }
 .dz-o.over { outline: 2px solid #dc2626; outline-offset: 1px; }
+.dz-o.cd-bad { animation: dzCdBlink 0.9s steps(2, start) infinite; outline: 2.5px solid #dc2626; outline-offset: 2px; }
+.dz-o.cd-bad::after { content: "Check digit"; position: absolute; left: 0; top: -18px; font: 600 11px var(--font); color: #fff; background: #dc2626; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+@keyframes dzCdBlink { to { outline-color: transparent; opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .dz-o.cd-bad { animation: none; } }
 .dz-o.head { outline: 2px solid #7c3aed; outline-offset: 1px; }
 .dz-o.edge { outline: 1.5px dashed #d97706; outline-offset: 1px; }
 .dz-o.over .h { background: #dc2626; } .dz-o.over .rh { border-color: #dc2626; } .dz-o.over .rh::after { background: #dc2626; }
@@ -2902,6 +2906,7 @@ function dzEl(it, s, live, col = 0) {
 function dzPaint(el, it, s) {
   const lw = dzLW(), D = dz.D;
   dzSnapBar(it); const dm = dzDims(it), bx = dzBox(it);
+  if (it.type === "barcode" && DZ_CD[it.symbology] && !it.parts) { const r = dzCheckFull(it.symbology, it.data); el.classList.toggle("cd-bad", !!r && (!!r.err || (r.typed !== null && !r.ok))); el.title = r && r.err ? r.err : r && !r.ok ? `Check digit should be ${r.cd}` : ""; }
   Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: Math.max(1, bx.w * s) + "px", height: Math.max(1, bx.h * s) + "px", border: "", background: "" });
 
   const keep = el.querySelector(".h"), keepR = el.querySelector(".rh");
@@ -3183,6 +3188,22 @@ function dzCheckInfo(it) {
   return `<b>Check digit ${r.cd}</b> · ${name} encodes <b style="font-family:var(--font-mono,monospace);letter-spacing:.05em">${r.full.slice(0, -1)}<span style="color:var(--accent);text-decoration:underline">${r.cd}</span></b>`
     + (r.typed !== null && !r.ok ? `<br><span style="color:#b42318">You typed ${r.typed} as the last digit, but the check digit is ${r.cd}. The barcode uses ${r.cd}; check the number.</span>` : r.typed !== null ? " · matches the digit you typed" : "");
 }
+// Wrong check digit typed: tell the user once per value, with a one-click fix
+function dzCdPop(it) {
+  const r = dzCheckFull(it.symbology, it.data); if (!r || r.err || r.typed === null || r.ok || it._cdAsked === it.data) return;
+  it._cdAsked = it.data; const name = (DZ_SYM[it.symbology] || { name: "" }).name;
+  let d = $("dzCdDlg");
+  if (!d) { d = document.createElement("dialog"); d.id = "dzCdDlg"; d.setAttribute("aria-labelledby", "dzCdH"); d.style.cssText = "max-width:440px;border:1px solid var(--line);border-radius:14px;padding:0;background:var(--surface);color:var(--ink)"; document.body.append(d); }
+  const body = String(it.data).replace(/\D/g, "").slice(0, DZ_CD[it.symbology]);
+  d.innerHTML = `<div style="padding:20px 22px"><div style="display:flex;gap:10px;align-items:center;margin-bottom:8px"><span style="width:30px;height:30px;border-radius:50%;background:#fee4e2;color:#b42318;display:grid;place-items:center;font-weight:700">!</span><h2 id="dzCdH" style="font:600 18px var(--font-head);margin:0">${name} checksum error</h2></div>
+    <p style="margin:0 0 10px;font-size:14px;line-height:1.5">The last digit you typed is <b style="color:#b42318">${r.typed}</b>, but for <b>${body}</b> the check digit must be <b style="color:var(--accent)">${r.cd}</b>.</p>
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font:15px var(--font-mono,monospace);background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:12px"><span style="color:var(--muted);font:12px var(--font)">Typed</span><span>${body}<b style="color:#b42318;text-decoration:line-through">${r.typed}</b></span><span style="color:var(--muted);font:12px var(--font)">Correct</span><span>${body}<b style="color:var(--accent)">${r.cd}</b></span></div>
+    <p class="dz-cap" style="margin:0 0 14px">A wrong check digit usually means a mistyped number, so check it against the product master. Printers always encode the correct check digit, so the printed barcode would not match the number you typed.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="dzCdFix">Use ${body}${r.cd}</button><button type="button" class="btn" id="dzCdKeep">I'll check the number</button></div></div>`;
+  d.querySelector("#dzCdFix").onclick = () => { it.data = body + r.cd; d.close(); dzRefresh(it); dzSave(); dzProps(); toast("Check digit corrected"); };
+  d.querySelector("#dzCdKeep").onclick = () => { d.close(); const t = $("dzData"); if (t) t.focus(); };
+  d.showModal();
+}
 function dzHriText(it) { // what prints under the bars
   let d = it.esc ? dzPlain(it.data) : String(it.data || ""); const sym = it.symbology;
   if (sym === "ean13") { d = d.replace(/\D/g, "").slice(0, 12); return d.length === 12 ? ean13Full(d) : d; }
@@ -3434,7 +3455,7 @@ function dzProps() {
     }
     if (it.type === "image" && it.lock !== false && (k === "w" || k === "h")) { const n = +v || 1; if (k === "w") { it.w = n; it.h = r1(n * it.ratio); } else { it.h = n; it.w = r1(n / it.ratio); } dzRefresh(it); dzSave(); return; }
     if (k === "qrKind") { it.qrKind = v; if (v === "contact") { it.contact = it.contact || { name: "", org: "", tel: "", email: "", url: "", adr: "", title: "" }; it.data = dzContact(it); } dzRefresh(it); dzSave(); return dzProps(); }
-    if (k === "text" || k === "data") { it[k] = v; dzSyncLinks(); if (k === "data" && $("dzCD")) $("dzCD").innerHTML = dzCheckInfo(it); }
+    if (k === "text" || k === "data") { it[k] = v; dzSyncLinks(); if (k === "data" && $("dzCD")) { $("dzCD").innerHTML = dzCheckInfo(it); clearTimeout(dzCdPop.t); dzCdPop.t = setTimeout(() => dzCdPop(it), 700); } }
     else if (k === "symbology") { if (!v) return; dzSetSym(it, v); return; }
     else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
     else if (k === "len") { const n = Math.max(1, +v || 1); if (it.w >= it.h) it.w = n; else it.h = n; }
