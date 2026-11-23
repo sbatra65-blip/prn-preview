@@ -674,6 +674,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <label id="dzCustomMW" hidden>Media width, mm<input id="dzMaxMW" type="number" min="20" max="320" step="0.1"></label>
       </div><div class="rl" id="dzCaps">Printer</div></div>
       <div class="rg"><div class="rr sf">
+        <label class="w2">Label size<select id="dzSize" aria-describedby="dzSizeNote"></select></label>
         <label>Liner width, mm<input id="dzPaper" type="number" min="10" max="320" step="0.5" value="104"></label>
         <label>Labels across<input id="dzAcross" type="number" min="1" max="20" step="1" value="1"></label>
         <label>Gap between, mm<input id="dzHGap" type="number" min="0" max="20" step="0.5" value="3"></label>
@@ -682,7 +683,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <label>Gap below, mm<input id="dzVGap" type="number" min="0" max="20" step="0.5" value="3"></label>
         <label>Label width (auto)<input id="dzW" readonly></label>
         <label>&nbsp;<button type="button" class="btn sm" id="dzTurnLabel" title="Swap width and height and turn every object, e.g. a 150 × 100 mm label fed 100 mm wide">Turn label 90°</button></label>
-      </div><div class="rl">Media and labels across</div></div>
+      </div><div class="rl" id="dzSizeNote">Media and labels across</div></div>
       <div class="rg"><div class="rr sf">
         <label>Label colour<input id="dzStock" type="color" value="#ffffff"></label>
         <label>Print colour<input id="dzInk" type="color" value="#000000"></label>
@@ -2569,8 +2570,45 @@ const DZ_PRINTERS = [
   ["Zebra", "ZT411", [203, 300, 600], ["ZPL"], 104, 114, "Industrial"],
   ["SATO", "CL4NX Plus", [203, 300, 600], ["SBPL", "ZPL", "DPL"], 104, 128, "Industrial"],
   ["Citizen", "CL-S621II", [203], ["ZPL", "DPL", "EPL2"], 104, 118, "Desktop"],
+  ["Epson", "ColorWorks CW-C6000 (4 inch colour)", [300, 600], ["ZPL"], 108, 112, "Colour"],
+  ["Epson", "ColorWorks CW-C6500 (8 inch colour)", [300, 600], ["ZPL"], 212, 216, "Colour"],
+  ["Primera", "LX500 (colour)", [300, 600], ["ZPL"], 101.6, 108, "Colour driver"],
+  ["Primera", "LX610 (colour, cutter)", [300, 600], ["ZPL"], 127, 133, "Colour driver"],
   ["Any", "Custom printer", [203, 300, 600], ["TSPL", "ZPL", "EPL2", "PGL", "DPL", "FP", "SBPL", "CPCL"], 104, 112, "Custom"],
-].map(([brand, model, dpis, langs, pw, mw, kind]) => ({ id: (brand + "-" + model).replace(/\W+/g, "-").toLowerCase(), brand, model, dpis, langs, pw, mw, kind }));
+].map(([brand, model, dpis, langs, pw, mw, kind]) => ({ id: (brand + "-" + model).replace(/\W+/g, "-").toLowerCase(), brand, model, dpis, langs, pw, mw, kind, colour: kind.startsWith("Colour"), driver: kind === "Colour driver" }));
+// Stock label sizes: [width, height, across, gap between, edge, gap below] in mm. The list shown is
+// filtered to what fits the chosen printer's media and print width, with sizes in dots at the chosen dpi.
+const DZ_SIZES = [
+  [25, 25, 1, 0, 2, 3], [38, 25, 1, 0, 2, 3], [50, 25, 1, 0, 2, 3], [50, 30, 1, 0, 2, 3], [50, 38, 1, 0, 2, 3], [50, 50, 1, 0, 2, 3],
+  [58, 40, 1, 0, 2, 3], [70, 50, 1, 0, 2, 3], [75, 38, 1, 0, 2, 3], [75, 50, 1, 0, 2, 3], [76, 102, 1, 0, 2, 3],
+  [100, 25, 1, 0, 2, 3], [100, 38, 1, 0, 2, 3], [100, 50, 1, 0, 2, 3], [100, 75, 1, 0, 2, 3], [100, 100, 1, 0, 2, 3],
+  [100, 150, 1, 0, 2, 3], [102, 76, 1, 0, 1, 3], [102, 152, 1, 0, 1, 3], [104, 152, 1, 0, 0, 3],
+  [127, 76, 1, 0, 2, 3], [148, 105, 1, 0, 2, 3], [150, 100, 1, 0, 2, 3], [150, 150, 1, 0, 2, 3], [150, 200, 1, 0, 2, 3],
+  [203, 152, 1, 0, 2, 3], [210, 148, 1, 0, 2, 3], [210, 297, 1, 0, 2, 3],
+  [25, 15, 2, 2, 2, 2], [38, 25, 2, 2, 2, 3], [50, 25, 2, 2, 1, 3], [50, 30, 2, 2, 1, 3], [50, 38, 2, 2, 1, 3], [50, 50, 2, 2, 1, 3],
+  [25, 12, 3, 2, 2, 2], [32, 25, 3, 2, 2, 3], [33, 15, 3, 2, 1.5, 2], [33, 22, 3, 2, 1.5, 3], [33, 25, 3, 2, 1.5, 3], [35, 25, 3, 2, 1, 3],
+  [25, 25, 4, 2, 1, 3], [24, 12, 4, 2, 1, 2], [20, 10, 5, 1.5, 1, 2],
+];
+const dzLiner = s => r1(s[2] * s[0] + (s[2] - 1) * s[3] + 2 * s[4]);
+const dzDots = (mm, dpi) => Math.round(mm / 25.4 * dpi);
+function dzSizes() {
+  const D = dz.D, sel = $("dzSize"); if (!sel || !D) return;
+  const ok = DZ_SIZES.filter(s => dzLiner(s) <= D.mw + 0.01 && dzLiner(s) - s[4] <= D.pw + 0.01);
+  const dpi = D.lang === "EPL2" ? 203 : D.dpi, groups = [[1, "One label across"], [2, "Two across"], [3, "Three across"], [4, "Four or more across"]];
+  sel.replaceChildren(new Option("Custom size (type below)", ""));
+  for (const [n, name] of groups) {
+    const list = ok.filter(s => n === 4 ? s[2] >= 4 : s[2] === n); if (!list.length) continue;
+    const g = document.createElement("optgroup"); g.label = name;
+    for (const s of list) {
+      const inch = s[0] % 25.4 < 0.6 || 25.4 - (s[0] % 25.4) < 0.6 ? ` (${(s[0] / 25.4).toFixed(0)}×${(s[1] / 25.4).toFixed(s[1] % 25.4 < 0.6 || 25.4 - (s[1] % 25.4) < 0.6 ? 0 : 1)} in)` : "";
+      g.append(new Option(`${s[0]} × ${s[1]} mm${s[2] > 1 ? `, ${s[2]} across` : ""}${inch} · ${dzDots(s[0], dpi)} × ${dzDots(s[1], dpi)} dots · liner ${dzLiner(s)} mm`, DZ_SIZES.indexOf(s)));
+    }
+    sel.append(g);
+  }
+  const lw = r1(dzLW()), cur = ok.find(s => s[2] === D.across && Math.abs(s[0] - lw) < 0.3 && s[1] === D.h);
+  sel.value = cur ? String(DZ_SIZES.indexOf(cur)) : "";
+  $("dzSizeNote").textContent = `${ok.length} stock sizes fit the ${dzPrinter().brand === "Any" ? "printer" : dzPrinter().model} (media up to ${D.mw} mm, prints ${D.pw} mm) · sizes in dots at ${dpi} dpi`;
+}
 const DZ_LANG_NAME = { TSPL: "TSPL · TSC", ZPL: "ZPL · Zebra", EPL2: "EPL2 · Eltron", PGL: "PGL · Printronix", DPL: "DPL · Datamax", FP: "Fingerprint · Honeywell", SBPL: "SBPL · SATO", CPCL: "CPCL · mobile" };
 const DZ_SYMS = [["code128", "Code 128"], ["gs1-128", "GS1-128"], ["ean13", "EAN-13"], ["upca", "UPC-A"], ["code39", "Code 39"], ["qrcode", "QR code"], ["datamatrix", "DataMatrix"]];
 const dz = { zoom: 1, sel: null, seq: 1, D: null };
@@ -2702,7 +2740,10 @@ function dzPrinterChanged(keep) {
 }
 function dzCaps() {
   const D = dz.D, p = dzPrinter();
-  $("dzCaps").textContent = `${p.kind} · prints ${D.pw} mm wide · media up to ${D.mw} mm · ${p.langs.map(l => DZ_LANG_NAME[l].split(" · ")[0]).join(", ")} · ${p.dpis.join("/")} dpi`;
+  $("dzCaps").textContent = p.driver ? `Colour inkjet · prints ${D.pw} mm wide · media up to ${D.mw} mm · no printer language: print File → Export colour image through its Windows driver`
+    : p.colour ? `Colour inkjet · prints ${D.pw} mm wide · media up to ${D.mw} mm · ZPL II prints black only; for colour use File → Export colour image with its driver`
+    : `${p.kind} · prints ${D.pw} mm wide · media up to ${D.mw} mm · ${p.langs.map(l => DZ_LANG_NAME[l].split(" · ")[0]).join(", ")} · ${p.dpis.join("/")} dpi`;
+  dzSizes();
 }
 function dzMedia() {
   const D = dz.D, num = (id, min, max) => Math.min(max, Math.max(min, +$(id).value || 0));
@@ -2714,7 +2755,7 @@ function dzMedia() {
   if (D.paper > D.mw) w.push(`Liner ${D.paper} mm is wider than this printer takes (${D.mw} mm).`);
   else if (D.paper - D.edge > D.pw) w.push(`Print width is ${D.pw} mm: anything beyond ${D.pw} mm from the left edge of the liner will not print.`);
   $("dzMediaWarn").hidden = !w.length; $("dzMediaWarn").textContent = w.join(" ");
-  dzDraw(); dzSave();
+  dzSizes(); dzDraw(); dzSave();
 }
 
 /* canvas */
@@ -3422,6 +3463,7 @@ function dzColourPNG() {
   const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = `label-design-colour-${D.across}up.png`; a.click();
 }
 function dzDownload() {
+  if (dzPrinter().driver) { toast("This colour printer has no printer language: use File → Export colour image and print it through its Windows driver."); return; }
   if (!dzCheck()) return;
   const D = dz.D, d = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayout(), D.lang, d);
   const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `design_${D.across}up_${D.lang}_${d}dpi.prn`; a.click();
@@ -3695,8 +3737,13 @@ $("dzAsk").addEventListener("submit", e => { e.preventDefault(); dzAsk($("dzAskI
 
 /* wiring */
 $("dzPrinter").addEventListener("change", () => { dzPrinterChanged(false); dzDraw(); dzSave(); });
-$("dzLang").addEventListener("change", () => { dz.D.lang = $("dzLang").value; dzDraw(); dzSave(); });
+$("dzLang").addEventListener("change", () => { dz.D.lang = $("dzLang").value; dzSizes(); dzDraw(); dzSave(); });
 $("dzDpi").addEventListener("change", () => { dz.D.dpi = +$("dzDpi").value; dzCaps(); dzDraw(); dzSave(); });
+$("dzSize").addEventListener("change", () => { const s = DZ_SIZES[+$("dzSize").value]; if (!$("dzSize").value || !s) return;
+  const D = dz.D; clearTimeout(dzSave.t); dzHist();
+  [D.across, D.hgap, D.edge, D.h, D.vgap] = [s[2], s[3], s[4], s[1], s[5]]; D.paper = dzLiner(s);
+  for (const k of ["paper", "across", "hgap", "edge", "h", "vgap"]) $("dz" + { paper: "Paper", across: "Across", hgap: "HGap", edge: "Edge", h: "H", vgap: "VGap" }[k]).value = D[k];
+  dzMedia(); if (typeof dzFit === "function") dzFit(); toast(`${s[0]} × ${s[1]} mm${s[2] > 1 ? `, ${s[2]} across` : ""} on ${dzLiner(s)} mm liner`); });
 for (const id of ["dzMaxPW", "dzMaxMW"]) $(id).addEventListener("input", () => { dz.D.pw = +$("dzMaxPW").value || 104; dz.D.mw = +$("dzMaxMW").value || 112; dzCaps(); dzMedia(); });
 for (const id of ["dzPaper", "dzAcross", "dzHGap", "dzEdge", "dzH", "dzVGap"]) $(id).addEventListener("input", dzMedia);
 for (const b of document.querySelectorAll("[data-add]")) b.addEventListener("click", () => dzAdd(b.dataset.add));
