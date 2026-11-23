@@ -2610,7 +2610,36 @@ function dzSizes() {
   $("dzSizeNote").textContent = `${ok.length} stock sizes fit the ${dzPrinter().brand === "Any" ? "printer" : dzPrinter().model} (media up to ${D.mw} mm, prints ${D.pw} mm) · sizes in dots at ${dpi} dpi`;
 }
 const DZ_LANG_NAME = { TSPL: "TSPL · TSC", ZPL: "ZPL · Zebra", EPL2: "EPL2 · Eltron", PGL: "PGL · Printronix", DPL: "DPL · Datamax", FP: "Fingerprint · Honeywell", SBPL: "SBPL · SATO", CPCL: "CPCL · mobile" };
-const DZ_SYMS = [["code128", "Code 128"], ["gs1-128", "GS1-128"], ["ean13", "EAN-13"], ["upca", "UPC-A"], ["code39", "Code 39"], ["qrcode", "QR code"], ["datamatrix", "DataMatrix"]];
+// Every barcode the designer offers: [bwip-js id, name, group, kind]. kind: 1d = bars with digits, sq = square 2D,
+// 2d = rectangular 2D, post = postal (bar heights). DZ_NATIVE_SYM print with the printer's own barcode commands;
+// the rest are drawn at the printer's resolution, whole dots per module, and sent as a graphic (works in every language).
+const DZ_SYMS = [
+  ["code128", "Code 128", "Common"], ["gs1-128", "GS1-128 (EAN-128)", "Common"], ["ean13", "EAN-13", "Common"], ["qrcode", "QR code", "Common", "sq"], ["datamatrix", "DataMatrix / GS1 DataMatrix", "Common", "sq"],
+  ["upca", "UPC-A", "Retail"], ["upce", "UPC-E", "Retail"], ["ean8", "EAN-8", "Retail"], ["isbn", "ISBN (books)", "Retail"], ["ismn", "ISMN (music)", "Retail"], ["issn", "ISSN (journals)", "Retail"],
+  ["databaromni", "GS1 DataBar Omnidirectional", "GS1 DataBar"], ["databartruncated", "GS1 DataBar Truncated", "GS1 DataBar"], ["databarlimited", "GS1 DataBar Limited", "GS1 DataBar"], ["databarexpanded", "GS1 DataBar Expanded", "GS1 DataBar"],
+  ["databarstacked", "GS1 DataBar Stacked", "GS1 DataBar", "2d"], ["databarstackedomni", "GS1 DataBar Stacked Omni", "GS1 DataBar", "2d"], ["databarexpandedstacked", "GS1 DataBar Expanded Stacked", "GS1 DataBar", "2d"],
+  ["itf14", "ITF-14 (cartons)", "Logistics"], ["sscc18", "SSCC-18", "Logistics"], ["interleaved2of5", "Interleaved 2 of 5", "Logistics"], ["code39", "Code 39", "Logistics"], ["code39ext", "Code 39 Extended (full ASCII)", "Logistics"], ["code93", "Code 93", "Logistics"], ["code93ext", "Code 93 Extended", "Logistics"],
+  ["rationalizedCodabar", "Codabar", "Other linear"], ["code11", "Code 11", "Other linear"], ["code2of5", "Standard 2 of 5", "Other linear"], ["industrial2of5", "Industrial 2 of 5", "Other linear"], ["iata2of5", "IATA 2 of 5", "Other linear"], ["matrix2of5", "Matrix 2 of 5", "Other linear"], ["msi", "MSI Plessey", "Other linear"], ["plessey", "Plessey (UK)", "Other linear"], ["telepen", "Telepen", "Other linear"], ["channelcode", "Channel Code", "Other linear"],
+  ["pharmacode", "Pharmacode (Laetus)", "Pharma & health", "post"], ["pzn", "PZN (German pharma)", "Pharma & health"], ["hibccode128", "HIBC Code 128", "Pharma & health"], ["hibccode39", "HIBC Code 39", "Pharma & health"], ["hibcdatamatrix", "HIBC DataMatrix", "Pharma & health", "sq"], ["hibcqrcode", "HIBC QR code", "Pharma & health", "sq"],
+  ["microqrcode", "Micro QR", "2D", "sq"], ["datamatrixrectangular", "DataMatrix rectangular", "2D", "2d"], ["pdf417", "PDF417", "2D", "2d"], ["pdf417compact", "PDF417 compact", "2D", "2d"], ["micropdf417", "MicroPDF417", "2D", "2d"],
+  ["azteccode", "Aztec", "2D", "sq"], ["azteccodecompact", "Aztec compact", "2D", "sq"], ["maxicode", "MaxiCode (UPS)", "2D", "sq"], ["dotcode", "DotCode", "2D", "2d"], ["hanxin", "Han Xin", "2D", "sq"], ["codablockf", "Codablock F", "2D", "2d"], ["code16k", "Code 16K", "2D", "2d"], ["code49", "Code 49", "2D", "2d"],
+  ["onecode", "USPS Intelligent Mail", "Postal", "post"], ["postnet", "USPS POSTNET", "Postal", "post"], ["planet", "USPS PLANET", "Postal", "post"], ["royalmail", "Royal Mail 4-state", "Postal", "post"], ["kix", "Dutch KIX", "Postal", "post"], ["japanpost", "Japan Post", "Postal", "post"], ["auspost", "Australia Post", "Postal", "post"], ["daft", "DAFT", "Postal", "post"],
+];
+const DZ_SYM_EXAMPLE = { code128: "12345678", "gs1-128": "(01)08901234567890(10)B123", ean13: "890123456789", qrcode: "https://labeldesk.app", datamatrix: "LabelDesk",
+  upca: "01234567890", upce: "0123456", ean8: "9031101", isbn: "978-1-56581-231-4", ismn: "979-0-2605-3211-3", issn: "0317-8471 00",
+  databaromni: "(01)24012345678905", databartruncated: "(01)24012345678905", databarlimited: "(01)15012345678907", databarexpanded: "(01)98898765432106(3202)012345(15)991231",
+  databarstacked: "(01)24012345678905", databarstackedomni: "(01)24012345678905", databarexpandedstacked: "(01)98898765432106(3202)012345(15)991231",
+  itf14: "0460123456789", sscc18: "(00)376130321109103420", interleaved2of5: "2401234567", code39: "CODE39", code39ext: "Code39 Ext!", code93: "CODE93", code93ext: "Code93 Ext!",
+  rationalizedCodabar: "A0123456789B", code11: "0123456789", code2of5: "01234567", industrial2of5: "01234567", iata2of5: "01234567", matrix2of5: "01234567", msi: "0123456789", plessey: "01234ABCD", telepen: "ABCDEF", channelcode: "3493",
+  pharmacode: "117480", pzn: "123456", hibccode128: "A123BJC5D6E71", hibccode39: "A123BJC5D6E71", hibcdatamatrix: "A123BJC5D6E71", hibcqrcode: "A123BJC5D6E71",
+  microqrcode: "1234", datamatrixrectangular: "1234", pdf417: "LabelDesk PDF417", pdf417compact: "LabelDesk", micropdf417: "MicroPDF417",
+  azteccode: "LabelDesk", azteccodecompact: "1234", maxicode: "This is MaxiCode", dotcode: "This is DotCode", hanxin: "LabelDesk", codablockf: "CODABLOCK F", code16k: "Code 16K", code49: "CODE 49",
+  onecode: "0123456709498765432101234567891", postnet: "01234", planet: "01234567890", royalmail: "LE28HS9Z", kix: "1231FZ13XHS", japanpost: "6540123789-A-K-Z", auspost: "5956439111ABA 9", daft: "FATDAFTDAD" };
+const DZ_SYM = Object.fromEntries(DZ_SYMS.map(([v, n, g, k]) => [v, { name: n, group: g, kind: k || "1d" }]));
+const DZ_NATIVE_SYM = new Set(["code128", "gs1-128", "ean13", "upca", "code39", "qrcode", "datamatrix"]);
+const dzSymKind = it => (DZ_SYM[it.symbology] || { kind: "1d" }).kind;
+const dzSymOptions = cur => [...new Set(DZ_SYMS.map(x => x[2]))].map(g => `<optgroup label="${g}">${DZ_SYMS.filter(x => x[2] === g).map(([v, n]) => `<option value="${v}"${v === cur ? " selected" : ""}>${n}${DZ_NATIVE_SYM.has(v) ? "" : " ·"}</option>`).join("")}</optgroup>`).join("");
+function dzBcid(it, data) { const s = it.symbology; return s === "datamatrix" && /^\(\d/.test(data) ? "gs1datamatrix" : s === "qrcode" && /^\(\d/.test(data) ? "gs1qrcode" : s; }
 const dz = { zoom: 1, sel: null, seq: 1, D: null };
 const r1 = v => Math.round(v * 10) / 10;
 
@@ -2625,7 +2654,8 @@ function dzDefault() {
 }
 const dzPrinter = () => DZ_PRINTERS.find(p => p.id === dz.D.printer) || DZ_PRINTERS[0];
 const dzLW = (D = dz.D) => (D.paper - 2 * D.edge - (D.across - 1) * D.hgap) / D.across;
-const dzIs2D = it => it.type === "barcode" && (it.symbology === "qrcode" || it.symbology === "datamatrix");
+const dzIs2D = it => it.type === "barcode" && dzSymKind(it) === "sq";
+const dzIsBars = it => it.type === "barcode" && dzSymKind(it) === "1d"; // bars with human-readable digits
 // Fonts: "" = the printer's own scalable font (sharp, fast); any other family prints as a graphic
 const DZ_FONTS = [["", "Printer font (sharpest)"], "#Latin", ["Roboto", "Roboto"], ["Roboto Condensed", "Roboto Condensed"], ["Open Sans", "Open Sans"], ["Lato", "Lato"], ["Oswald", "Oswald"], ["Merriweather", "Merriweather (serif)"], ["Courier Prime", "Courier Prime (mono)"],
   "#Indian languages", ["Noto Sans Devanagari", "Hindi, Marathi, Nepali · देवनागरी"], ["Noto Sans Bengali", "Bengali, Assamese · বাংলা"], ["Noto Sans Gurmukhi", "Punjabi · ਗੁਰਮੁਖੀ"], ["Noto Sans Gujarati", "Gujarati · ગુજરાતી"], ["Noto Sans Oriya", "Odia · ଓଡ଼ିଆ"], ["Noto Sans Tamil", "Tamil · தமிழ்"], ["Noto Sans Telugu", "Telugu · తెలుగు"], ["Noto Sans Kannada", "Kannada · ಕನ್ನಡ"], ["Noto Sans Malayalam", "Malayalam · മലയാളം"], ["Noto Nastaliq Urdu", "Urdu · اردو"],
@@ -2875,7 +2905,7 @@ function dzPaint(el, it, s) {
   }
   else if (it.type === "box") { el.style.border = `${Math.max(1, (it.thickness || 0.3) * s)}px solid ${dzCol(it)}`; el.replaceChildren(); }
   else {
-    const sym = it.symbology, two = sym === "qrcode" || sym === "datamatrix";
+    const sym = it.symbology, two = dzSymKind(it) === "sq";
     if (!two) { // bars at their true width and height, digits underneath, as the printer prints them
       const pr = Math.min(3, (window.devicePixelRatio || 1) * 1.5), cv = dzRenderItem(it, s * pr, "all", true);
       cv.style.cssText = "width:100%;height:100%;image-rendering:auto"; el.replaceChildren(cv);
@@ -2885,7 +2915,7 @@ function dzPaint(el, it, s) {
     let data = String(it.data || "");
     if (sym === "ean13") data = data.replace(/\D/g, "").slice(0, 12);
     if (sym === "upca") data = data.replace(/\D/g, "").slice(0, 11);
-    const bcid = { "gs1-128": "gs1-128", upca: "upca" }[sym] || sym;
+    const bcid = dzBcid(it, data);
     const bc = dzCol(it).slice(1);
     try { bwipjs.toCanvas(c, Object.assign({ bcid, text: sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, scale: 2, barcolor: bc, textcolor: bc }, two ? {} : { height: 10, includetext: true, textsize: 8 })); el.replaceChildren(c);
       if (!two) { // show the width the printer will really use: whole dots per module, centred in the box
@@ -2956,7 +2986,7 @@ function dzDims(it) { // the item's own size in mm, before any rotation
   return { w: it.w, h: it.h };
 }
 function dzBox(it) { const d = dzDims(it), r = dzRot(it) * Math.PI / 180, c = Math.abs(Math.cos(r)), sn = Math.abs(Math.sin(r)); return { w: d.w * c + d.h * sn, h: d.w * sn + d.h * c }; }
-const dzNative = it => it.type !== "shape" && dzRot(it) % 90 === 0 && !dzCurve(it) && !dzOnPath(it) && !(it.type === "text" && (it.font || dzNonLatin(it) || it.para)); // printers turn these themselves; others print as a graphic
+const dzNative = it => it.type !== "shape" && !(it.type === "barcode" && !DZ_NATIVE_SYM.has(it.symbology)) && dzRot(it) % 90 === 0 && !dzCurve(it) && !dzOnPath(it) && !(it.type === "text" && (it.font || dzNonLatin(it) || it.para)); // printers turn these themselves; others print as a graphic
 function dzTurn(it, by) { // turn about the box centre so the item stays where it was
   const b = dzBox(it), cx = it.x + b.w / 2, cy = it.y + b.h / 2;
   it.rot = Math.round((((dzRot(it) + by) % 360) + 360) % 360 * 10) / 10; const n = dzBox(it);
@@ -3064,10 +3094,18 @@ function dzRenderItem(it, k, part, guide) {
   } else if (it.type === "image") { x.fillStyle = "#fff"; x.fillRect(0, 0, W, H); x.drawImage(dzImg(it), 0, 0, W, H); }
   else if (it.type === "barcode") {
     let data = String(it.data || ""); const sym = it.symbology;
-    if (dzIs2D(it)) { const b = bwipCanvas({ bcid: sym === "qrcode" ? "qrcode" : /^\(\d/.test(data) ? "gs1datamatrix" : "datamatrix", text: data }); if (b) x.drawImage(b, 0, 0, W, H); }
+    const kind = dzSymKind(it);
+    if (kind !== "1d") {
+      const b = bwipCanvas({ bcid: dzBcid(it, data), text: data, ...(kind === "post" ? { height: 5 } : {}) });
+      if (!b) { if (live) { x.fillStyle = "#b42318"; x.font = `${Math.max(8, H / 5)}px sans-serif`; x.fillText("Check barcode data", 2, H / 2); } }
+      else if (kind === "sq") x.drawImage(b, 0, 0, W, H);
+      else if (kind === "post") x.drawImage(b, 0, 0, W, H);
+      else { const f = Math.min(W / b.width, H / b.height), n = f >= 1 ? Math.floor(f) : f; x.drawImage(b, 0, 0, Math.round(b.width * n), Math.round(b.height * n)); } // keep the modules square
+    }
     else {
       if (sym === "ean13" || sym === "upca") data = data.replace(/\D/g, "").slice(0, sym === "ean13" ? 12 : 11);
       const bcid = sym, txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, b = bwipCanvas({ bcid, text: txt, height: 5 });
+      if (!b && live) { x.fillStyle = "#b42318"; x.font = `${Math.max(8, H / 5)}px sans-serif`; x.fillText("Check barcode data", 2, H / 2); }
       if (b) {
         const dpi = (dz.D && dz.D.dpi) || 203, mods = b.width, wd = dotsOf(it.w, dpi); let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
         const bw = Math.min(W, mods * n * (k * 25.4 / dpi)), hri = it.hri || "below", th = hri === "none" ? 0 : (it.hriSize > 0 ? it.hriSize * k : H * 0.2), bh = Math.round(hri === "none" ? H : H - th * 1.1);
@@ -3113,7 +3151,7 @@ function dzHriText(it) { // what prints under the bars
 }
 // A linear barcode prints at a whole number of dots per bar, so its box snaps to that true width
 function dzSnapBar(it) {
-  if (it.type !== "barcode" || dzIs2D(it) || !dz.D) return;
+  if (!dzIsBars(it) || !dz.D) return;
   let data = String(it.data || ""); const sym = it.symbology;
   if (sym === "ean13" || sym === "upca") data = data.replace(/\D/g, "").slice(0, sym === "ean13" ? 12 : 11);
   const txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, mods = linearModules(sym, txt); if (!mods) return;
@@ -3247,7 +3285,7 @@ function dzProps() {
       f.push(`<label>Height, mm<input value="${r1(dzDims(it).h)}" readonly title="${dzParaLines(it).length} line(s)"></label>`);
     } else f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
   } else if (it.type === "barcode") {
-    f.push(`<label class="full">Type<select data-k="symbology">${DZ_SYMS.map(([v, n]) => `<option value="${v}"${v === it.symbology ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
+    f.push(`<label class="full">Type <small style="font-weight:400">· = drawn as a graphic</small><select data-k="symbology">${dzSymOptions(it.symbology)}</select></label>`);
     if (it.symbology === "qrcode") f.push(`<label class="full">QR holds<select data-k="qrKind"><option value="text"${it.qrKind !== "contact" ? " selected" : ""}>Text or link</option><option value="contact"${it.qrKind === "contact" ? " selected" : ""}>Contact card (vCard)</option></select></label>`);
     if (it.symbology === "qrcode" && it.qrKind === "contact") for (const [k, n] of DZ_CONTACT) f.push(`<label class="full">${n}<input data-c="${k}" value="${String((it.contact || {})[k] || "").replace(/"/g, "&quot;")}"${k === "tel" ? ' inputmode="tel"' : k === "email" ? ' inputmode="email"' : ""}></label>`);
     else if (dzLinkSrc(it)) f.push(`<label class="full">Data (from the linked object)<textarea readonly>${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
@@ -3278,7 +3316,7 @@ function dzProps() {
     f.push(`<label>Max font size, pt<input data-pt="maxH" type="number" min="0" max="400" step="0.5" value="${+it.maxH > 0 ? dzToPt(it.maxH) : 0}" list="dzPtList" title="0 = as big as fits"></label>`);
     const ft = dzFitText(it); f.push(`<p class="dz-cap" style="grid-column:1/-1;margin:0">${String(it.text || "").trim() ? ft.length ? `Text fits at ${dzToPt(ft[0].h)} pt on ${ft.length} line${ft.length > 1 ? "s" : ""}.` : "Text does not fit: make the shape bigger or the text shorter." : "Shape only."}</p>`);
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
-  if (it.type === "barcode" && !dzIs2D(it)) {
+  if (dzIsBars(it)) {
     f.push(`<label>Human readable<select data-h="hri"><option value="below"${(it.hri || "below") === "below" ? " selected" : ""}>Below the bars</option><option value="above"${it.hri === "above" ? " selected" : ""}>Above the bars</option><option value="none"${it.hri === "none" ? " selected" : ""}>Off</option></select></label>`);
     if (it.hri !== "none") {
       f.push(`<label>Digits size, pt<input data-h="hriPt" type="number" min="0" step="0.5" value="${+it.hriSize > 0 ? dzToPt(it.hriSize / 0.86) : 0}" title="0 = automatic" list="dzPtList"></label>`);
@@ -3349,7 +3387,10 @@ function dzProps() {
     if (it.type === "image" && it.lock !== false && (k === "w" || k === "h")) { const n = +v || 1; if (k === "w") { it.w = n; it.h = r1(n * it.ratio); } else { it.h = n; it.w = r1(n / it.ratio); } dzRefresh(it); dzSave(); return; }
     if (k === "qrKind") { it.qrKind = v; if (v === "contact") { it.contact = it.contact || { name: "", org: "", tel: "", email: "", url: "", adr: "", title: "" }; it.data = dzContact(it); } dzRefresh(it); dzSave(); return dzProps(); }
     if (k === "text" || k === "data") { it[k] = v; dzSyncLinks(); }
-    else if (k === "symbology") { const was2 = dzIs2D(it); it.symbology = v; if (dzIs2D(it) && !was2) it.w = it.h = Math.min(it.w, 20); if (!dzIs2D(it) && was2) { it.w = 50; it.h = 15; } dzRefresh(it); dzSave(); return dzProps(); }
+    else if (k === "symbology") { const was = dzSymKind(it); it.symbology = v; const now = dzSymKind(it);
+      if (now !== was) { if (now === "sq") it.w = it.h = Math.min(Math.max(it.w, 10), 20); else if (now === "2d") { it.w = 40; it.h = 15; } else if (now === "post") { it.w = 60; it.h = 6; } else { it.w = 50; it.h = 15; } }
+      const ex = DZ_SYM_EXAMPLE[v]; if (ex && !bwipCanvas({ bcid: dzBcid(it, it.data || ""), text: String(it.data || "") })) it.data = ex; // keep the data if it still encodes, else a valid example
+      dzRefresh(it); dzSave(); return dzProps(); }
     else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
     else if (k === "len") { const n = Math.max(1, +v || 1); if (it.w >= it.h) it.w = n; else it.h = n; }
     else if (k === "thickness") { it.thickness = Math.max(0.1, +v || 0.1); if (it.type === "line") { if (it.w >= it.h) it.h = it.thickness; else it.w = it.thickness; } }
@@ -3428,7 +3469,7 @@ function dzAdd(kind) {
     D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave(); return; }
   const base = { text: { type: "text", h: 3.5, text: "New text" },
     para: { type: "text", h: 2.2, para: true, bw: r1(Math.max(15, Math.min(70, lw - 6))), align: "left", lg: 1.25, text: "Ingredients: wheat flour, sugar, edible vegetable oil, milk solids, salt.\nStore in a cool, dry place." },
-    gs1: { type: "barcode", symbology: "gs1-128", data: "(01)08901234567892(17)271231(10)B123", w: Math.min(80, lw - 4), h: 18 }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
+    gs1: { type: "barcode", symbology: "gs1-128", data: "(01)08901234567890(17)271231(10)B123", w: Math.min(80, lw - 4), h: 18 }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
     qrcode: { type: "barcode", symbology: "qrcode", data: "https://", w: 18, h: 18 },
     vcard: { type: "barcode", symbology: "qrcode", qrKind: "contact", contact: { name: "Your Name", org: "Company", tel: "+91 ", email: "", url: "", adr: "", title: "" }, w: Math.min(24, lw - 6, D.h - 6), h: Math.min(24, lw - 6, D.h - 6) }, datamatrix: { type: "barcode", symbology: "datamatrix", data: "(01)08901234567890", w: 15, h: 15 },
     line: { type: "line", w: Math.max(5, lw - 6), h: 0.4, thickness: 0.4 }, box: { type: "box", w: Math.min(30, lw - 6), h: Math.min(15, D.h - 6), thickness: 0.4 } }[kind];
@@ -3529,7 +3570,7 @@ function dzDownload() {
 const DZ_ICON = { text: "T", barcode: "▥", line: "─", box: "▭", image: "▣", shape: "◇" };
 function dzObjName(it) {
   if (it.type === "text") return it.text || "Text";
-  if (it.type === "barcode") return (dzIs2D(it) ? (it.qrKind === "contact" ? "Contact QR" : it.symbology === "qrcode" ? "QR" : "DataMatrix") : (DZ_SYMS.find(x => x[0] === it.symbology) || [, "Barcode"])[1]) + (it.qrKind === "contact" ? (it.contact && it.contact.name ? ": " + it.contact.name : "") : ": " + String(it.data || "").slice(0, 24));
+  if (it.type === "barcode") return (it.qrKind === "contact" ? "Contact QR" : (DZ_SYM[it.symbology] || { name: "Barcode" }).name.split(" (")[0].split(" / ")[0]) + (it.qrKind === "contact" ? (it.contact && it.contact.name ? ": " + it.contact.name : "") : ": " + String(it.data || "").slice(0, 24));
   if (it.type === "shape") return DZ_SHAPES[it.kind] + (it.text ? ": " + it.text.split("\n")[0] : "");
   if (it.type === "image") return "Image" + (it.name ? ": " + it.name : "");
   return it.type === "line" ? "Line" : "Box";
@@ -4486,7 +4527,7 @@ document.getElementById("ldPrintX").onclick = () => document.getElementById("ldP
     <p class="ld-err" id="dzGs1Err" role="alert"></p>
     <div class="ld-row"><button type="button" class="btn primary" id="dzGs1Use">Use this data</button><button type="button" class="btn" id="dzGs1Cancel">Cancel</button></div>
     <details class="ld-sec"><summary>About FNC1 and the special characters</summary>
-      <p class="dz-cap" style="margin-top:8px">In LabelDesk you type GS1 data with the identifier in brackets, e.g. <code>(01)08901234567892(17)271231(10)B123</code>. The brackets are only shown in the human-readable line; they are not encoded. When the label prints, LabelDesk puts FNC1 at the start of the barcode (that is what makes it GS1-128 / GS1 DataMatrix) and a group separator (FNC1 in GS1-128, ASCII 29 &lt;GS&gt; in DataMatrix) after each variable-length field such as batch (10) or serial (21), but not after the last one. Fixed-length fields (00, 01, 02, dates, weights) need no separator, so the builder puts them first to keep the barcode short. For a QR, GS1 asks for a Digital Link web address instead, e.g. <code>https://id.gs1.org/01/08901234567892/10/B123?17=271231</code>.</p>
+      <p class="dz-cap" style="margin-top:8px">In LabelDesk you type GS1 data with the identifier in brackets, e.g. <code>(01)08901234567890(17)271231(10)B123</code>. The brackets are only shown in the human-readable line; they are not encoded. When the label prints, LabelDesk puts FNC1 at the start of the barcode (that is what makes it GS1-128 / GS1 DataMatrix) and a group separator (FNC1 in GS1-128, ASCII 29 &lt;GS&gt; in DataMatrix) after each variable-length field such as batch (10) or serial (21), but not after the last one. Fixed-length fields (00, 01, 02, dates, weights) need no separator, so the builder puts them first to keep the barcode short. For a QR, GS1 asks for a Digital Link web address instead, e.g. <code>https://id.gs1.org/01/08901234567890/10/B123?17=271231</code>.</p>
     </details>
   </div>
 </dialog>
