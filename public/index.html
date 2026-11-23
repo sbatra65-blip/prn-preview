@@ -234,6 +234,12 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 .dz-o.over .h { background: #dc2626; } .dz-o.over .rh { border-color: #dc2626; } .dz-o.over .rh::after { background: #dc2626; }
 .dz-o.head .h { background: #7c3aed; } .dz-o.head .rh { border-color: #7c3aed; } .dz-o.head .rh::after { background: #7c3aed; }
 .dz-o.edge .h { background: #d97706; } .dz-o.edge .rh { border-color: #d97706; } .dz-o.edge .rh::after { background: #d97706; }
+.dz-label.multi .dz-o.sel .h, .dz-label.multi .dz-o.sel .rh { display: none; }
+.dz-label.multi .dz-o.sel { outline: 1.5px solid var(--accent); }
+.dz-marq { position: absolute; border: 1px dashed var(--accent); background: rgba(194, 65, 12, .08); pointer-events: none; z-index: 5; }
+.dz-mgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.dz-mgrid .rb { display: flex; flex-direction: column; align-items: center; gap: 2px; border: 1px solid #eef0f3; border-radius: 8px; background: #fff; padding: 6px 2px; font: 11.5px var(--font); color: #334155; cursor: pointer; }
+.dz-mgrid .rb:hover { background: var(--accent-soft); border-color: var(--accent-line); }
 .dz-o .em { position: absolute; pointer-events: none; z-index: 3; }
 .dz-o.over .em { background: #dc2626; } .dz-o.head .em { background: #7c3aed; } .dz-o.edge .em { background: #d97706; }
 .dz-o .em-l { left: -6px; top: 0; bottom: 0; width: 4px; border-radius: 2px; }
@@ -1865,20 +1871,21 @@ function layoutPRN(L, lang, dpi) {
       if (lang === "TSPL") {
         const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "128M" }[kind];
         const g1 = kind === "gs1-128" ? "!102" + gs1Raw(paren, "!102") : data; // 128M: !102 is FNC1
-        const [ax, ay] = mp(bx - x, 0); out.push(`BARCODE ${ax},${ay},"${t}",${bh},1,${rot},${n},${kind === "code39" ? n * 3 : n},"${tsplQ(g1)}"`);
+        const [ax, ay] = mp(bx - x, 0); out.push(`BARCODE ${ax},${ay},"${t}",${bh},${e.hriOff ? 0 : 1},${rot},${n},${kind === "code39" ? n * 3 : n},"${tsplQ(g1)}"`);
       } else if (lang === "ZPL") {
         const [fx, fy] = zo(bx - x, 0, mods * n, h);
-        if (kind === "ean13") out.push(`^BY${n}^FO${fx},${fy}^BE${ZR},${bh},Y,N^FD${data}^FS`);
-        else if (kind === "code39") out.push(`^BY${n},3^FO${fx},${fy}^B3${ZR},N,${bh},Y,N^FD${data}^FS`);
-        else if (kind === "gs1-128") out.push(`^BY${n}^FO${fx},${fy}^BC${ZR},${bh},Y,N,N,D^FD${paren}^FS`);
-        else out.push(`^BY${n}^FO${fx},${fy}^BC${ZR},${bh},Y,N,N^FD${data}^FS`);
+        const YN = e.hriOff ? "N" : "Y";
+        if (kind === "ean13") out.push(`^BY${n}^FO${fx},${fy}^BE${ZR},${bh},${YN},N^FD${data}^FS`);
+        else if (kind === "code39") out.push(`^BY${n},3^FO${fx},${fy}^B3${ZR},N,${bh},${YN},N^FD${data}^FS`);
+        else if (kind === "gs1-128") out.push(`^BY${n}^FO${fx},${fy}^BC${ZR},${bh},${YN},N,N,D^FD${paren}^FS`);
+        else out.push(`^BY${n}^FO${fx},${fy}^BC${ZR},${bh},${YN},N,N^FD${data}^FS`);
       } else if (lang === "EPL2") {
         const t = { code128: "1", ean13: "E30", code39: "3", "gs1-128": "1E" }[kind];
-        const [ax, ay] = mp(bx - x, 0); out.push(`B${ax},${ay},${rot / 90},${t},${n},${kind === "code39" ? n * 3 : n},${bh},B,"${kind === "gs1-128" ? raw : data}"`);
+        const [ax, ay] = mp(bx - x, 0); out.push(`B${ax},${ay},${rot / 90},${t},${n},${kind === "code39" ? n * 3 : n},${bh},${e.hriOff ? "N" : "B"},"${kind === "gs1-128" ? raw : data}"`);
       } else {
         const t = { code128: "C128B", ean13: "EAN13", code39: "C3/9", "gs1-128": "UCC-128" }[kind];
         const hin = bh / dpi, tenth = Math.max(1, Math.floor(hin * 10)), extra = Math.max(0, bh - Math.round(tenth / 10 * dpi));
-        pgl.bars.push("BARCODE", `${t};H${tenth}${extra ? "." + extra : ""};${y};${bx}`, `*${kind === "gs1-128" ? raw : data}*`, "PDF", "STOP");
+        pgl.bars.push("BARCODE", `${t};H${tenth}${extra ? "." + extra : ""};${y};${bx}`, `*${kind === "gs1-128" ? raw : data}*`, ...(e.hriOff ? [] : ["PDF"]), "STOP");
       }
     } else if (e.type === "image") {
       const im = e.imgEl; if (!im || !im.naturalWidth) { warn.push("An image had not loaded and was skipped."); continue; }
@@ -2565,7 +2572,21 @@ function dzUndo(step) {
   dz.hi += step; dz.D = JSON.parse(dz.hist[dz.hi]); if (!dz.D.items.some(i => i.id === dz.sel)) dz.sel = null;
   dz.restoring = true; dzSetupForm(); dzProps(); dz.restoring = false; try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) {}
 }
-function dzSave() { if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
+function dzLinkSrc(it) { return it.link ? dz.D.items.find(i => i.id === it.link && i.id !== it.id) : null; }
+function dzContentOf(it) { return it.type === "barcode" ? (it.qrKind === "contact" ? dzObjName(it) : String(it.data || "")) : it.type === "shape" ? String(it.text || "") : String(it.text || ""); }
+function dzSyncLinks() { // copy linked content (a few passes so chains settle); repaint what changed
+  if (!dz.D) return;
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false;
+    for (const it of dz.D.items) {
+      const src = dzLinkSrc(it); if (!src) continue;
+      const v = (it.linkPre || "") + dzContentOf(src) + (it.linkPost || ""), key = it.type === "barcode" ? "data" : "text";
+      if (it[key] !== v) { it[key] = v; changed = true; if (dz.s && $("dzDlg").open) dzRefresh(it); }
+    }
+    if (!changed) break;
+  }
+}
+function dzSave() { dzSyncLinks(); if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
 
 var APP = !new URLSearchParams(location.search).has("about");
 function dzShowViewer() {
@@ -2646,7 +2667,7 @@ function dzDraw() {
     if (D.stock && D.stock !== "#ffffff") lab.style.backgroundColor = D.stock;
     Object.assign(lab.style, { left: (D.edge + c * (lw + D.hgap)) * s + "px", top: D.vgap * s + "px", width: lw * s + "px", height: D.h * s + "px", backgroundSize: `${s * 5}px ${s * 5}px` });
     for (const it of D.items) lab.append(dzEl(it, s, !c, c));
-    if (!c) { lab.id = "dzLab"; lab.addEventListener("pointerdown", e => { if (e.target === lab) dzSelect(null); }); }
+    if (!c) { lab.id = "dzLab"; lab.addEventListener("pointerdown", e => { if (e.target === lab) dzMarquee(e, lab); }); }
     paper.append(lab);
   }
   $("dzInfo").textContent = `${D.across} × ${r1(lw)} × ${D.h} mm on ${D.paper} mm liner · ${DZ_LANG_NAME[D.lang].split(" · ")[0]} ${D.dpi} dpi`;
@@ -2672,7 +2693,7 @@ function dzMark(el, it) {
   return f;
 }
 function dzEl(it, s, live, col = 0) {
-  const el = document.createElement("div"); el.className = "dz-o" + (live && dz.sel === it.id ? " sel" : ""); el.dataset.id = it.id; el.dataset.col = col;
+  const el = document.createElement("div"); el.className = "dz-o" + (live && dzSelIds().includes(it.id) ? " sel" : ""); el.dataset.id = it.id; el.dataset.col = col;
   dzPaint(el, it, s);
   if (live) {
     const h = document.createElement("span"); h.className = "h"; el.append(h);
@@ -2683,7 +2704,7 @@ function dzEl(it, s, live, col = 0) {
 }
 function dzPaint(el, it, s) {
   const lw = dzLW(), D = dz.D;
-  const dm = dzDims(it), bx = dzBox(it);
+  dzSnapBar(it); const dm = dzDims(it), bx = dzBox(it);
   Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: Math.max(1, bx.w * s) + "px", height: Math.max(1, bx.h * s) + "px", border: "", background: "" });
 
   const keep = el.querySelector(".h"), keepR = el.querySelector(".rh");
@@ -2710,7 +2731,13 @@ function dzPaint(el, it, s) {
   }
   else if (it.type === "box") { el.style.border = `${Math.max(1, (it.thickness || 0.3) * s)}px solid ${dzCol(it)}`; el.replaceChildren(); }
   else {
-    const sym = it.symbology, two = sym === "qrcode" || sym === "datamatrix", c = document.createElement("canvas");
+    const sym = it.symbology, two = sym === "qrcode" || sym === "datamatrix";
+    if (!two) { // bars at their true width and height, digits underneath, as the printer prints them
+      const pr = Math.min(3, (window.devicePixelRatio || 1) * 1.5), cv = dzRenderItem(it, s * pr, "all", true);
+      cv.style.cssText = "width:100%;height:100%;image-rendering:auto"; el.replaceChildren(cv);
+    }
+    const c = document.createElement("canvas");
+    if (two) {
     let data = String(it.data || "");
     if (sym === "ean13") data = data.replace(/\D/g, "").slice(0, 12);
     if (sym === "upca") data = data.replace(/\D/g, "").slice(0, 11);
@@ -2722,7 +2749,7 @@ function dzPaint(el, it, s) {
         let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
         c.style.width = Math.min(100, mods * n / wd * 100) + "%"; c.style.margin = "0 auto";
       } }
-    catch (e) { const t = document.createElement("span"); t.className = "t"; t.style.cssText = "color:var(--bad);font-size:12px;font-family:var(--font)"; t.textContent = "Check barcode data"; el.replaceChildren(t); }
+    catch (e) { const t = document.createElement("span"); t.className = "t"; t.style.cssText = "color:var(--bad);font-size:12px;font-family:var(--font)"; t.textContent = "Check barcode data"; el.replaceChildren(t); } }
   }
   const r = dzRot(it);
   if (el.firstChild && (r || dzCurve(it))) { // turn the content about the box centre, the same way the printer output is built
@@ -2888,9 +2915,14 @@ function dzRenderItem(it, k, part, guide) {
     else {
       if (sym === "ean13" || sym === "upca") data = data.replace(/\D/g, "").slice(0, sym === "ean13" ? 12 : 11);
       const bcid = sym, txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, b = bwipCanvas({ bcid, text: txt, height: 5 });
-      if (b) { const mods = b.width; let n = Math.max(1, Math.min(10, Math.round(W / mods))); while (n > 1 && mods * n > W * 1.01) n--;
-        const bh = Math.round(H * 0.78), off = Math.round((W - mods * n) / 2); x.drawImage(b, off, 0, mods * n, bh);
-        x.font = DZ_FONT((H - bh) * 0.95); x.textAlign = "center"; x.textBaseline = "top"; x.fillText(txt, W / 2, bh + 1); }
+      if (b) {
+        const dpi = (dz.D && dz.D.dpi) || 203, mods = b.width, wd = dotsOf(it.w, dpi); let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
+        const bw = Math.min(W, mods * n * (k * 25.4 / dpi)), hri = it.hri || "below", th = hri === "none" ? 0 : (it.hriSize > 0 ? it.hriSize * k : H * 0.2), bh = Math.round(hri === "none" ? H : H - th * 1.1);
+        const by = hri === "above" ? H - bh : 0, off = Math.max(0, Math.round((W - bw) / 2));
+        x.drawImage(b, off, by, bw, bh);
+        if (live && ink.toLowerCase() !== "#000000") { x.save(); x.globalCompositeOperation = "source-in"; x.fillStyle = ink; x.fillRect(0, by, W, bh); x.restore(); }
+        if (hri !== "none") { x.fillStyle = ink; x.font = dzFontCss({ font: it.hriFont, bold: it.hriBold }, Math.max(4, th)); x.textAlign = "center"; x.textBaseline = hri === "above" ? "top" : "top"; x.fillText(dzHriText(it), W / 2, hri === "above" ? 0 : bh + th * 0.08); }
+      }
     }
   }
   return c;
@@ -2901,20 +2933,55 @@ function dzTurnCanvas(src, rot) { // any angle; returns a canvas sized to the tu
   x.fillStyle = "#fff"; x.fillRect(0, 0, W, H); x.translate(W / 2, H / 2); x.rotate(r); x.drawImage(src, -src.width / 2, -src.height / 2); return c;
 }
 
-function dzSelect(id) {
-  dz.sel = id;
-  for (const el of document.querySelectorAll("#dzLab .dz-o")) el.classList.toggle("sel", +el.dataset.id === id);
-  dzProps();
+function dzSelIds() { // every selected id; a lone dz.sel set elsewhere counts as a single selection
+  if (dz.sel == null) return [];
+  return dz.multi && dz.multi.has(dz.sel) && dz.multi.size > 1 ? [...dz.multi].filter(id => dz.D.items.some(i => i.id === id)) : [dz.sel];
+}
+function dzMarkSel() {
+  const ids = new Set(dzSelIds()); for (const el of document.querySelectorAll("#dzLab .dz-o")) el.classList.toggle("sel", ids.has(+el.dataset.id));
+  if ($("dzLab")) $("dzLab").classList.toggle("multi", ids.size > 1);
+}
+function dzSelect(id, add) {
+  if (!dz.multi || !dz.multi.has(dz.sel)) dz.multi = new Set(dz.sel != null ? [dz.sel] : []);
+  if (id == null) { dz.multi.clear(); dz.sel = null; }
+  else if (add) { if (dz.multi.has(id)) { dz.multi.delete(id); dz.sel = dz.multi.size ? [...dz.multi].pop() : null; } else { dz.multi.add(id); dz.sel = id; } }
+  else { dz.multi = new Set([id]); dz.sel = id; }
+  dzMarkSel(); dzProps();
+}
+function dzSelectMany(ids) { dz.multi = new Set(ids); dz.sel = ids.length ? ids[ids.length - 1] : null; dzMarkSel(); dzProps(); }
+function dzHriText(it) { // what prints under the bars
+  let d = String(it.data || ""); const sym = it.symbology;
+  if (sym === "ean13") { d = d.replace(/\D/g, "").slice(0, 12); return d.length === 12 ? ean13Full(d) : d; }
+  if (sym === "upca") return d.replace(/\D/g, "").slice(0, 11);
+  if (sym === "gs1-128") return d.includes("(") ? d : gs1Paren("\x1d" + d);
+  return d;
+}
+// A linear barcode prints at a whole number of dots per bar, so its box snaps to that true width
+function dzSnapBar(it) {
+  if (it.type !== "barcode" || dzIs2D(it) || !dz.D) return;
+  let data = String(it.data || ""); const sym = it.symbology;
+  if (sym === "ean13" || sym === "upca") data = data.replace(/\D/g, "").slice(0, sym === "ean13" ? 12 : 11);
+  const txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, mods = linearModules(sym, txt); if (!mods) return;
+  const dpi = dz.D.dpi, wd = dotsOf(it.w, dpi); let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
+  it.w = Math.ceil(mods * n / dpi * 25.4 * 100) / 100;
 }
 function dzRefresh(it) { // repaint one object on every label across
   for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${it.id}"]`)) dzPaint(el, it, dz.s);
 }
 function dzGrab(e, it, resize) {
-  e.preventDefault(); e.stopPropagation(); dzSelect(it.id);
+  e.preventDefault(); e.stopPropagation();
+  if (!resize && (e.shiftKey || e.ctrlKey || e.metaKey)) { dzSelect(it.id, true); return; }
+  const ids = dzSelIds(), group = !resize && ids.length > 1 && ids.includes(it.id);
+  if (!group) dzSelect(it.id);
+  const gs = group ? ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean).map(g => ({ it: g, x: g.x, y: g.y })) : [];
   const sx = e.clientX, sy = e.clientY, o = { x: it.x, y: it.y, w: it.w, h: it.h, pw: +it.pw || 30, ph: +it.ph || 20 }, s = dz.s, snap = +$("dzSnap").value;
   const sn = v => snap ? Math.round(v / snap) * snap : r1(v);
   const move = ev => {
     let dx = (ev.clientX - sx) / s, dy = (ev.clientY - sy) / s;
+    if (group) {
+      for (const g of gs) { g.it.x = sn(g.x + dx); g.it.y = sn(g.y + dy); for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${g.it.id}"]`)) { el.style.left = g.it.x * s + "px"; el.style.top = g.it.y * s + "px"; dzMark(el, g.it); } }
+      dzWarnCount(); return;
+    }
     const rr = dzRot(it);
     if (resize && rr % 180 === 90) [dx, dy] = [dy, dx];
     else if (resize && rr % 90) { const b = dzBox(Object.assign({}, it, o)), f = Math.max((b.w + dx) / b.w, (b.h + dy) / b.h); dx = o.w * (f - 1); dy = o.h * (f - 1); }
@@ -2930,7 +2997,20 @@ function dzGrab(e, it, resize) {
       else { const b = dzBox(it); Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: b.w * s + "px", height: b.h * s + "px" }); dzMark(el, it); dzWarnCount(); }
     }
   };
-  const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); dzRefresh(it); dzProps(); dzSave(); };
+  const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (group) gs.forEach(g => dzRefresh(g.it)); else dzRefresh(it); dzProps(); dzSave(); };
+  addEventListener("pointermove", move); addEventListener("pointerup", up);
+}
+function dzMarquee(e, lab) { // drag on empty label space to select everything the box touches
+  e.preventDefault(); const add = e.shiftKey || e.ctrlKey || e.metaKey, r0 = lab.getBoundingClientRect(), s = dz.s, x0 = e.clientX - r0.left, y0 = e.clientY - r0.top;
+  const m = document.createElement("div"); m.className = "dz-marq"; lab.append(m); let moved = false;
+  const box = ev => { const x1 = ev.clientX - r0.left, y1 = ev.clientY - r0.top; return [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)]; };
+  const move = ev => { const [l, t, w, h] = box(ev); if (w + h > 4) moved = true; Object.assign(m.style, { left: l + "px", top: t + "px", width: w + "px", height: h + "px" }); };
+  const up = ev => {
+    removeEventListener("pointermove", move); removeEventListener("pointerup", up); m.remove();
+    if (!moved) { if (!add) dzSelect(null); return; }
+    const [l, t, w, h] = box(ev).map(v => v / s), hit = dz.D.items.filter(it => { const b = dzBox(it); return it.x < l + w && it.x + b.w > l && it.y < t + h && it.y + b.h > t; }).map(i => i.id);
+    dzSelectMany(add ? [...new Set([...dzSelIds(), ...hit])] : hit);
+  };
   addEventListener("pointermove", move); addEventListener("pointerup", up);
 }
 function dzSpin(e, it) { // drag the round handle to turn; snaps to right angles within 2°, Shift gives 15° steps
@@ -2946,7 +3026,28 @@ function dzSpin(e, it) { // drag the round handle to turn; snaps to right angles
 }
 
 /* properties */
+function dzMultiPanel(ids) {
+  const btn = (ic, label, fn) => `<button type="button" class="rb" data-m="${fn}" title="${label}">${dzIcon(ic)}<span>${label}</span></button>`;
+  return `<p style="margin:0 0 10px;font-weight:600">${ids.length} objects selected</p>
+    <h3>Align with each other</h3><div class="dz-mgrid">${btn("al", "Left", "left")}${btn("ac", "Centre", "center")}${btn("ar", "Right", "right")}${btn("at", "Top", "top")}${btn("am", "Middle", "middle")}${btn("ab", "Bottom", "bottom")}</div>
+    <h3>Space evenly</h3><div class="dz-mgrid">${btn("dh", "Across", "dx")}${btn("dv", "Down", "dy")}</div>
+    <h3>Align on the label</h3><div class="dz-mgrid">${btn("ac", "Centre across", "lcenter")}${btn("am", "Middle", "lmiddle")}</div>
+    <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzMDup">Duplicate</button><button type="button" class="btn" id="dzMDel" style="color:var(--bad)">Delete</button></div>
+    <p class="dz-cap">Shift or Ctrl + click adds or removes an object. Drag on empty label space to select a group. Arrow keys move them together.</p>`;
+}
+function dzGroupToLabel(where) { // move the selection as one block to the label centre
+  const ids = dzSelIds(), its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), bs = its.map(dzBox);
+  const L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
+  const dx = where === "lcenter" ? (dzLW() - (R - L)) / 2 - L : 0, dy = where === "lmiddle" ? (dz.D.h - (B - T)) / 2 - T : 0;
+  its.forEach(it => { it.x = r1(it.x + dx); it.y = r1(it.y + dy); dzRefresh(it); }); dzProps(); dzSave();
+}
 function dzProps() {
+  { const ids = dz.D ? dzSelIds() : []; if (ids.length > 1) {
+    if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
+    const box = $("dzProps"); box.innerHTML = dzMultiPanel(ids) + dzObjList(); dzObjWire(); dzWarnCount();
+    for (const b of box.querySelectorAll("[data-m]")) b.onclick = () => { const m = b.dataset.m; if (m === "dx") dzDistribute("x"); else if (m === "dy") dzDistribute("y"); else if (m[0] === "l" && m !== "left") dzGroupToLabel(m); else dzAlignMany(m, ids); };
+    $("dzMDup").onclick = dzDuplicate; $("dzMDel").onclick = dzDelete; return;
+  } }
   if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
   const box = $("dzProps"), it = dz.D.items.find(i => i.id === dz.sel);
   if (!it) { box.innerHTML = '<p class="dz-empty">Select an object on the label, or add one from the left.</p>' + dzObjList(); dzObjWire(); dzWarnCount(); return; }
@@ -2956,13 +3057,15 @@ function dzProps() {
     f.push(`<label class="full">Font / language<select data-k="font">${dzFontOptions(it.font)}</select></label>`);
     if (it.font) f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-k="bold" style="width:auto"${it.bold ? " checked" : ""}> <b>Bold</b></label><label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-k="italic" style="width:auto"${it.italic ? " checked" : ""}> <i>Italic</i></label>`);
   }
-  if (it.type === "text") {
+  if (it.type === "text" && dzLinkSrc(it)) f.push(`<label class="full">Text (from the linked object)<input value="${(it.text || "").replace(/"/g, "&quot;")}" readonly></label>`);
+  if (it.type === "text" && !dzLinkSrc(it)) {
     f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
     num("h", "Text height, mm", 0.5, 1); f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
   } else if (it.type === "barcode") {
     f.push(`<label class="full">Type<select data-k="symbology">${DZ_SYMS.map(([v, n]) => `<option value="${v}"${v === it.symbology ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
     if (it.symbology === "qrcode") f.push(`<label class="full">QR holds<select data-k="qrKind"><option value="text"${it.qrKind !== "contact" ? " selected" : ""}>Text or link</option><option value="contact"${it.qrKind === "contact" ? " selected" : ""}>Contact card (vCard)</option></select></label>`);
     if (it.symbology === "qrcode" && it.qrKind === "contact") for (const [k, n] of DZ_CONTACT) f.push(`<label class="full">${n}<input data-c="${k}" value="${String((it.contact || {})[k] || "").replace(/"/g, "&quot;")}"${k === "tel" ? ' inputmode="tel"' : k === "email" ? ' inputmode="email"' : ""}></label>`);
+    else if (dzLinkSrc(it)) f.push(`<label class="full">Data (from the linked object)<textarea readonly>${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
     else f.push(`<label class="full">Data<textarea data-k="data">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
     if (dzIs2D(it)) num("w", "Size, mm", 0.5, 4); else { num("w", "Width, mm", 0.5, 5); num("h", "Height, mm", 0.5, 3); }
   } else if (it.type === "line") {
@@ -2986,6 +3089,20 @@ function dzProps() {
     num("maxH", "Max text height, mm", 0.5, 0);
     const ft = dzFitText(it); f.push(`<p class="dz-cap" style="grid-column:1/-1;margin:0">${String(it.text || "").trim() ? ft.length ? `Text fits at ${r1(ft[0].h)} mm on ${ft.length} line${ft.length > 1 ? "s" : ""}.` : "Text does not fit: make the shape bigger or the text shorter." : "Shape only."}</p>`);
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
+  if (it.type === "barcode" && !dzIs2D(it)) {
+    f.push(`<label>Human readable<select data-h="hri"><option value="below"${(it.hri || "below") === "below" ? " selected" : ""}>Below the bars</option><option value="above"${it.hri === "above" ? " selected" : ""}>Above the bars</option><option value="none"${it.hri === "none" ? " selected" : ""}>Off</option></select></label>`);
+    if (it.hri !== "none") {
+      f.push(`<label>Digits height, mm<input data-h="hriSize" type="number" min="0" step="0.1" value="${+it.hriSize || 0}" title="0 = automatic"></label>`);
+      f.push(`<label class="full">Digits font<select data-h="hriFont">${dzFontOptions(it.hriFont).replace("Printer font (sharpest)", "Printer's own barcode digits")}</select></label>`);
+      if (it.hriFont) f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-h="hriBold" style="width:auto"${it.hriBold ? " checked" : ""}> Bold digits</label>`);
+    }
+    f.push(`<label class="full"><button type="button" class="btn sm" id="dzLinkText">Add a text linked to this barcode</button></label>`);
+  }
+  if (it.type === "text" || it.type === "barcode" || it.type === "shape") {
+    const others = dz.D.items.filter(o => o.id !== it.id && (o.type === "text" || o.type === "barcode" || o.type === "shape") && o.link !== it.id);
+    f.push(`<label class="full">Content linked to<select data-h="link"><option value="">Nothing (type it here)</option>${others.map(o => `<option value="${o.id}"${it.link === o.id ? " selected" : ""}>${dzObjName(o).slice(0, 40).replace(/</g, "&lt;")}</option>`).join("")}</select></label>`);
+    if (dzLinkSrc(it)) f.push(`<label>Before<input data-h="linkPre" value="${(it.linkPre || "").replace(/"/g, "&quot;")}" placeholder="e.g. Batch: "></label><label>After<input data-h="linkPost" value="${(it.linkPost || "").replace(/"/g, "&quot;")}"></label>`);
+  }
   { // colours: on screen and in the colour image; the printer prints in its ribbon colour
     const cl = (key, label, val) => `<label>${label}<input type="color" data-col="${key}" value="${val}" style="height:34px;padding:2px"></label>`;
     if (it.type === "shape") { const noLine = !it.fill && !(+it.thickness > 0);
@@ -3042,7 +3159,7 @@ function dzProps() {
     }
     if (it.type === "image" && it.lock !== false && (k === "w" || k === "h")) { const n = +v || 1; if (k === "w") { it.w = n; it.h = r1(n * it.ratio); } else { it.h = n; it.w = r1(n / it.ratio); } dzRefresh(it); dzSave(); return; }
     if (k === "qrKind") { it.qrKind = v; if (v === "contact") { it.contact = it.contact || { name: "", org: "", tel: "", email: "", url: "", adr: "", title: "" }; it.data = dzContact(it); } dzRefresh(it); dzSave(); return dzProps(); }
-    if (k === "text" || k === "data") it[k] = v;
+    if (k === "text" || k === "data") { it[k] = v; dzSyncLinks(); }
     else if (k === "symbology") { const was2 = dzIs2D(it); it.symbology = v; if (dzIs2D(it) && !was2) it.w = it.h = Math.min(it.w, 20); if (!dzIs2D(it) && was2) { it.w = 50; it.h = 15; } dzRefresh(it); dzSave(); return dzProps(); }
     else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
     else if (k === "len") { const n = Math.max(1, +v || 1); if (it.w >= it.h) it.w = n; else it.h = n; }
@@ -3050,6 +3167,18 @@ function dzProps() {
     else { it[k] = +v || 0; if (k === "w" && dzIs2D(it)) it.h = it.w; }
     dzRefresh(it); dzSave();
   });
+  for (const inp of box.querySelectorAll("[data-h]")) inp.addEventListener(inp.tagName === "SELECT" || inp.type === "checkbox" ? "change" : "input", () => {
+    const k = inp.dataset.h, v = inp.type === "checkbox" ? inp.checked : inp.value;
+    if (k === "link") { if (v) it.link = +v; else { delete it.link; delete it.linkPre; delete it.linkPost; } }
+    else if (k === "hriSize") it.hriSize = Math.max(0, +v || 0);
+    else if (k === "hriFont") { it.hriFont = v || undefined; if (v === "__local") { delete it.hriFont; dzPickLocalFont().then(f => { if (f) { it.hriFont = f; dzRefresh(it); dzSave(); } dzProps(); }); return; } if (it.hriFont) dzLoadFont(it.hriFont); }
+    else it[k] = v;
+    dzSave(); dzRefresh(it); if (inp.tagName === "SELECT" || inp.type === "checkbox") dzProps();
+  });
+  if ($("dzLinkText")) $("dzLinkText").onclick = () => { // a separate text that always shows this barcode's data
+    const b = dzBox(it), t = { id: dz.seq++, type: "text", x: it.x, y: r1(Math.min(dz.D.h - 4, it.y + b.h + 0.8)), h: 2.5, text: "", link: it.id };
+    it.hri = "none"; dz.D.items.push(t); dzSyncLinks(); dz.sel = t.id; dzDraw(); dzProps(); dzSave();
+  };
   for (const inp of box.querySelectorAll("[data-col]")) inp.addEventListener("input", () => { it[inp.dataset.col] = inp.value; dzRefresh(it); dzSave(); });
   for (const inp of box.querySelectorAll("[data-col]")) inp.addEventListener("change", () => dzProps());
   if ($("dzColReset")) $("dzColReset").onclick = () => { delete it.color; delete it.fillColor; delete it.textColor; dzRefresh(it); dzSave(); dzProps(); };
@@ -3103,8 +3232,9 @@ function dzAdd(kind) {
   if (it.qrKind === "contact") it.data = dzContact(it);
   D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave();
 }
-function dzDelete() { const D = dz.D; D.items = D.items.filter(i => i.id !== dz.sel); dz.sel = null; dzDraw(); dzProps(); dzSave(); }
-function dzDuplicate() { const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; const c = Object.assign({}, it, { id: dz.seq++, x: it.x + 2, y: it.y + 2 }); dz.D.items.push(c); dz.sel = c.id; dzDraw(); dzProps(); dzSave(); }
+function dzDelete() { const D = dz.D, ids = new Set(dzSelIds()); for (const i of D.items) if (ids.has(i.link)) delete i.link; D.items = D.items.filter(i => !ids.has(i.id)); dz.sel = null; dz.multi = new Set(); dzDraw(); dzProps(); dzSave(); }
+function dzDuplicate() {
+  const ids = dzSelIds(); if (ids.length > 1) { const made = []; for (const id of ids) { const it = dz.D.items.find(i => i.id === id); if (!it) continue; const c = Object.assign(JSON.parse(JSON.stringify(it)), { id: dz.seq++, x: r1(it.x + 2), y: r1(it.y + 2) }); dz.D.items.push(c); made.push(c.id); } dzDraw(); dzSelectMany(made); dzSave(); return; } const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; const c = Object.assign({}, it, { id: dz.seq++, x: it.x + 2, y: it.y + 2 }); dz.D.items.push(c); dz.sel = c.id; dzDraw(); dzProps(); dzSave(); }
 
 /* output */
 function dzLayout() {
@@ -3128,6 +3258,17 @@ function dzLayout() {
       }
       if (o.type === "image") { o.imgEl = dzImg(it); delete o.src; }
       if (o.qrKind === "contact" && o.symbology === "qrcode") o.data = dzContact(it, D.lang === "TSPL" || D.lang === "ZPL" ? "vcard" : "mecard");
+      if (o.type === "barcode" && !dzIs2D(it) && dzNative(it) && !dzRot(it) && ((it.hri && it.hri !== "below") || it.hriFont || it.hriSize > 0)) {
+        o.hriOff = true; const hri = it.hri || "below";
+        if (hri !== "none") { // the digits become a text object of their own, centred on the bars
+          const th = it.hriSize > 0 ? it.hriSize : it.h * 0.2, bh = it.h - th * 1.1, txt = dzHriText(it), t = { type: "text", text: txt, h: r1(th * 0.82), font: it.hriFont, bold: it.hriBold };
+          const tw = dzMeasure(t, txt, t.h); t.x = r1(o.x + it.w / 2 - tw / 2); t.w = tw;
+          if (hri === "above") { t.y = r1(o.y); o.y = r1(o.y + it.h - bh); } else t.y = r1(o.y + bh + th * 0.12);
+          o.h = r1(bh / 0.78);
+          if (t.font || dzNonLatin(t)) { const k = D.dpi / 25.4, cv = dzRenderItem(Object.assign({ id: -1 }, t), k); items.push({ type: "image", x: t.x, y: t.y, w: r1(cv.width / k), h: r1(cv.height / k), imgEl: Object.assign(cv, { naturalWidth: cv.width }), method: "threshold", threshold: 205, invert: false, rot: 0 }); }
+          else items.push(t);
+        }
+      }
       if (o.type === "barcode" && o.symbology === "upca") { o.data = "0" + String(o.data || "").replace(/\D/g, "").slice(0, 11); o.symbology = "ean13"; }
       items.push(o);
     }
@@ -3189,12 +3330,29 @@ function dzObjName(it) {
 }
 function dzObjList() {
   const items = dz.D.items.slice().reverse(); // top of the stack first
-  return `<div class="dz-objs"><h3>Objects (${items.length}) · top first</h3>${items.map(it => `<button type="button" data-obj="${it.id}" aria-current="${it.id === dz.sel}"><i>${DZ_ICON[it.type] || "•"}</i><span>${dzObjName(it).replace(/</g, "&lt;")}</span></button>`).join("") || '<p class="dz-empty">No objects yet.</p>'}</div>`;
+  return `<div class="dz-objs"><h3>Objects (${items.length}) · top first</h3>${items.map(it => `<button type="button" data-obj="${it.id}" aria-current="${dzSelIds().includes(it.id)}"><i>${DZ_ICON[it.type] || "•"}</i><span>${it.link ? "🔗 " : ""}${dzObjName(it).replace(/</g, "&lt;")}</span></button>`).join("") || '<p class="dz-empty">No objects yet.</p>'}</div>`;
 }
-function dzObjWire() { for (const b of $("dzProps").querySelectorAll("[data-obj]")) b.onclick = () => dzSelect(+b.dataset.obj); }
+function dzObjWire() { for (const b of $("dzProps").querySelectorAll("[data-obj]")) b.onclick = e => dzSelect(+b.dataset.obj, e.shiftKey || e.ctrlKey || e.metaKey); }
 
 /* arrange and editing helpers */
+function dzAlignMany(where, ids) { // line objects up with each other: edges or centres of the selection
+  const its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), bs = its.map(dzBox);
+  const L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
+  its.forEach((it, k) => { const b = bs[k];
+    if (where === "left") it.x = r1(L); if (where === "right") it.x = r1(R - b.w); if (where === "center") it.x = r1((L + R) / 2 - b.w / 2);
+    if (where === "top") it.y = r1(T); if (where === "bottom") it.y = r1(B - b.h); if (where === "middle") it.y = r1((T + B) / 2 - b.h / 2); });
+  its.forEach(dzRefresh); dzProps(); dzSave();
+}
+function dzDistribute(axis) { // equal gaps between three or more objects
+  const ids = dzSelIds(); if (ids.length < 3) return toast("Select three or more objects to space them evenly");
+  const its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), pos = axis === "x" ? "x" : "y", size = it => axis === "x" ? dzBox(it).w : dzBox(it).h;
+  its.sort((a, b) => a[pos] - b[pos]);
+  const first = its[0][pos], last = its[its.length - 1][pos] + size(its[its.length - 1]), total = its.reduce((t, i) => t + size(i), 0), gap = (last - first - total) / (its.length - 1);
+  let p = first; for (const it of its) { it[pos] = r1(p); p += size(it) + gap; }
+  its.forEach(dzRefresh); dzProps(); dzSave();
+}
 function dzAlign(where) {
+  const ids = dzSelIds(); if (ids.length > 1) return dzAlignMany(where, ids);
   const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; const b = dzBox(it), lw = dzLW(), m = 1;
   if (where === "left") it.x = m; if (where === "center") it.x = r1((lw - b.w) / 2); if (where === "right") it.x = r1(lw - b.w - m);
   if (where === "top") it.y = m; if (where === "middle") it.y = r1((dz.D.h - b.h) / 2); if (where === "bottom") it.y = r1(dz.D.h - b.h - m);
@@ -3204,8 +3362,12 @@ function dzOrder(step) {
   const a = dz.D.items, i = a.findIndex(x => x.id === dz.sel); if (i < 0) return; const [it] = a.splice(i, 1);
   const j = step === "front" ? a.length : step === "back" ? 0 : Math.max(0, Math.min(a.length, i + step)); a.splice(j, 0, it); dzDraw(); dzProps(); dzSave();
 }
-function dzCopy() { const it = dz.D.items.find(i => i.id === dz.sel); if (it) { dz.clip = JSON.stringify(it); toast("Copied"); } }
-function dzPaste() { if (!dz.clip) return toast("Nothing copied yet"); const it = Object.assign(JSON.parse(dz.clip), { id: dz.seq++ }); it.x = r1(it.x + 2); it.y = r1(it.y + 2); dz.D.items.push(it); dz.sel = it.id; dzDraw(); dzProps(); dzSave(); }
+function dzCopy() { const list = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(Boolean); if (list.length) { dz.clip = JSON.stringify(list); toast(list.length > 1 ? `Copied ${list.length} objects` : "Copied"); } }
+function dzPaste() {
+  if (!dz.clip) return toast("Nothing copied yet"); let list = JSON.parse(dz.clip); if (!Array.isArray(list)) list = [list];
+  const made = list.map(o => { const it = Object.assign(o, { id: dz.seq++ }); it.x = r1(it.x + 2); it.y = r1(it.y + 2); dz.D.items.push(it); return it.id; });
+  dzDraw(); dzSelectMany(made); dzSave();
+}
 function dzSelNext(back) { const a = dz.D.items; if (!a.length) return; const i = a.findIndex(x => x.id === dz.sel); const n = (i + (back ? -1 : 1) + a.length) % a.length; dzSelect(a[i < 0 ? 0 : n].id); }
 function dzSelTextLike() { const it = dz.D.items.find(i => i.id === dz.sel); return it && (it.type === "text" || it.type === "shape") ? it : null; }
 function dzSetFont(v) { const it = dzSelTextLike(); if (!it) return; it.font = v || undefined; if (!v) { delete it.bold; delete it.italic; } dzEnsureFont(it); dzRefresh(it); dzProps(); dzSave(); }
@@ -3221,7 +3383,7 @@ function dzMenus() {
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
     File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
-    Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select none", () => dzSelect(null), "Esc"]],
+    Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Barcode", () => dzAdd("barcode")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
     Text: ["#Font / language", ...DZ_FONTS.map(f => typeof f === "string" ? f : [f[1], () => f[0] === "__local" ? dzPickLocalFont().then(v => v && dzSetFont(v)) : dzSetFont(f[0]), "", txt, () => { const it = dzSelTextLike(); return !!it && (it.font || "") === f[0]; }]), "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
@@ -3251,7 +3413,7 @@ const DZ_IC = { // 24x24 stroke icons, drawn for this app
   undo: "M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3", redo: "M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h3", copy: "M8 8h12v12H8zM4 16V4h12", paste: "M8 4h8v3H8zM6 6H4v15h16V6h-2M9 12h6M9 16h6",
   dup: "M4 4h11v11H4zM9 9h11v11H9z", del: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13", preview: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 .01 0", download: "M12 4v11M7 10l5 5 5-5M4 20h16",
   cloud: "M7 18a4 4 0 0 1-.5-8 6 6 0 0 1 11.5 2 3 3 0 0 1 0 6zM12 11v5M10 13l2-2 2 2", folder: "M3 6h6l2 2h10v11H3z",
-  al: "M4 3v18M8 7h10M8 12h6M8 17h12", ac: "M12 3v18M6 7h12M8 12h8M5 17h14", ar: "M20 3v18M6 7h10M10 12h6M4 17h12", at: "M3 4h18M7 8v10M12 8v6M17 8v12", am: "M3 12h18M7 6v12M12 8v8M17 5v14", ab: "M3 20h18M7 6v10M12 10v6M17 4v12",
+  al: "M4 3v18M8 7h10M8 12h6M8 17h12", dh: "M4 4v16M20 4v16M9 8h2v8H9zM14 8h2v8h-2z", dv: "M4 4h16M4 20h16M8 9h8v2H8zM8 14h8v2H8z", ac: "M12 3v18M6 7h12M8 12h8M5 17h14", ar: "M20 3v18M6 7h10M10 12h6M4 17h12", at: "M3 4h18M7 8v10M12 8v6M17 8v12", am: "M3 12h18M7 6v12M12 8v8M17 5v14", ab: "M3 20h18M7 6v10M12 10v6M17 4v12",
   front: "M9 9h11v11H9zM4 4h11v11", back: "M4 4h11v11H4zM9 15v5h11V9h-5", fwd: "M12 5l5 5M12 5l-5 5M12 5v14", bwd: "M12 19l5-5M12 19l-5-5M12 19V5",
   rotr: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5", rotl: "M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5", straight: "M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4",
   bold: "M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z", italic: "M10 5h8M6 19h8M14 5l-4 14", bigger: "M4 19L9 5l5 14M6 14h6M17 6v6M14 9h6", smaller: "M4 19L9 5l5 14M6 14h6M14 9h6",
@@ -3275,7 +3437,8 @@ function dzRibbonDef() {
       ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box"))]],
       ["Shapes · text fits inside", Object.keys(DZ_SHAPES).map(k => B(k, DZ_SHAPES[k].split(" ")[0].replace("Circle", "Circle"), () => dzAdd("shape:" + k), null, null, DZ_SHAPES[k]))],
       ["Text shaped like (no outline)", ["rect", "ellipse", "star", "hexagon"].map(k => B(k, DZ_SHAPES[k].split(" ")[0], () => dzAdd("tshape:" + k), null, null, "Text in the form of a " + DZ_SHAPES[k].toLowerCase()))]],
-    Arrange: [["Align on label", [B("al", "Left", () => dzAlign("left"), has), B("ac", "Centre", () => dzAlign("center"), has), B("ar", "Right", () => dzAlign("right"), has), B("at", "Top", () => dzAlign("top"), has), B("am", "Middle", () => dzAlign("middle"), has), B("ab", "Bottom", () => dzAlign("bottom"), has)]],
+    Arrange: [[dzSelIds().length > 1 ? "Align selection" : "Align on label", [B("al", "Left", () => dzAlign("left"), has), B("ac", "Centre", () => dzAlign("center"), has), B("ar", "Right", () => dzAlign("right"), has), B("at", "Top", () => dzAlign("top"), has), B("am", "Middle", () => dzAlign("middle"), has), B("ab", "Bottom", () => dzAlign("bottom"), has)]],
+      ["Space evenly", [B("dh", "Across", () => dzDistribute("x"), () => dzSelIds().length > 2), B("dv", "Down", () => dzDistribute("y"), () => dzSelIds().length > 2)]],
       ["Order", [B("front", "To front", () => dzOrder("front"), has), B("fwd", "Forward", () => dzOrder(1), has), B("bwd", "Backward", () => dzOrder(-1), has), B("back", "To back", () => dzOrder("back"), has)]],
       ["Rotate", [B("rotr", "90° right", turn(90), turnable, null, "R"), B("rotl", "90° left", turn(-90), turnable, null, "Shift+R"), B("straight", "Straighten", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, turnable)]]],
     Text: [["Font", [{ font: true }, B("bold", "Bold", () => dzToggle("bold"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
@@ -3477,6 +3640,7 @@ $("dzDlg").addEventListener("keydown", e => {
   if (mod && key === "-") { e.preventDefault(); return $("dzZoomOut").click(); }
   if (mod && key === "0") { e.preventDefault(); return $("dzZoomFit").click(); }
   if (e.key === "Tab") { e.preventDefault(); return dzSelNext(e.shiftKey); }
+  if (mod && key === "a") { e.preventDefault(); return dzSelectMany(dz.D.items.map(i => i.id)); }
   if (e.key === "Escape" && dz.sel != null) { e.preventDefault(); return dzSelect(null); }
   if (dz.sel == null) return;
   if (mod && key === "c") { e.preventDefault(); return dzCopy(); }
@@ -3486,7 +3650,7 @@ $("dzDlg").addEventListener("keydown", e => {
   if (mod && e.key === "[") { e.preventDefault(); return dzSize(-0.5); }
   const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return;
   const st = e.shiftKey ? 5 : 0.5, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
-  if (mv) { e.preventDefault(); it.x = r1(it.x + mv[0]); it.y = r1(it.y + mv[1]); dzRefresh(it); dzProps(); dzSave(); }
+  if (mv) { e.preventDefault(); for (const id of dzSelIds()) { const o = dz.D.items.find(i => i.id === id); if (!o) continue; o.x = r1(o.x + mv[0]); o.y = r1(o.y + mv[1]); dzRefresh(o); } dzProps(); dzSave(); }
   else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); dzDelete(); }
   else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && it.type !== "line" && it.type !== "box") { e.preventDefault(); dzTurn(it, e.shiftKey ? -90 : 90); dzRefresh(it); dzProps(); dzSave(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); dzDuplicate(); }
