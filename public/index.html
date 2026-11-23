@@ -695,6 +695,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
     </div>
     <div class="dz-warn dz-mwarn" id="dzMediaWarn" hidden></div>
     <input type="file" id="dzImgFile" accept="image/*,.bmp,.jpg,.jpeg,.png" hidden>
+    <input type="file" id="dzDbFile" accept=".csv,.txt,.xlsx,.xls,.ods" hidden>
 </div>
   <div class="dz-body">
     <div class="dz-main">
@@ -2785,7 +2786,7 @@ function dzOpen() {
   dz.seq = Math.max(1, ...dz.D.items.map(i => i.id)) + 1;
   for (const d of document.querySelectorAll("dialog[open]")) if (d.id !== "dzDlg") d.close();
   if (!$("dzDlg").open) { if (APP) $("dzDlg").show(); else $("dzDlg").showModal(); }
-  dzShowDesigner(); for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
+  dzShowDesigner(); if (typeof dzDbRestore === "function") dzDbRestore(); for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
 }
 
 /* setup panel */
@@ -3397,8 +3398,7 @@ function dzProps() {
     f.push(`<label class="full">Content linked to<select data-h="link"><option value="">Nothing (type it here)</option>${others.map(o => `<option value="${o.id}"${it.link === o.id ? " selected" : ""}>${dzObjName(o).slice(0, 40).replace(/</g, "&lt;")}</option>`).join("")}</select></label>`);
     if (dzLinkSrc(it)) f.push(`<label>Before<input data-h="linkPre" value="${(it.linkPre || "").replace(/"/g, "&quot;")}" placeholder="e.g. Batch: "></label><label>After<input data-h="linkPost" value="${(it.linkPost || "").replace(/"/g, "&quot;")}"></label>`);
   }
-  if ((it.type === "text" || it.type === "barcode") && !dzLinkSrc(it) && it.qrKind !== "contact")
-    f.push(`<div class="full" style="grid-column:1/-1"><button type="button" class="btn sm${it.parts ? " soft" : ""}" id="dzParts">${it.parts ? `Edit the ${it.parts.length} parts (fields, FNC1, dates, serials)…` : "Build from parts: database fields, FNC1/GS, dates, serial numbers…"}</button></div>`);
+  if ((it.type === "text" || it.type === "barcode") && !dzLinkSrc(it) && it.qrKind !== "contact") f.push(dzSrcPanel(it));
   { // colours: on screen and in the colour image; the printer prints in its ribbon colour
     const cl = (key, label, val) => `<label>${label}<input type="color" data-col="${key}" value="${val}" style="height:34px;padding:2px"></label>`;
     if (it.type === "shape") { const noLine = !it.fill && !(+it.thickness > 0);
@@ -3479,6 +3479,7 @@ function dzProps() {
   };
   if ($("dzGs1")) $("dzGs1").onclick = () => dzGs1Builder(it);
   if ($("dzParts")) $("dzParts").onclick = () => dzVarBuilder(it);
+  dzSrcWire(it);
   if ($("dzSymGrp")) $("dzSymGrp").onchange = e => { // a new group: switch to its first barcode type
     const g = e.target.value, first = DZ_SYM_GROUPS.find(([n]) => n === g)[1][0], sel = box.querySelector('select[data-k="symbology"]');
     it._grp = g; dzSetSym(it, first); };
@@ -3801,6 +3802,9 @@ function dzRibbonDef() {
     Text: [["Font", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
       ["Curve", [B("flat", "Straight", () => dzCurveTo(0), isText, () => isText() && !dzCurve(sel()) && !dzOnPath(sel())), B("arcup", "Arch up", () => dzCurveTo(180), isText, () => isText() && dzCurve(sel()) > 0), B("arcdn", "Arch down", () => dzCurveTo(-180), isText, () => isText() && dzCurve(sel()) < 0), B("ring", "Circle", () => dzPathTo("circle"), isText, () => isText() && sel().path === "circle")]],
       ["Along an outline", ["rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => B(k === "wave" ? "wave" : k, DZ_PATHS[k], () => dzPathTo(k), isText, () => isText() && sel().path === k))]],
+    Data: [["Database", [B("folder", "Connect file", () => $("dzDbFile").click(), null, null, "Connect a CSV or Excel file as the label's database"), B("del", "Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db), null, "Disconnect the database"), { dbinfo: true }]],
+      ["Fields: click to link the selected object", [{ dbfields: true }]],
+      ["Live database", [B("printers", "ODBC / SQL", () => dzDbLiveInfo(), null, null, "SQL Server, MySQL, Oracle, Tally and other ODBC databases through the LabelDesk agent")]]],
     Tools: [["Design", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing"), null, "Back to the label designer"), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing"), "Preview the design as printed")]],
       ["Printer files", [B("openf", "Open PRN", () => $("fileIn").click(), null, null, "Open a .prn file"), B("code", "Paste code", () => { dzShowViewer(); $("pasteBtn").click(); }, null, null, "Paste printer code to view it"), B("pic", "From picture", () => $("picDlg").showModal(), null, null, "Logo or label photo to PRN")]],
       ["Templates", [B("lib", "Library", () => openLibrary())]],
@@ -3824,6 +3828,8 @@ function dzRibbonShow(tab) {
         const one = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h));
         w.innerHTML = `<input type="number" min="3" max="400" step="0.5" list="dzPtList" aria-label="Font size in points" value="${one.length && one.every(v => v === one[0]) ? one[0] : ""}" placeholder="pt"${dzSelIds().length ? "" : " disabled"}><span>pt</span>`;
         const inp = w.querySelector("input"); inp.onchange = () => dzSetPt(inp.value); row.append(w); continue; }
+      if (b.dbinfo) { dzDbRibbon(row); continue; }
+      if (b.dbfields) { dzDbFields(row); continue; }
       if (b.symsel) { // pick any barcode type and insert it; with a barcode selected, change its type
         const w = document.createElement("div"); w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center";
         const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Barcode type"); s.style.maxWidth = "230px";
@@ -3854,7 +3860,7 @@ function dzRibbonShow(tab) {
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
-  for (const t of ["Label", "Home", "Insert", "Arrange", "Text", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
+  for (const t of ["Label", "Home", "Insert", "Data", "Arrange", "Text", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
   document.addEventListener("click", e => { if (!e.target.closest(".dz-drop")) dzMenuClose(); });
   dzRibbonShow("Label");
 })();
@@ -4546,7 +4552,7 @@ async function ldPrintOpen() {
   const info = () => { const q0 = Math.max(1, +document.getElementById("ldPrQty").value || 1); let q = q0; if (dzVarNeeds().any) { try { q = ldVarLabels(q0).length || q0; } catch (e) {} } const rows = Math.ceil(q / per);
     document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm · ${q} label(s)${per > 1 ? ` on ${rows} row(s), ${per} across` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
   document.getElementById("ldPrQty").oninput = info; info();
-  ldVarWire(() => { const file = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value === "file"; document.querySelector('label:has(#ldPrQty)').firstChild.textContent = file ? "Copies of each record" : "Number of labels"; info(); });
+  ldVarWire(() => { const file = /^(file|db)$/.test((document.querySelector('input[name="ldVarSrc"]:checked') || {}).value); document.querySelector('label:has(#ldPrQty)').firstChild.textContent = file ? "Copies of each record" : "Number of labels"; info(); });
   const $p = id => document.getElementById(id);
   const fit = () => { // per Windows printer: saved choice, else read from its name/driver, else the design's own settings
     const name = $p("ldPrName").value, g = ldGuessPrinter(name), lang = $p("ldPrLang").value;
@@ -4864,15 +4870,17 @@ async function ldReadTable(file) {
 function ldVarPanel() {
   const need = dzVarNeeds(); if (!need.any) return "";
   return `<div class="ld-sec" style="margin-top:4px"><b style="font-size:14px">Data for this print</b>
-    ${need.fields.length ? `<div class="ld-row" style="margin:8px 0"><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed" checked> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
-    <div id="ldVarTyped" class="ld-grid2">${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
+    ${need.fields.length ? `<div class="ld-row" style="margin:8px 0">${dz.db ? `<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="db" checked> Database: ${ldEsc(dz.db.name)} (${dz.db.rows.length})</label>` : ""}<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed"${dz.db ? "" : " checked"}> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
+    ${dz.db ? `<div id="ldVarDb" class="ld-grid2"><label class="ld-f">From record<input id="ldDbFrom" type="number" min="1" max="${dz.db.rows.length}" value="1"></label><label class="ld-f">To record<input id="ldDbTo" type="number" min="1" max="${dz.db.rows.length}" value="${dz.db.rows.length}"></label></div>` : ""}
+    <div id="ldVarTyped" class="ld-grid2"${dz.db ? " hidden" : ""}>${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
     <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
     ${need.serial ? `<p class="dz-cap">Serial numbers go up on every label in this print.</p>` : ""}</div>`;
 }
 function ldVarWire(onChange) {
   const need = dzVarNeeds(); if (!need.fields.length) return;
   const src = () => (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value;
-  for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; onChange(); };
+  for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; if ($("ldVarDb")) $("ldVarDb").hidden = src() !== "db"; onChange(); };
+  for (const id of ["ldDbFrom", "ldDbTo"]) if ($(id)) $(id).oninput = onChange;
   $("ldVarIn").onchange = async e => { const f = e.target.files[0]; if (!f) return;
     try { LDV.recs = await ldReadTable(f); LDV.file = f.name; const cols = Object.keys(LDV.recs[0] || {}), miss = need.fields.filter(x => !cols.includes(x.name)).map(x => x.name);
       $("ldVarInfo").innerHTML = `<b>${LDV.recs.length} record(s)</b> from ${ldEsc(f.name)}.${miss.length ? ` <span style="color:#b42318">No column for: ${miss.map(ldEsc).join(", ")} (their sample value is used).</span>` : " All fields matched."}`; }
@@ -4881,9 +4889,10 @@ function ldVarWire(onChange) {
 // The list of labels to print: [{ rec, n }] in order
 function ldVarLabels(qty) {
   const need = dzVarNeeds(), src = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value, out = [];
-  if (src === "file") {
-    if (!LDV.recs || !LDV.recs.length) throw new Error("Choose a CSV or Excel file with the records first.");
-    for (const r of LDV.recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: r, n: out.length }); }
+  if (src === "file" || src === "db") {
+    const recs = src === "db" ? (dz.db ? dz.db.rows.slice(Math.max(0, (+$("ldDbFrom").value || 1) - 1), Math.max(1, +$("ldDbTo").value || dz.db.rows.length)) : []) : LDV.recs;
+    if (!recs || !recs.length) throw new Error(src === "db" ? "No records in that range." : "Choose a CSV or Excel file with the records first.");
+    for (const r of recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: r, n: out.length }); }
     return out;
   }
   const rec = {}; for (const el of document.querySelectorAll("[data-fv]")) rec[el.dataset.fv] = el.value;
@@ -4900,6 +4909,99 @@ function ldVarPRN(labels, lang, dpi) {
   let all = "", unmerged = 0;
   for (const c of chunks) { const q = ldWithQty(c.prn, lang, c.n); if (q.done) all += q.prn; else { all += c.prn.repeat(c.n); unmerged++; } }
   return { prn: all, rows, jobs: chunks.length };
+}
+</script>
+
+<!-- Database for the design: connect a CSV / Excel file now (ODBC / SQL through the LabelDesk agent later), browse records, link objects to fields -->
+<script>
+/* ---------- design database ---------- */
+dz.db = null; dz.recIdx = 0;
+function dzDbRestore() { // rows stay in this browser; the design keeps the file name and columns
+  try { const j = JSON.parse(localStorage.getItem("ld-db-rows") || "null"); if (j && dz.D && dz.D.db && j.name === dz.D.db.name) dz.db = j; } catch (e) {}
+}
+async function dzDbConnect(file) {
+  try {
+    const rows = await ldReadTable(file); if (!rows.length) throw new Error("No records found in " + file.name);
+    const columns = Object.keys(rows[0]).filter(Boolean);
+    dz.db = { name: file.name, columns, rows }; dz.recIdx = 0;
+    dz.D.db = { kind: /\.(xlsx|xls|ods)$/i.test(file.name) ? "Excel" : "CSV", name: file.name, columns, count: rows.length, at: new Date().toISOString().slice(0, 10) };
+    const f = dzFields(); for (const c of columns) if (!f.some(x => x.name === c)) f.push({ name: c, sample: "" });
+    try { const js = JSON.stringify(dz.db); if (js.length < 3e6) localStorage.setItem("ld-db-rows", js); else localStorage.removeItem("ld-db-rows"); } catch (e) {}
+    dzDbShow(0); dzSave(); dzRibbonShow("Data"); dzProps();
+    toast(`${rows.length} records, ${columns.length} fields from ${file.name}`);
+  } catch (e) { toast(e.message); }
+}
+function dzDbOff() { if (!dz.D.db) return; if (!confirm(`Disconnect ${dz.D.db.name}? Objects keep their field links and show the sample values.`)) return; delete dz.D.db; dz.db = null; try { localStorage.removeItem("ld-db-rows"); } catch (e) {} dzSave(); dzRibbonShow("Data"); dzProps(); }
+// Show record i on the label: field samples take that record's values
+function dzDbShow(i) {
+  if (!dz.db || !dz.db.rows.length) return; dz.recIdx = Math.max(0, Math.min(dz.db.rows.length - 1, i)); const rec = dz.db.rows[dz.recIdx];
+  for (const f of dzFields()) if (rec[f.name] != null) f.sample = String(rec[f.name]);
+  for (const it of dz.D.items) if (it.parts && it.parts.length) dzApplySample(it);
+  dzDraw(); dzSave(); const n = $("dzRecNo"); if (n) n.value = dz.recIdx + 1; if (dz.sel) dzProps();
+}
+const dzFieldNames = () => [...new Set([...(dz.db ? dz.db.columns : dz.D.db ? dz.D.db.columns : []), ...dzFields().map(f => f.name)])];
+// Object linked to one field, with optional text before/after: parts [text?, field, text?]
+function dzOneField(it) {
+  const p = it.parts || [], f = p.filter(x => x.t === "field");
+  if (f.length !== 1 || p.some(x => x.t !== "field" && x.t !== "text") || p.length > 3) return null;
+  const i = p.indexOf(f[0]); if (p.slice(0, i).length > 1 || p.slice(i + 1).length > 1) return null;
+  return { name: f[0].name, pre: i ? p[0].v || "" : "", post: p[i + 1] ? p[i + 1].v || "" : "" };
+}
+function dzLinkField(it, name, pre, post) {
+  if (!name) return;
+  if (!dzFields().some(x => x.name === name)) dzFields().push({ name, sample: dz.db && dz.db.rows[dz.recIdx] ? String(dz.db.rows[dz.recIdx][name] ?? "") : "" });
+  it.parts = [pre ? { t: "text", v: pre } : null, { t: "field", name }, post ? { t: "text", v: post } : null].filter(Boolean);
+  delete it.link; delete it.linkPre; delete it.linkPost; dzApplySample(it); dzSave();
+}
+function dzSrcPanel(it) {
+  const one = dzOneField(it), names = dzFieldNames(), cur = !it.parts ? "" : one ? "f:" + one.name : "parts", db = dz.D.db;
+  return `<div class="full" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px">
+    <label class="full" style="margin:0">Content comes from<select id="dzSrc">
+      <option value=""${cur === "" ? " selected" : ""}>Typed here (fixed)</option>
+      ${names.length ? `<optgroup label="${db ? ldEsc(db.kind + ": " + db.name) : "Fields"}">${names.map(n => `<option value="f:${ldEsc(n)}"${cur === "f:" + n ? " selected" : ""}>Field: ${ldEsc(n)}</option>`).join("")}</optgroup>` : ""}
+      <option value="new">+ New field…</option>
+      <option value="parts"${cur === "parts" ? " selected" : ""}>Several parts: fields, FNC1/GS, dates, serials…</option>
+    </select></label>
+    ${one ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><label style="margin:0">Text before<input id="dzSrcPre" value="${ldEsc(one.pre)}" placeholder="e.g. Batch: "></label><label style="margin:0">Text after<input id="dzSrcPost" value="${ldEsc(one.post)}" placeholder="e.g. kg"></label></div>` : ""}
+    ${cur === "parts" ? `<button type="button" class="btn sm soft" id="dzParts">Edit the ${it.parts.length} parts…</button>` : ""}
+    ${!db ? `<p class="dz-cap" style="margin:0">Connect a database on the <b>Data</b> tab to pick its fields here.</p>` : ""}
+  </div>`;
+}
+function dzSrcWire(it) {
+  const s = $("dzSrc"); if (!s) return;
+  s.onchange = () => { const v = s.value;
+    if (v === "") { if (it.parts) { const shown = dzContentOf(it); delete it.parts; delete it.esc; it[dzKeyOf(it)] = shown; dzRefresh(it); dzSave(); } return dzProps(); }
+    if (v === "parts") return dzVarBuilder(it);
+    if (v === "new") { const n = (prompt("Field name (the database column it reads), e.g. batch, mrp, gtin") || "").trim().replace(/[^\w ]/g, "").slice(0, 40); if (!n) return dzProps(); dzLinkField(it, n, "", ""); return dzProps(); }
+    const one = dzOneField(it); dzLinkField(it, v.slice(2), one ? one.pre : "", one ? one.post : ""); dzProps(); };
+  const upd = () => { const one = dzOneField(it); if (one) dzLinkField(it, one.name, $("dzSrcPre").value, $("dzSrcPost").value); };
+  if ($("dzSrcPre")) { $("dzSrcPre").oninput = upd; $("dzSrcPost").oninput = upd; }
+}
+$("dzDbFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) dzDbConnect(f); });
+function dzDbLiveInfo() {
+  alert("Live databases (SQL Server, MySQL, PostgreSQL, Oracle, Access, Tally and any ODBC source) connect through the LabelDesk agent: a small Windows program on a PC in your network. It reads the database locally and prints, so the data never has to leave your network.\n\nUntil the agent is ready: export the table or query to CSV/Excel (or schedule your ERP to save one) and use Connect file. The field links you make now keep working when you switch to the live database.");
+}
+// Ribbon: database status and record browser
+function dzDbRibbon(row) {
+  const db = dz.D && dz.D.db, w = document.createElement("div"); w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center;min-width:230px;font-size:12px";
+  if (!db) { w.innerHTML = `<b style="font-size:13px">No database connected</b><span style="color:var(--muted)">Connect a CSV or Excel file; each column becomes a field you can link objects to.</span>`; row.append(w); return; }
+  const live = !!dz.db, n = live ? dz.db.rows.length : db.count;
+  w.innerHTML = `<b style="font-size:13px">${ldEsc(db.kind)}: ${ldEsc(db.name)}</b><span style="color:var(--muted)">${n} records · ${db.columns.length} fields${live ? "" : " · reopen the file to browse records"}</span>
+    ${live ? `<div style="display:flex;gap:4px;align-items:center"><button type="button" class="btn sm" data-rec="-1" aria-label="Previous record" style="min-height:26px;padding:0 8px">◀</button>Record <input id="dzRecNo" type="number" min="1" max="${n}" value="${dz.recIdx + 1}" style="width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> of ${n}<button type="button" class="btn sm" data-rec="1" aria-label="Next record" style="min-height:26px;padding:0 8px">▶</button></div>` : ""}`;
+  row.append(w);
+  for (const b of w.querySelectorAll("[data-rec]")) b.onclick = () => dzDbShow(dz.recIdx + +b.dataset.rec);
+  const r = w.querySelector("#dzRecNo"); if (r) r.onchange = () => dzDbShow(+r.value - 1);
+}
+function dzDbFields(row) {
+  const db = dz.D && dz.D.db; if (!db) return;
+  const w = document.createElement("div"); w.style.cssText = "display:flex;flex-wrap:wrap;gap:4px;align-self:center;max-width:420px;max-height:64px;overflow:auto";
+  const sel = dz.D.items.find(i => i.id === dz.sel && (i.type === "text" || i.type === "barcode"));
+  w.innerHTML = db.columns.map(c => `<button type="button" class="btn sm" data-fld="${ldEsc(c)}" title="${sel ? "Link the selected object to " : "Add a text linked to "}${ldEsc(c)}" style="min-height:24px;padding:0 8px;font-size:12px">${ldEsc(c)}</button>`).join("");
+  row.append(w);
+  for (const b of w.querySelectorAll("[data-fld]")) b.onclick = () => {
+    let it = dz.D.items.find(i => i.id === dz.sel && (i.type === "text" || i.type === "barcode"));
+    if (!it) { dzAdd("text"); it = dz.D.items[dz.D.items.length - 1]; }
+    dzLinkField(it, b.dataset.fld, "", ""); dzProps(); toast(`Linked to ${b.dataset.fld}`); };
 }
 </script>
 
