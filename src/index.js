@@ -1,4 +1,4 @@
-// prn-preview Worker: serves the static site from ./public and the Pic2Label AI endpoint.
+// prn-preview Worker: serves LabelDesk (labeldesk.app) from ./public, plus the AI, leads and design endpoints.
 // Providers tried in order: Claude (ANTHROPIC_API_KEY), Gemini (GEMINI_API_KEY), then Workers AI as last resort.
 const CLAUDE_MODEL = "claude-sonnet-5-5";
 const GEMINI_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
@@ -211,7 +211,7 @@ async function designs(request, env, url) {
     for (const row of results) { try { list.push({ id: row.id, name: row.name, updated: row.updated, design: await unseal(key, row) }); } catch (e) {} }
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode("p2l-backup-v1") }, key, new TextEncoder().encode(JSON.stringify({ made: new Date().toISOString(), designs: list })));
-    return new Response(JSON.stringify({ app: "Pic2Label PRN Studio", kind: "design-backup", v: 1, count: list.length, iv: b64e(iv), data: b64e(ct) }), { headers: { "content-type": "application/json", "content-disposition": `attachment; filename="label-designs-backup-${new Date().toISOString().slice(0, 10)}.p2lbak"`, "cache-control": "no-store" } });
+    return new Response(JSON.stringify({ app: "LabelDesk", kind: "design-backup", v: 1, count: list.length, iv: b64e(iv), data: b64e(ct) }), { headers: { "content-type": "application/json", "content-disposition": `attachment; filename="label-designs-backup-${new Date().toISOString().slice(0, 10)}.p2lbak"`, "cache-control": "no-store" } });
   }
   if (id === "backup" && m === "POST") {
     const text = await request.text(); if (text.length > 30000000) return json({ error: "Backup file is too large" }, 413);
@@ -314,9 +314,16 @@ async function designAI(request, env) {
   return json({ error: "AI could not design that just now: " + lastErr.slice(0, 160) }, 502);
 }
 
+const APP_HOST = "labeldesk.app", OLD_HOST = "labels.infinitesolutions.co.in";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // LabelDesk lives on labeldesk.app. www goes to the bare domain. The old address sends every
+    // page except the app itself (which carries the browser's workspace key across) and the API.
+    if (url.hostname === "www." + APP_HOST) return Response.redirect(`https://${APP_HOST}${url.pathname}${url.search}`, 301);
+    if (url.hostname === OLD_HOST && !url.pathname.startsWith("/api/") && url.pathname !== "/" && url.pathname !== "/index.html")
+      return Response.redirect(`https://${APP_HOST}${url.pathname}${url.search}`, 301);
     if (url.pathname === "/api/pic2label") return pic2label(request, env);
     if (url.pathname === "/api/lead") return saveLead(request, env);
     if (url.pathname === "/api/leads") return listLeads(request, env);

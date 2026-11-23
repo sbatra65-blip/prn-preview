@@ -3,8 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pic2Label PRN Studio: preview, convert and create label printer files</title>
+<title>LabelDesk: cloud label designer, PRN viewer and printer file converter</title>
 <meta name="description" content="Preview TSPL, ZPL, EPL2, PGL, DPL, Fingerprint, SBPL and CPCL label files at 203, 300 or 600 dpi. Turn pictures into PRN with AI. By Infinite Solutions.">
+<link rel="canonical" href="https://labeldesk.app/">
+<meta property="og:title" content="LabelDesk: cloud label designer">
+<meta property="og:url" content="https://labeldesk.app/">
+<meta name="theme-color" content="#1f5eff">
+<script>/* LabelDesk moved to labeldesk.app: carry this browser's workspace key and draft across, then switch */
+(function(){try{var L=location,h=L.hostname;if(h==="labels.infinitesolutions.co.in"){var m={};try{var o=localStorage.getItem("p2l-owner");if(o)m.o=o;var d=localStorage.getItem("p2l-design");if(d&&d.length<60000)m.d=d;}catch(e){}var f=Object.keys(m).length?"#move="+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(m))))):"";L.replace("https://labeldesk.app/"+L.search+f);return;}if(L.hash.indexOf("#move=")===0){var j=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(L.hash.slice(6))))));if(j.o&&/^[A-Za-z0-9_-]{32,128}$/.test(j.o)&&!localStorage.getItem("p2l-owner"))localStorage.setItem("p2l-owner",j.o);if(j.d&&!localStorage.getItem("p2l-design"))localStorage.setItem("p2l-design",j.d);history.replaceState(null,"",L.pathname+L.search);}}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Mono:wght@500;600&family=Roboto+Condensed:wght@700&display=swap" rel="stylesheet">
@@ -404,7 +410,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="./"><span class="mark" aria-hidden="true">P2</span><b>Pic2Label <span>PRN Studio</span></b></a>
+  <a class="brand" href="./"><span class="mark" aria-hidden="true">LD</span><b>Label<span>Desk</span></b></a>
   <nav class="topnav" aria-label="Main">
     <a href="#viewer" class="on">Viewer</a>
     <button type="button" data-open="dz">Designer</button>
@@ -649,7 +655,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 <datalist id="dzPtList"><option value="5"><option value="6"><option value="7"><option value="8"><option value="9"><option value="10"><option value="11"><option value="12"><option value="14"><option value="16"><option value="18"><option value="20"><option value="24"><option value="28"><option value="32"><option value="36"><option value="42"><option value="48"><option value="60"><option value="72"></datalist>
 <dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
   <div class="dz-head">
-    <h2 id="dzTitle" class="dz-brand"><span class="mark" aria-hidden="true">P2</span>Pic2Label <span>PRN Studio</span></h2>
+    <h2 id="dzTitle" class="dz-brand"><span class="mark" aria-hidden="true">LD</span>Label<span>Desk</span></h2>
     <button type="button" class="btn dark dz-apponly" data-lead="talk">Talk to Infinite Solutions</button>
     <button type="button" class="btn" id="dzNew">New</button>
     <button type="button" class="btn" id="dzPasteBtn">Paste code</button>
@@ -1356,7 +1362,7 @@ function layoutPRN2(L, lang, dpi) {
   const c36 = v => Math.max(1, Math.min(35, Math.round(v))).toString(36).toUpperCase();
   const dmm = v => v * 10; // DPL metric units (0.1 mm)
   if (lang === "DPL") out.push("<STX>L", "m", "D11", "H15", "PG");
-  if (lang === "FP") out.push(`REM Pic2Label W=${W} H=${H} dots at ${dpi} dpi`, "INPUT OFF", "VERBOFF", "CLL");
+  if (lang === "FP") out.push(`REM LabelDesk W=${W} H=${H} dots at ${dpi} dpi`, "INPUT OFF", "VERBOFF", "CLL");
   if (lang === "SBPL") out.push("<ESC>A", `<ESC>A1${p4(H)}${p4(W)}`, "<ESC>%0");
   if (lang === "CPCL") out.push(`! 0 ${dpi === 203 ? 200 : dpi} ${dpi === 203 ? 200 : dpi} ${H} 1`, `PAGE-WIDTH ${W}`);
   for (const e of L.items) {
@@ -1755,7 +1761,7 @@ function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add
 window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
 
 /* ---------------- Pic2Label: picture -> PRN ---------------- */
-const P2L_API = (location.hostname.endsWith("infinitesolutions.co.in") ? "" : "https://labels.infinitesolutions.co.in") + "/api/pic2label";
+const P2L_API = (/(^|\.)labeldesk\.app$|infinitesolutions\.co\.in$/.test(location.hostname) ? "" : "https://labeldesk.app") + "/api/pic2label";
 const dotsOf = (mm, dpi) => Math.max(0, Math.round(mm * dpi / 25.4));
 const p2l = { img: null, photo: null, gen: false };
 
@@ -1804,7 +1810,7 @@ function bitmapPRN(lang, dpi, o) {
   const name = o.name;
   if (lang === "ZPL") {
     const n = r.bytes.length;
-    return `^XA\n^FX Pic2Label bitmap: ${name}, ${wd} x ${hd} dots at ${dpi} dpi\n^PW${W}\n^LL${H}\n^LH0,0\n^FO${x},${y}^GFA,${n},${n},${r.wb},${zplHexEncode(r.bytes, r.wb, hd)}^FS\n^PQ1\n^XZ\n`;
+    return `^XA\n^FX LabelDesk bitmap: ${name}, ${wd} x ${hd} dots at ${dpi} dpi\n^PW${W}\n^LL${H}\n^LH0,0\n^FO${x},${y}^GFA,${n},${n},${r.wb},${zplHexEncode(r.bytes, r.wb, hd)}^FS\n^PQ1\n^XZ\n`;
   }
   const inv = r.bytes.map(b => 255 - b); // TSPL and EPL2: a 0 bit prints a dot
   if (lang === "EPL2") return `N\nq${W}\nQ${H},24\nGW${x},${y},${r.wb},${hd},${putBin(inv)}\nP1\n`;
@@ -2327,7 +2333,7 @@ async function lmpcReportPDF() {
     }
     y += 2; line("Text found on the label", 11, true); y += 1;
     for (const l of L.G.lines) line(`${l.s}   (${l.mm.toFixed(1)} mm)`, 9, false, [60, 70, 85]);
-    y += 4; line("Legal Metrology (Packaged Commodities) Rules, 2011: declarations in Rule 6, letter size in Rule 7. This is an automatic text check by Pic2Label PRN Studio (labels.infinitesolutions.co.in), not legal advice; confirm with your Legal Metrology consultant.", 8.5, false, [120, 128, 140]);
+    y += 4; line("Legal Metrology (Packaged Commodities) Rules, 2011: declarations in Rule 6, letter size in Rule 7. This is an automatic text check by LabelDesk (labeldesk.app), not legal advice; confirm with your Legal Metrology consultant.", 8.5, false, [120, 128, 140]);
     saveBlob(doc.output("blob"), `LMPC-report-${L.G.name.replace(/[^\w.-]+/g, "_").slice(0, 40)}.pdf`); toast("Report downloaded");
   } catch (e) { toast(e.message); }
 }
@@ -2575,7 +2581,7 @@ function dzDefault() {
     { id: 2, type: "text", x: 3, y: 9, h: 3, text: "MRP Rs. 0.00 (incl. of all taxes)" },
     { id: 3, type: "line", x: 3, y: 14, w: 94, h: 0.4, thickness: 0.4 },
     { id: 4, type: "barcode", symbology: "code128", data: "1234567890", x: 3, y: 17, w: 60, h: 16 },
-    { id: 5, type: "barcode", symbology: "qrcode", data: "https://labels.infinitesolutions.co.in", x: 76, y: 17, w: 20, h: 20 },
+    { id: 5, type: "barcode", symbology: "qrcode", data: "https://labeldesk.app", x: 76, y: 17, w: 20, h: 20 },
   ] };
 }
 const dzPrinter = () => DZ_PRINTERS.find(p => p.id === dz.D.printer) || DZ_PRINTERS[0];
@@ -3620,7 +3626,7 @@ function dzRibbonShow(tab) {
 }
 (function dzBuildRibbon() {
   const r = $("dzRibbon"), tabs = r.querySelector(".rt");
-  tabs.insertAdjacentHTML("afterbegin", '<a class="rbrand" href="./?about" title="About Pic2Label PRN Studio"><span class="mark" aria-hidden="true">P2</span>Pic2Label <span>PRN Studio</span></a>');
+  tabs.insertAdjacentHTML("afterbegin", '<a class="rbrand" href="./?about" title="About LabelDesk"><span class="mark" aria-hidden="true">LD</span>Label<span>Desk</span></a>');
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
@@ -3703,7 +3709,7 @@ $("dzWelcome").addEventListener("click", e => {
 });
 if (APP) {
   document.body.classList.add("appmode"); $("bmGo").textContent = "Make design"; $("picTitle").textContent = "Picture to design";
-  const sub = document.querySelector("#picDlg .dlg-head .sub"); if (sub) sub.textContent = "Turns a label photo into a design you can edit, or places a logo on a new label."; document.title = "Pic2Label PRN Studio · label designer and PRN viewer";
+  const sub = document.querySelector("#picDlg .dlg-head .sub"); if (sub) sub.textContent = "Turns a label photo into a design you can edit, or places a logo on a new label."; document.title = "LabelDesk · cloud label designer";
   const qs = new URLSearchParams(location.search), shared = location.hash.startsWith("#prn=") || qs.has("lib");
   setTimeout(() => { dzOpen(); if (shared) dzShowViewer(); else if (!store.get("p2l-welcomed")) $("dzWelcome").hidden = false; }, 200);
 }

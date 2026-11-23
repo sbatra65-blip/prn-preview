@@ -7,8 +7,13 @@
     "directory": "./public",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": true
   },
+  "routes": [
+    { "pattern": "labeldesk.app", "custom_domain": true },
+    { "pattern": "www.labeldesk.app", "custom_domain": true },
+    { "pattern": "labels.infinitesolutions.co.in", "custom_domain": true }
+  ],
   "ai": { "binding": "AI" },
   "d1_databases": [
     { "binding": "LEADS", "database_name": "pic2label-leads", "database_id": "00617217-1ac9-4e87-8ed4-00989ebf5d75" }
