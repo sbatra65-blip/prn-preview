@@ -3806,7 +3806,7 @@ function dzRibbonDef() {
       ["History", [B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
       ["Insert", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("qr", "QR code", () => dzAdd("qrcode")), B("image", "Image", () => $("dzImgFile").click())]],
       ["Arrange", [B("ac", "Centre", () => dzAlign("center"), has), B("front", "To front", () => dzOrder("front"), has), B("rotr", "Turn 90°", turn(90), turnable)]],
-      ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
+      ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("download", "Save .ldl", () => ldlSaveDialog(), null, null, "Download the label as a LabelDesk file (.ldl): design, printer and settings in one file (Ctrl+Shift+S)"), B("openf", "Open .ldl", () => ldlPick(), null, null, "Open a LabelDesk file (.ldl) (Ctrl+O)"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
     Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
       ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box")), B("dh", "Guide line", () => dzAdd("guide"), null, null, "Horizontal alignment line that is never printed"), B("dv", "Vertical guide", () => dzAdd("vguide"), null, null, "Vertical alignment line that is never printed")]],
       ["Shapes · text fits inside", Object.keys(DZ_SHAPES).map(k => B(k, DZ_SHAPES[k].split(" ")[0].replace("Circle", "Circle"), () => dzAdd("shape:" + k), null, null, DZ_SHAPES[k]))],
@@ -4024,10 +4024,12 @@ async function dzCloudList() {
   try {
     const { designs } = await dzApi("");
     if (!designs.length) { box.innerHTML = '<p class="dz-empty">No designs saved yet. Use “Save to cloud” in the designer.</p>'; return; }
-    box.innerHTML = `<table class="tbl" style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr><th style="text-align:left;padding:6px">Name</th><th style="text-align:left;padding:6px">Saved</th><th></th></tr></thead><tbody>${designs.map(d => `<tr style="border-top:1px solid var(--line)"><td style="padding:8px 6px">${d.name.replace(/</g, "&lt;")}</td><td style="padding:8px 6px;color:var(--muted)">${new Date(d.updated.replace(" ", "T") + "Z").toLocaleString()}</td><td style="padding:8px 6px;text-align:right;white-space:nowrap"><button type="button" class="btn sm primary" data-open-id="${d.id}">Open</button> <button type="button" class="btn sm" data-del-id="${d.id}" data-name="${d.name.replace(/"/g, "&quot;")}">Delete</button></td></tr>`).join("")}</tbody></table>`;
+    box.innerHTML = `<table class="tbl" style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr><th style="text-align:left;padding:6px">Name</th><th style="text-align:left;padding:6px">Saved</th><th></th></tr></thead><tbody>${designs.map(d => `<tr style="border-top:1px solid var(--line)"><td style="padding:8px 6px">${d.name.replace(/</g, "&lt;")}</td><td style="padding:8px 6px;color:var(--muted)">${new Date(d.updated.replace(" ", "T") + "Z").toLocaleString()}</td><td style="padding:8px 6px;text-align:right;white-space:nowrap"><button type="button" class="btn sm primary" data-open-id="${d.id}">Open</button> <button type="button" class="btn sm" data-ldl-id="${d.id}" title="Download this design as a LabelDesk file">.ldl</button> <button type="button" class="btn sm" data-del-id="${d.id}" data-name="${d.name.replace(/"/g, "&quot;")}">Delete</button></td></tr>`).join("")}</tbody></table>`;
   } catch (e) { box.innerHTML = `<p class="dz-warn">${e.message}</p>`; }
 }
 $("dzCloudList").addEventListener("click", async e => {
+  const dl = e.target.closest("[data-ldl-id]");
+  if (dl) { dl.disabled = true; try { const j = await dzApi("/" + dl.dataset.ldlId), keep = dz.D; dz.D = Object.assign(dzDefault(), j.design); try { await ldlSave(j.name, "any", false, true); } finally { dz.D = keep; } } catch (err) { toast(err.message); } dl.disabled = false; return; }
   const o = e.target.closest("[data-open-id]"), d = e.target.closest("[data-del-id]");
   try {
     if (o) { const j = await dzApi("/" + o.dataset.openId); dz.D = Object.assign(dzDefault(), j.design, { cloud: { id: j.id, name: j.name } }); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1; $("dzCloudDlg").close(); dzSetupForm(); dzProps(); dzSave(); $("dzStatus").textContent = `Opened “${j.name}” from the cloud.`; }
@@ -5288,7 +5290,14 @@ async function ldlSeal(head, payload) {
   const r = await fetch("/api/ldl/seal", { method: "POST", headers: { "content-type": "application/json", "x-ld": "1" }, body: JSON.stringify({ head, payload: ldlB64(payload) }) });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Could not seal the file"); return j;
 }
-function ldlSaveDialog() {
+async function ldlReady() { // the server must hold the key that seals .ldl files
+  if (ldlReady.ok) return true;
+  const r = await fetch("/api/ldl/seal", { method: "POST", headers: { "content-type": "application/json", "x-ld": "1" }, body: JSON.stringify({ head: "{}", payload: "" }) }).catch(() => null);
+  if (r && r.status === 503) { alert("Downloading .ldl files is not switched on yet on this server: the owner needs to add the DESIGN_KEY secret.\n\nMeanwhile use File → Download .prn or the PDF in the print window."); return false; }
+  return (ldlReady.ok = true);
+}
+async function ldlSaveDialog() { if (!await ldlReady()) return; ldlSaveDialog2(); }
+function ldlSaveDialog2() {
   const D = dz.D, p = dzPrinter(), co = typeof LD !== "undefined" && LD.company, rows = dz.db ? dz.db.rows.length : 0;
   let d = $("ldlDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldlDlg"; d.style.cssText = "width:min(560px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)"; document.body.append(d); }
   d.innerHTML = `<div class="dlg-head"><div><h2>Save as LabelDesk file (.ldl)</h2><div class="sub">One file with the design, printer, language, resolution, label size, fields, images and serial positions. Only LabelDesk can open it, and any change to the file stops it opening.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
@@ -5303,12 +5312,12 @@ function ldlSaveDialog() {
     catch (e) { $("ldlErr").textContent = e.message; } finally { b.disabled = false; b.textContent = "Save .ldl file"; } };
   d.showModal();
 }
-async function ldlSave(name, lock, withData) {
+async function ldlSave(name, lock, withData, exportOnly) {
   const D = dz.D, p = dzPrinter(), co = typeof LD !== "undefined" && LD.company, now = new Date().toISOString();
   const design = JSON.parse(JSON.stringify(D)); delete design.cloud; design.fileName = name;
   const prefs = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^ld-pr:/.test(k)) prefs[k] = localStorage.getItem(k); } } catch (e) {}
   const serial = {}; for (const { it, k } of (typeof dzSerialParts === "function" ? dzSerialParts() : [])) { const v = store.get(ldSerKey(it, k)); if (v) serial[it.id + ":" + k] = v; }
-  const payload = { design, prefs, serial, data: withData && dz.db ? { name: dz.db.name, columns: dz.db.columns, rows: dz.db.rows } : null };
+  const payload = { design, prefs, serial: exportOnly ? {} : serial, data: withData && !exportOnly && dz.db ? { name: dz.db.name, columns: dz.db.columns, rows: dz.db.rows } : null };
   const head = JSON.stringify({ format: "LabelDesk label", v: 1, app: "LabelDesk", name, created: D.created || now, modified: now,
     author: (typeof LD !== "undefined" && LD.me && LD.me.user && LD.me.user.name) || "", lock, cid: lock === "company" && co ? co.id : "", company: co ? `${co.code} · ${co.name}` : "",
     printer: { id: p.id, brand: p.brand, model: p.model, kind: p.kind }, lang: D.lang, dpi: D.dpi, label: { w: r1(dzLW()), h: D.h, across: D.across, liner: D.paper },
@@ -5318,7 +5327,7 @@ async function ldlSave(name, lock, withData) {
   const hb = new TextEncoder().encode(head), iv = ldlUn64(sealed.iv), ct = ldlUn64(sealed.data);
   const blob = new Blob([new Uint8Array(LDL_MAGIC), ldlU32(hb.length), hb, ldlU32(thumb.length), thumb, iv, ct], { type: "application/x-labeldesk" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name.replace(/[\\/:*?"<>|]+/g, "_") + ".ldl"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  D.fileName = name; dzSave(); toast(`Saved ${a.download}${lock === "company" ? " (locked to your company)" : ""}`);
+  if (!exportOnly) { D.fileName = name; dzSave(); } toast(`Downloaded ${a.download}${lock === "company" ? " (locked to your company)" : ""}`);
 }
 // Read the readable part only (also used to show what a file holds before opening it)
 function ldlParse(buf) {
