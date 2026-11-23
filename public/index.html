@@ -3605,14 +3605,14 @@ function dzToViewer() {
   $("dzDlg").close(); regenSource(D.lang, D.dpi, true);
   $("viewer").scrollIntoView({ block: "start" });
 }
-function dzColourPNG(ret) {
-  const D = dz.D, k = 12, lw = dzLW(), c = document.createElement("canvas"); c.width = Math.round(D.paper * k); c.height = Math.round((D.h + 2 * D.vgap) * k);
-  const x = c.getContext("2d"); x.fillStyle = "#e7e2d6"; x.fillRect(0, 0, c.width, c.height); dz.colourOut = true;
+function dzColourPNG(ret, opt) {
+  opt = opt || {}; const D = dz.D, k = opt.k || 12, lw = dzLW(), c = document.createElement("canvas"); c.width = Math.round(D.paper * k); c.height = Math.round((D.h + 2 * D.vgap) * k);
+  const x = c.getContext("2d"); x.fillStyle = opt.plain ? "#ffffff" : "#e7e2d6"; x.fillRect(0, 0, c.width, c.height); dz.colourOut = !opt.mono;
   try {
     for (let col = 0; col < D.across; col++) {
       const ox = (D.edge + col * (lw + D.hgap)) * k, oy = D.vgap * k;
       x.save(); x.beginPath(); x.rect(ox, oy, lw * k, D.h * k); x.clip(); x.fillStyle = D.stock || "#ffffff"; x.fillRect(ox, oy, lw * k, D.h * k);
-      for (const it of D.items) {
+      for (const it of dzResolveCol(col)) {
         const b = dzBox(it), px = ox + it.x * k, py = oy + it.y * k;
         if (it.type === "line" || it.type === "box") { x.fillStyle = x.strokeStyle = dzCol(it); if (it.type === "line") x.fillRect(px, py, Math.max(1, it.w * k), Math.max(1, it.h * k)); else { const t = (it.thickness || 0.3) * k; x.lineWidth = t; x.strokeRect(px + t / 2, py + t / 2, it.w * k - t, it.h * k - t); } continue; }
         let src = dzRenderItem(it, k, "all", false);
@@ -4498,6 +4498,39 @@ function ldWithQty(prn, lang, rows) {
   else done = false;
   return { prn, done };
 }
+// PDF of the labels being printed (fields, serials and record ranges included): roll, one label per page, or A4 sheets
+async function ldPrintPDF() {
+  const D = dz.D, err = document.getElementById("ldPrErr"), btn = document.getElementById("ldPdfGo"), mode = document.getElementById("ldPdfMode").value; err.textContent = "";
+  const q0 = Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1));
+  let labels; try { labels = dzVarNeeds().any ? ldVarLabels(q0) : Array.from({ length: q0 }, (_, n) => ({ rec: null, n })); } catch (e) { err.textContent = e.message; return; }
+  if (!labels.length) { err.textContent = "Nothing to print."; return; }
+  if (labels.length > 1500 && !confirm(`Make a PDF of ${labels.length} labels? Large PDFs take a while.`)) return;
+  btn.disabled = true; btn.textContent = "Making PDF…";
+  try {
+    const jsPDF = await loadJsPDF(), k = 12, lw = dzLW(), rows = Math.ceil(labels.length / D.across), var_ = dzVarNeeds().any, mono = !dzPrinter().colour && !D.items.some(i => i.color || i.fillColor || i.textColor);
+    let doc = null, cache = {}, placed = 0;
+    const A4 = { w: 210, h: 297, m: 8, gx: Math.max(2, D.hgap || 0), gy: Math.max(2, D.vgap || 0) }, perRow = Math.max(1, Math.floor((A4.w - 2 * A4.m + A4.gx) / (lw + A4.gx))), perCol = Math.max(1, Math.floor((A4.h - 2 * A4.m + A4.gy) / (D.h + A4.gy)));
+    const page = (w, h) => { const o = w > h ? "l" : "p"; if (!doc) doc = new jsPDF({ unit: "mm", format: [w, h], orientation: o, compress: true }); else doc.addPage([w, h], o); };
+    for (let r = 0; r < rows; r++) {
+      dz.ctx = { labels, base: r * D.across };
+      const key = var_ ? "r" + r : "same" + Math.min(D.across, labels.length - r * D.across); let row = cache[key];
+      if (!row) { const full = dzColourPNG(true, { plain: true, k, mono }); row = document.createElement("canvas"); row.width = full.width; row.height = Math.round(D.h * k); row.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * k)); if (!var_) cache[key] = row; }
+      const n = Math.min(D.across, labels.length - r * D.across);
+      if (mode === "row") { page(D.paper, D.h); doc.addImage(row.toDataURL("image/png"), "PNG", 0, 0, D.paper, D.h, var_ ? undefined : key, "FAST"); continue; }
+      for (let c = 0; c < n; c++) {
+        const one = document.createElement("canvas"); one.width = Math.round(lw * k); one.height = row.height; one.getContext("2d").drawImage(row, -Math.round((D.edge + c * (lw + D.hgap)) * k), 0);
+        const url = one.toDataURL("image/png"), alias = var_ ? undefined : key + "c" + c;
+        if (mode === "label") { page(lw, D.h); doc.addImage(url, "PNG", 0, 0, lw, D.h, alias, "FAST"); }
+        else { const i = placed % (perRow * perCol); if (i === 0) page(A4.w, A4.h); const cx = i % perRow, cy = Math.floor(i / perRow);
+          doc.addImage(url, "PNG", A4.m + cx * (lw + A4.gx), A4.m + cy * (D.h + A4.gy), lw, D.h, alias, "FAST"); doc.setDrawColor(200); doc.setLineWidth(0.1); doc.rect(A4.m + cx * (lw + A4.gx), A4.m + cy * (D.h + A4.gy), lw, D.h); placed++; }
+      }
+      if (r % 20 === 19) await new Promise(ok => setTimeout(ok, 0)); // keep the page responsive on long runs
+    }
+    doc.save(`labels_${labels.length}_${mode === "a4" ? "A4" : mode === "label" ? "single" : "roll"}.pdf`);
+    toast(`PDF with ${labels.length} label(s)${mode === "a4" ? `, ${perRow * perCol} per A4 page` : ""}`);
+  } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); }
+  finally { dz.ctx = null; dz.gfx = null; btn.disabled = false; btn.textContent = "Download PDF"; }
+}
 const ldPrKey = () => "ld-printer:" + dzPrinter().id;
 // Which resolution and language does this Windows printer need? Saved choice first, then clues in its name and driver.
 function ldGuessPrinter(name) {
@@ -4517,19 +4550,10 @@ async function ldPrintOpen() {
   if (!dlg.open) dlg.showModal();
   body.innerHTML = '<p class="dz-empty">Connecting to QZ Tray on this computer…</p>';
   try { await ldQzConnect(); LDQ.printers = await qz.printers.find(); LDQ.details = {}; try { for (const d of await qz.printers.details()) LDQ.details[d.name] = d; } catch (e) {} }
-  catch (e) {
-    body.innerHTML = `<p style="margin:0 0 10px"><b>QZ Tray is not running on this computer.</b></p>
-      <ol class="ld-steps"><li>Download QZ Tray (free) from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a> and install it. Amazon sellers often have it already.</li>
-      <li>Start QZ Tray: it sits in the system tray, next to the clock.</li>
-      <li>Click <b>Try again</b>. The first time, QZ Tray asks you to allow labeldesk.app: tick “Remember” and click Allow.</li></ol>
-      <p class="dz-cap">${ldEsc(e && e.message || "")}</p>
-      <div class="ld-row"><button type="button" class="btn primary" id="ldQzRetry">Try again</button><button type="button" class="btn" id="ldQzPrn">Download .prn instead</button></div>`;
-    document.getElementById("ldQzRetry").onclick = ldPrintOpen; document.getElementById("ldQzPrn").onclick = () => { dlg.close(); dzDownload(); };
-    return;
-  }
+  catch (e) { LDQ.printers = []; LDQ.err = e && e.message || ""; }
   const saved = store.get(ldPrKey()), guess = LDQ.printers.find(n => n === saved) || LDQ.printers.find(n => new RegExp(p.brand === "Any" ? "^$" : p.brand, "i").test(n) || new RegExp(p.model.split(" ")[0].replace(/\W/g, ""), "i").test(n.replace(/\W/g, ""))) || LDQ.printers[0];
   const colourOnly = p.driver, per = D.across;
-  body.innerHTML = `
+  body.innerHTML = `${LDQ.printers.length ? "" : `<div class="dz-warn" style="margin:0 0 12px;padding:10px 12px;border-radius:10px"><b>Direct printing needs QZ Tray on this computer.</b> Install it free from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a>, start it, then <button type="button" class="ld-link" id="ldQzRetry">try again</button>. Meanwhile you can download a PDF or a printer file below.</div>`}
     <div class="ld-grid2">
       <label class="ld-f">Printer on this computer<select id="ldPrName">${LDQ.printers.map(n => `<option${n === guess ? " selected" : ""}>${ldEsc(n)}</option>`).join("")}</select></label>
       <label class="ld-f">Number of labels<input id="ldPrQty" type="number" min="1" max="99999" value="${per}" step="1"></label>
@@ -4547,7 +4571,10 @@ async function ldPrintOpen() {
       <div class="ld-f">Label<small id="ldPrInfo"></small></div>
     </div>
     <p class="ld-err" id="ldPrErr" role="alert"></p>
-    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo">Print</button><button type="button" class="btn" id="ldPrTest">Print 1 test label</button></div>
+    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo"${LDQ.printers.length ? "" : " disabled"}>Print</button><button type="button" class="btn" id="ldPrTest"${LDQ.printers.length ? "" : " disabled"}>Print 1 test label</button>
+      <span style="flex:1"></span>
+      <select id="ldPdfMode" aria-label="PDF pages" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><option value="row">PDF: labels as on the roll</option><option value="label">PDF: one label per page</option><option value="a4">PDF: A4 sheet of labels</option></select>
+      <button type="button" class="btn" id="ldPdfGo">Download PDF</button><button type="button" class="btn" id="ldPrnGo">Download .prn</button></div>
     <p class="dz-cap" style="margin-top:12px">Printer language mode needs the Windows printer set to a “Generic / Text Only” or the maker's driver with raw pass-through, which is the normal set-up for thermal printers. Image mode works with any driver; set the driver's label size to ${r1(D.paper)} × ${r1(D.h)} mm.</p>`;
   const info = () => { const q0 = Math.max(1, +document.getElementById("ldPrQty").value || 1); let q = q0; if (dzVarNeeds().any) { try { q = ldVarLabels(q0).length || q0; } catch (e) {} } const rows = Math.ceil(q / per);
     document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm · ${q} label(s)${per > 1 ? ` on ${rows} row(s), ${per} across` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
@@ -4566,21 +4593,24 @@ async function ldPrintOpen() {
     n.hidden = !msg.length; n.textContent = msg.join(" "); };
   $p("ldPrName").onchange = fit; $p("ldPrDpi").onchange = note; $p("ldPrLang").onchange = note; $p("ldPrMode").onchange = note; fit();
   document.getElementById("ldPrGo").onclick = () => ldPrintRun(false);
+  document.getElementById("ldPdfGo").onclick = () => ldPrintPDF();
+  document.getElementById("ldPrnGo").onclick = () => ldPrintRun(false, "file");
+  if (document.getElementById("ldQzRetry")) document.getElementById("ldQzRetry").onclick = ldPrintOpen;
   document.getElementById("ldPrTest").onclick = () => ldPrintRun(true);
 }
-async function ldPrintRun(test) {
+async function ldPrintRun(test, to) {
   const D = dz.D, err = document.getElementById("ldPrErr"), btns = document.querySelectorAll("#ldPrintBody button"); err.textContent = "";
   const name = document.getElementById("ldPrName").value, mode = document.getElementById("ldPrMode").value;
   const qty = test ? D.across : Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1)), rows = Math.ceil(qty / D.across);
-  if (!name) { err.textContent = "No printer found on this computer."; return; }
-  if (!test && rows > 50 && !confirm(`Print ${rows * D.across} labels on ${name}?`)) return;
+  if (!name && to !== "file") { err.textContent = "No printer found on this computer."; return; }
+  if (!test && to !== "file" && rows > 50 && !confirm(`Print ${rows * D.across} labels on ${name}?`)) return;
   btns.forEach(b => b.disabled = true);
   try {
-    store.set(ldPrKey(), name);
-    if (mode === "raw") {
+    if (name) store.set(ldPrKey(), name);
+    if (mode === "raw" || to === "file") {
       if (!dzCheck()) throw new Error("Fix the problems shown on the label first.");
       const lang = document.getElementById("ldPrLang").value, dpi = lang === "EPL2" ? 203 : +document.getElementById("ldPrDpi").value;
-      store.set("ld-pr:" + name, JSON.stringify({ dpi, lang }));
+      if (name) store.set("ld-pr:" + name, JSON.stringify({ dpi, lang }));
       let q;
       if (dzVarNeeds().any) { // fields, serial numbers: every label gets its own data
         let labels = ldVarLabels(test ? 1 : qty); if (test) labels = labels.slice(0, D.across);
@@ -4588,6 +4618,7 @@ async function ldPrintRun(test) {
         if (!test && labels.length > 2000 && !confirm(`Print ${labels.length} labels on ${name}?`)) return;
         const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; toast(`${labels.length} label(s) prepared`);
       } else { const { prn } = layoutPRN(dzLayout(), lang, dpi); q = ldWithQty(prn, lang, rows); }
+      if (to === "file") { const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(q.prn)); a.download = `labels_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("Printer file downloaded"); return; }
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
     } else {
