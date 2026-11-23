@@ -463,10 +463,23 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<dialog id="dzPasteDlg" aria-labelledby="dzPasteTitle">
+  <div class="dlg-head"><div><h2 id="dzPasteTitle">Paste printer code</h2><div class="sub">TSPL, ZPL, EPL2, PGL, DPL, Fingerprint, SBPL or CPCL. The language is detected; text, barcodes and lines become objects you can move and edit.</div></div><button type="button" class="x" id="dzPasteClose" aria-label="Close">×</button></div>
+  <div class="dlg-body" style="padding:16px 20px;overflow:auto">
+    <div class="dz-f">
+      <label class="full">Code<textarea id="dzPasteText" style="min-height:220px" spellcheck="false" placeholder="SIZE 100 mm, 50 mm&#10;CLS&#10;TEXT 40,40,&quot;0&quot;,0,12,12,&quot;HELLO&quot;&#10;PRINT 1"></textarea></label>
+      <label>Code was made for<select id="dzPasteDpi"><option value="203">203 dpi</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>
+      <label>Detected language<input id="dzPasteLang" readonly value="—"></label>
+    </div>
+    <p class="dz-cap" id="dzPasteNote">Printer graphics (logos) come in as images. Rotated items are not brought in yet; they are counted after import.</p>
+  </div>
+  <div class="dlg-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--line)"><button type="button" class="btn" id="dzPasteCancel">Cancel</button><button type="button" class="btn primary" id="dzPasteGo">Bring into designer</button></div>
+</dialog>
 <dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
   <div class="dz-head">
     <h2 id="dzTitle">Label designer</h2>
     <button type="button" class="btn" id="dzNew">New</button>
+    <button type="button" class="btn" id="dzPasteBtn">Paste code</button>
     <label class="btn" for="dzOpenFile">Open design</label><input type="file" id="dzOpenFile" accept=".json,.p2l" hidden>
     <button type="button" class="btn" id="dzSave">Save design</button>
     <button type="button" class="btn primary" id="dzToViewer">Preview as printed</button>
@@ -505,6 +518,7 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
         <button type="button" class="btn" data-add="datamatrix">DataMatrix</button>
         <button type="button" class="btn" data-add="line">Line</button>
         <button type="button" class="btn" data-add="box">Box</button>
+        <label class="btn" for="dzImgFile">Image</label><input type="file" id="dzImgFile" accept="image/*,.bmp,.jpg,.jpeg,.png" hidden>
       </div>
       <p class="dz-cap">Design on the outlined label. The other labels across repeat it. Drag to move, use the corner handle to resize, arrow keys nudge 0.5 mm (Shift: 5 mm), Delete removes, Ctrl+D duplicates.</p>
     </aside>
@@ -1150,6 +1164,14 @@ function layoutPRN2(L, lang, dpi) {
   if (lang === "CPCL") out.push(`! 0 ${dpi === 203 ? 200 : dpi} ${dpi === 203 ? 200 : dpi} ${H} 1`, `PAGE-WIDTH ${W}`);
   for (const e of L.items) {
     const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
+    if (e.type === "image") {
+      const im = e.imgEl;
+      if (lang !== "CPCL") { warn.push(`Images are not written in ${lang === "FP" ? "Fingerprint" : lang} here; these printers usually also accept ZPL.`); continue; }
+      if (!im || !im.naturalWidth) { warn.push("An image had not loaded and was skipped."); continue; }
+      const r = rasterize(im, w, h, e.method || "threshold", e.threshold ?? 128, !!e.invert); let hex = "";
+      for (const b of r.bytes) hex += b.toString(16).padStart(2, "0").toUpperCase();
+      out.push(`EG ${r.wb} ${h} ${x} ${y} ${hex}`); continue;
+    }
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
       const em = Math.max(8, Math.round(h * 1.2)), sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
@@ -1460,7 +1482,7 @@ const UNIT = { mm: 1, cm: 10, in: 25.4 };
 const toU = mm => +(mm / UNIT[state.unit || "mm"]).toFixed(state.unit === "in" ? 2 : 1);
 const fromU = v => v * UNIT[state.unit || "mm"];
 function draw() {
-  if ($("dzBack")) $("dzBack").hidden = !(state.source && state.source.design);
+  if ($("dzBack")) $("dzBack").hidden = !$("prn").value.trim();
   const all = $("prn").value;
   const lang = detect(all);
   const t = currentTpl();
@@ -1660,6 +1682,13 @@ function layoutPRN(L, lang, dpi) {
         const hin = bh / dpi, tenth = Math.max(1, Math.floor(hin * 10)), extra = Math.max(0, bh - Math.round(tenth / 10 * dpi));
         pgl.bars.push("BARCODE", `${t};H${tenth}${extra ? "." + extra : ""};${y};${bx}`, `*${kind === "gs1-128" ? raw : data}*`, "PDF", "STOP");
       }
+    } else if (e.type === "image") {
+      const im = e.imgEl; if (!im || !im.naturalWidth) { warn.push("An image had not loaded and was skipped."); continue; }
+      const r = rasterize(im, w, h, e.method || "threshold", e.threshold ?? 128, !!e.invert), inv = r.bytes.map(b => 255 - b);
+      if (lang === "TSPL") out.push(`BITMAP ${x},${y},${r.wb},${h},0,${putBin(inv)}`);
+      else if (lang === "ZPL") out.push(`^FO${x},${y}^GFA,${r.bytes.length},${r.bytes.length},${r.wb},${zplHexEncode(r.bytes, r.wb, h)}^FS`);
+      else if (lang === "EPL2") out.push(`GW${x},${y},${r.wb},${h},${putBin(inv)}`);
+      else warn.push("Images are not written in PGL here; most Printronix printers also take ZPL.");
     } else if (e.type === "line" || e.type === "box") {
       const th = Math.max(1, D(e.thickness || 0.3));
       const horiz = e.type === "line" && w >= h, ww = e.type === "line" ? (horiz ? Math.max(w, th) : th) : Math.max(w, th), hh = e.type === "line" ? (horiz ? th : Math.max(h, th)) : Math.max(h, th);
@@ -2262,7 +2291,7 @@ const dzPrinter = () => DZ_PRINTERS.find(p => p.id === dz.D.printer) || DZ_PRINT
 const dzLW = (D = dz.D) => (D.paper - 2 * D.edge - (D.across - 1) * D.hgap) / D.across;
 const dzIs2D = it => it.type === "barcode" && (it.symbology === "qrcode" || it.symbology === "datamatrix");
 function dzTextW(it) { return measureEm(it.text || " ", it.h * 1.2 * 20) / 20 * 1.02; }
-function dzSave() { store.set("p2l-design", JSON.stringify(dz.D)); $("dzStatus").textContent = "Saved in this browser as you work."; }
+function dzSave() { try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = "Saved in this browser as you work."; }
 
 function dzOpen() {
   if (!dz.D) { try { dz.D = JSON.parse(store.get("p2l-design")); } catch (e) {} if (!dz.D || !dz.D.items) dz.D = dzDefault(); }
@@ -2359,6 +2388,16 @@ function dzPaint(el, it, s) {
     t.style.fontSize = it.h * 1.2 * s + "px"; t.style.lineHeight = it.h * s + "px";
     el.replaceChildren(t);
   } else if (it.type === "line") { el.style.background = "#000"; el.replaceChildren(); }
+  else if (it.type === "image") {
+    const im = dzImg(it), c = document.createElement("canvas");
+    if (im.complete && im.naturalWidth) { // show it as the printer will: 1-bit dots at the printer's resolution
+      const wd = Math.max(1, dotsOf(it.w, D.dpi)), hd = Math.max(1, dotsOf(it.h, D.dpi)), r = rasterize(im, wd, hd, it.method || "threshold", it.threshold ?? 128, !!it.invert);
+      c.width = wd; c.height = hd; const x = c.getContext("2d"), img = x.createImageData(wd, hd);
+      for (let yy = 0; yy < hd; yy++) for (let xx = 0; xx < wd; xx++) { const on = r.bytes[yy * r.wb + (xx >> 3)] & (0x80 >> (xx & 7)), i = (yy * wd + xx) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = on ? 0 : 255; img.data[i + 3] = on ? 255 : 0; }
+      x.putImageData(img, 0, 0);
+    }
+    el.replaceChildren(c);
+  }
   else if (it.type === "box") { el.style.border = `${Math.max(1, (it.thickness || 0.3) * s)}px solid #000`; el.replaceChildren(); }
   else {
     const sym = it.symbology, two = sym === "qrcode" || sym === "datamatrix", c = document.createElement("canvas");
@@ -2394,9 +2433,10 @@ function dzGrab(e, it, resize) {
     else if (it.type === "text") it.h = Math.max(1, sn(o.h + dy));
     else if (dzIs2D(it)) { const v = Math.max(4, sn(Math.max(o.w + dx, o.h + dy))); it.w = it.h = v; }
     else if (it.type === "line") { if (o.w >= o.h) it.w = Math.max(1, sn(o.w + dx)); else it.h = Math.max(1, sn(o.h + dy)); }
+    else if (it.type === "image" && it.lock !== false) { it.w = Math.max(2, sn(o.w + dx)); it.h = r1(it.w * (it.ratio || o.h / o.w)); }
     else { it.w = Math.max(2, sn(o.w + dx)); it.h = Math.max(2, sn(o.h + dy)); }
     for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${it.id}"]`)) {
-      if (resize && it.type !== "line" && it.type !== "box") dzPaint(el, it, s);
+      if (resize && it.type !== "line" && it.type !== "box" && it.type !== "image") dzPaint(el, it, s);
       else Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: it.w * s + "px", height: it.h * s + "px" });
     }
   };
@@ -2422,12 +2462,24 @@ function dzProps() {
     f.push(`<label class="full">Direction<select data-k="dir"><option value="h"${horiz ? " selected" : ""}>Horizontal</option><option value="v"${horiz ? "" : " selected"}>Vertical</option></select></label>`);
     f.push(`<label>Length, mm<input data-k="len" type="number" step="0.5" min="1" value="${r1(Math.max(it.w, it.h))}"></label>`);
     num("thickness", "Thickness, mm", 0.1, 0.1);
+  } else if (it.type === "image") {
+    num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2);
+    f.push(`<label class="full" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-k="lock" style="width:auto"${it.lock !== false ? " checked" : ""}> Keep proportions</label>`);
+    f.push(`<label class="full">Method<select data-k="method"><option value="threshold"${it.method === "threshold" ? " selected" : ""}>Threshold (logos, text)</option><option value="atkinson"${it.method === "atkinson" ? " selected" : ""}>Atkinson dither (photos)</option><option value="fs"${it.method === "fs" ? " selected" : ""}>Floyd–Steinberg dither</option></select></label>`);
+    f.push(`<label>Threshold<input data-k="threshold" type="range" min="1" max="254" value="${it.threshold ?? 128}"></label>`);
+    f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);align-self:end"><input type="checkbox" data-k="invert" style="width:auto"${it.invert ? " checked" : ""}> Invert</label>`);
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
   const hints = { ean13: "12 digits; the check digit is added.", upca: "11 digits; the check digit is added.", "gs1-128": "Use (AI) brackets, e.g. (01)08901234567890(10)AB12.", datamatrix: "For GS1 DataMatrix start with (01)…" };
   box.innerHTML = `<div class="dz-f">${f.join("")}</div>${it.type === "barcode" && hints[it.symbology] ? `<p class="dz-cap">${hints[it.symbology]}</p>` : ""}
     <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzDup">Duplicate</button><button type="button" class="btn" id="dzCenter">Centre across</button><button type="button" class="btn" id="dzDel" style="color:var(--bad)">Delete</button></div>`;
-  for (const inp of box.querySelectorAll("[data-k]")) inp.addEventListener(inp.tagName === "SELECT" ? "change" : "input", () => {
+  for (const inp of box.querySelectorAll("[data-k]")) inp.addEventListener(inp.tagName === "SELECT" || inp.type === "checkbox" ? "change" : "input", () => {
     const k = inp.dataset.k, v = inp.value;
+    if (it.type === "image" && ["lock", "invert", "method", "threshold"].includes(k)) {
+      if (k === "lock" || k === "invert") it[k] = inp.checked; else if (k === "threshold") it.threshold = +v; else it.method = v;
+      if (k === "lock" && inp.checked) it.h = r1(it.w * it.ratio);
+      dzRefresh(it); dzSave(); return;
+    }
+    if (it.type === "image" && it.lock !== false && (k === "w" || k === "h")) { const n = +v || 1; if (k === "w") { it.w = n; it.h = r1(n * it.ratio); } else { it.h = n; it.w = r1(n / it.ratio); } dzRefresh(it); dzSave(); return; }
     if (k === "text" || k === "data") it[k] = v;
     else if (k === "symbology") { const was2 = dzIs2D(it); it.symbology = v; if (dzIs2D(it) && !was2) it.w = it.h = Math.min(it.w, 20); if (!dzIs2D(it) && was2) { it.w = 50; it.h = 15; } dzRefresh(it); dzSave(); return dzProps(); }
     else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
@@ -2457,6 +2509,7 @@ function dzLayout() {
     const ox = D.edge + c * (lw + D.hgap);
     for (const it of D.items) {
       const o = Object.assign({}, it, { x: r1(it.x + ox), y: r1(it.y) });
+      if (o.type === "image") { o.imgEl = dzImg(it); delete o.src; }
       if (o.type === "barcode" && o.symbology === "upca") { o.data = "0" + String(o.data || "").replace(/\D/g, "").slice(0, 11); o.symbology = "ean13"; }
       items.push(o);
     }
@@ -2513,7 +2566,87 @@ $("dzDlg").addEventListener("keydown", e => {
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); dzDuplicate(); }
 });
 addEventListener("resize", () => { if ($("dzDlg").open) dzDraw(); });
-if ($("dzBack")) $("dzBack").onclick = dzOpen;
+/* images */
+dz.imgs = {};
+function dzImg(it) { // decoded image for an item, loaded once; repaint when ready
+  let im = dz.imgs[it.id];
+  if (!im || im.src !== it.src) { im = dz.imgs[it.id] = new Image(); im.onload = () => { if ($("dzDlg").open) dzRefresh(it); }; im.src = it.src; }
+  return im;
+}
+function dzShrink(file) { // keep designs small: longest side 800 px, PNG keeps hard edges
+  return new Promise((res, rej) => {
+    const im = new Image(), url = URL.createObjectURL(file);
+    im.onload = () => { const k = Math.min(1, 800 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); res({ src: c.toDataURL("image/png"), ratio: c.height / c.width, photo: analysePicture ? analysePicture(im) : null }); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(); }; im.src = url;
+  });
+}
+$("dzImgFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  let r; try { r = await dzShrink(f); } catch (err) { return toast("Could not read that image"); }
+  const lw = dzLW(), D = dz.D, w = r1(Math.min(30, lw - 6)), h = r1(Math.min(D.h - 4, w * r.ratio)), id = dz.seq++;
+  const it = { id, type: "image", x: 3, y: 3, w: h < w * r.ratio ? r1(h / r.ratio) : w, h, src: r.src, ratio: r.ratio, name: f.name,
+    method: r.photo && r.photo.photo ? "atkinson" : "threshold", threshold: r.photo && r.photo.threshold || 128, invert: false };
+  D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave();
+  if (D.lang !== "TSPL" && D.lang !== "ZPL" && D.lang !== "EPL2" && D.lang !== "CPCL") toast(`Images print in TSPL, ZPL, EPL2 or CPCL; switch language before output`);
+});
+
+/* code -> designer */
+const DZ_SYM_IN = { code128: "code128", "gs1-128": "gs1-128", ean13: "ean13", upca: "upca", code39: "code39", qrcode: "qrcode", datamatrix: "datamatrix", gs1datamatrix: "datamatrix", "gs1-128composite": "gs1-128" };
+function dzFromModel(model, lang, dpi) {
+  const L = modelToLayout(model), items = [];
+  let id = 1, odd = 0;
+  for (const e of L.items) {
+    const b = { id: id++, x: r1(e.x), y: r1(e.y) };
+    if (e.type === "text") items.push(Object.assign(b, { type: "text", h: Math.max(1, r1(e.h)), text: e.text }));
+    else if (e.type === "barcode") { const sym = DZ_SYM_IN[e.symbology] || (odd++, "code128"); items.push(Object.assign(b, { type: "barcode", symbology: sym, data: String(e.data || ""), w: r1(e.w), h: r1(sym === "qrcode" || sym === "datamatrix" ? e.w : e.h) })); }
+    else if (e.type === "line") {
+      const th = Math.min(e.w, e.h);
+      if (th > 1.5) items.push(Object.assign(b, { type: "box", w: r1(e.w), h: r1(e.h), thickness: r1(th / 2 + 0.1) })); // a solid block
+      else items.push(Object.assign(b, { type: "line", w: r1(Math.max(e.w, th)), h: r1(e.w >= e.h ? th : e.h), thickness: Math.max(0.1, r1(th)) }));
+    }
+  }
+  const k = 25.4 / model.dpi;
+  for (const b of model.items.filter(i => i.k === "bmp" && !i.deg && i.bits)) { // printer graphics come in as image objects
+    const wd = b.wb * 8, c = document.createElement("canvas"); c.width = wd; c.height = b.h;
+    const x = c.getContext("2d"), img = x.createImageData(wd, b.h);
+    for (let yy = 0; yy < b.h; yy++) for (let xx = 0; xx < wd; xx++) { let on = !!(b.bits[yy * b.wb + (xx >> 3)] & (0x80 >> (xx & 7))); if (b.zeroBlack) on = !on; const i = (yy * wd + xx) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = on ? 0 : 255; img.data[i + 3] = 255; }
+    x.putImageData(img, 0, 0);
+    items.push({ id: id++, type: "image", x: r1(b.x * k), y: r1(b.y * k), w: r1(wd * (b.mx || 1) * k), h: r1(b.h * (b.my || 1) * k), src: c.toDataURL("image/png"), ratio: b.h * (b.my || 1) / (wd * (b.mx || 1)), method: "threshold", threshold: 128, invert: false, name: "graphic" });
+  }
+  const skipped = model.items.filter(i => i.deg || i.k === "gbox").length;
+  const cur = dz.D || dzDefault(), fits = p => p.langs.includes(lang) && p.dpis.includes(dpi);
+  const pr = fits(DZ_PRINTERS.find(p => p.id === cur.printer) || {}) ? cur.printer : (DZ_PRINTERS.find(fits) || DZ_PRINTERS[DZ_PRINTERS.length - 1]).id;
+  dz.D = { printer: pr, lang, dpi, pw: cur.pw, mw: cur.mw, paper: r1(L.w), across: 1, hgap: cur.hgap ?? 3, edge: 0, h: r1(L.h), vgap: cur.vgap ?? 3, items };
+  const p = DZ_PRINTERS.find(x => x.id === pr); if (p.kind !== "Custom") { dz.D.pw = p.pw; dz.D.mw = p.mw; } else { dz.D.pw = Math.max(dz.D.pw, L.w); dz.D.mw = Math.max(dz.D.mw, L.w); }
+  dz.sel = null; dz.seq = id;
+  const notes = [];
+  if (skipped) notes.push(`${skipped} rotated or graphic item${skipped > 1 ? "s were" : " was"} left out`);
+  if (odd) notes.push(`${odd} barcode type${odd > 1 ? "s" : ""} not in the designer became Code 128`);
+  return notes;
+}
+function dzImportText(text, dpi) {
+  text = showCtl(realCtl(text)); const lang = detect(text);
+  if (lang === "UNKNOWN") { toast("Could not recognise the printer language"); return false; }
+  const d = lang === "EPL2" ? 203 : dpi, model = parseAny(text, lang, d);
+  if (!model.items.length) { toast("No objects found in that code"); return false; }
+  const notes = dzFromModel(model, lang, d);
+  if ($("dzDlg").open) { dzSetupForm(); dzProps(); dzFit(); } else dzOpen();
+  dzSave(); $("dzStatus").textContent = `Brought in ${dz.D.items.length} objects from ${lang}${notes.length ? " · " + notes.join(" · ") : ""}.`;
+  return true;
+}
+$("dzPasteBtn").onclick = () => { $("dzPasteDpi").value = String(dz.D?.dpi || state.dpi || 203); $("dzPasteDlg").showModal(); $("dzPasteText").focus(); };
+for (const id of ["dzPasteClose", "dzPasteCancel"]) $(id).onclick = () => $("dzPasteDlg").close();
+$("dzPasteText").addEventListener("input", () => { const l = detect($("dzPasteText").value); $("dzPasteLang").value = l === "UNKNOWN" ? "—" : (DZ_LANG_NAME[l] || l); });
+$("dzPasteGo").onclick = () => { if (dzImportText($("dzPasteText").value, +$("dzPasteDpi").value)) $("dzPasteDlg").close(); };
+if ($("dzBack")) $("dzBack").onclick = () => {
+  if (state.source && state.source.design) return dzOpen();
+  const m = state.lastModel; if (!m || !m.items.length) return toast("Open a label first");
+  const notes = dzFromModel(m, state.lastLang || state.lang, m.dpi); dzOpen(); dzSave();
+  $("dzStatus").textContent = `Brought in ${dz.D.items.length} objects from the viewer${notes.length ? " · " + notes.join(" · ") : ""}.`;
+};
 if (new URLSearchParams(location.search).has("design")) setTimeout(dzOpen, 300);
 </script>
 </body>
