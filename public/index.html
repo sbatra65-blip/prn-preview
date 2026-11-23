@@ -813,13 +813,22 @@ function parsePGL(t, dpi, fallbackW) {
         const sr = +p[p.length - 2], sc = +p[p.length - 1];
         const hp = p.find(x => /^H\d/i.test(x)); let h = 1.3 * m.dpi;
         if (hp) { const [n, extra] = hp.slice(1).split("."); h = (+n / 10) * m.dpi + (+extra || 0); }
-        bc = { k: "bar", x: sc, y: sr, h, mod: Math.round(m.dpi / 203 * 3), hri: false, ptype: type };
+        const xd = p.find(x => /^XD\d/i.test(x)), ec = p.find(x => /^E[LMQH0-3]$/i.test(x));
+        if (/^QR/.test(type)) bc = { k: "qr", x: sc, y: sr, mod: xd ? +xd.slice(2) : Math.round(m.dpi / 203 * 4), ecc: ec ? ("LMQH"[+ec[1]] || ec[1].toUpperCase()) : "M", ptype: type };
+        else if (/^(DATAMATRIX|DMATRIX|DM)/.test(type)) bc = { k: "dm", x: sc, y: sr, mod: xd ? +xd.slice(2) : Math.round(m.dpi / 203 * 4), ptype: type };
+        else bc = { k: "bar", x: sc, y: sr, h, mod: Math.round(m.dpi / 203 * 3), hri: false, ptype: type };
       } else if (/^PDF/i.test(line)) bc.hri = true;
       else if (/^(.).*\1$/.test(line)) {
         const data = line.slice(1, -1);
-        if (bc.ptype.startsWith("EAN13")) Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
+        if (bc.k === "qr") bc.text = (bc.text ? bc.text + "\r\n" : "") + data;
+        else if (bc.k === "dm") { const gs1 = /^\(\d{2,4}\)/.test(data); Object.assign(bc, { gs1, text: data }); }
+        else if (bc.ptype.startsWith("EAN13")) Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
         else if (bc.ptype.startsWith("UCC-128") || bc.ptype.startsWith("EAN128")) { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
         else if (bc.ptype.startsWith("C128")) Object.assign(bc, { bcid: "code128", text: data, hriText: data });
+        else if (/^C3\/?9|^CODE39/.test(bc.ptype)) Object.assign(bc, { bcid: "code39", text: data, hriText: data });
+        else if (/^UPC-?A/.test(bc.ptype)) Object.assign(bc, { bcid: "upca", text: data, hriText: data });
+        else if (/^EAN8/.test(bc.ptype)) Object.assign(bc, { bcid: "ean8", text: data, hriText: data });
+        else if (/^I2\/?5/.test(bc.ptype)) Object.assign(bc, { bcid: "interleaved2of5", text: data, hriText: data });
         else { m.warn.push("PGL barcode " + bc.ptype + " not previewed"); bc = null; }
       }
     }
