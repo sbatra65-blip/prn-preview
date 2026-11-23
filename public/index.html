@@ -4313,11 +4313,24 @@ function ldWithQty(prn, lang, rows) {
   return { prn, done };
 }
 const ldPrKey = () => "ld-printer:" + dzPrinter().id;
+// Which resolution and language does this Windows printer need? Saved choice first, then clues in its name and driver.
+function ldGuessPrinter(name) {
+  const D = dz.D; let s = null; try { s = JSON.parse(store.get("ld-pr:" + name) || "null"); } catch (e) {}
+  if (s && s.dpi && s.lang) return s;
+  const d = LDQ.details && LDQ.details[name], t = `${name} ${d && d.driver || ""}`, low = t.toLowerCase().replace(/[\s_-]/g, "");
+  let dpi = 0, lang = "";
+  const m = t.match(/\b(200|203|300|305|600)\s*-?\s*dpi\b/i) || t.match(/\b(203|300|600)\b/); if (m) dpi = { 200: 203, 305: 300 }[m[1]] || +m[1];
+  const model = DZ_PRINTERS.find(p => p.brand !== "Any" && low.includes(p.model.split(" ")[0].toLowerCase().replace(/[\s_-]/g, "")));
+  if (model) { if (!dpi && model.dpis.length === 1) dpi = model.dpis[0]; lang = model.langs[0]; }
+  if (!lang) lang = /zebra|\bz[dtq]\d|\bgk4|\bgx4|\bzm4/i.test(t) ? "ZPL" : /\btsc\b|\bt[ex]\d{3}|\bttp|\bml\d{3}|\bmh\d{3}/i.test(t) ? "TSPL" : /printronix|\bt[468]\d{3}\b/i.test(t) ? "PGL"
+    : /datamax|\bi-?4\d{3}/i.test(t) ? "DPL" : /sato|cl4nx|\bcl\d{3}/i.test(t) ? "SBPL" : /intermec|honeywell|\bp[dmx]4\d/i.test(t) ? "FP" : D.lang;
+  return { dpi: dpi || D.dpi, lang };
+}
 async function ldPrintOpen() {
   const dlg = document.getElementById("ldPrint"), body = document.getElementById("ldPrintBody"), D = dz.D, p = dzPrinter();
   if (!dlg.open) dlg.showModal();
   body.innerHTML = '<p class="dz-empty">Connecting to QZ Tray on this computer…</p>';
-  try { await ldQzConnect(); LDQ.printers = await qz.printers.find(); }
+  try { await ldQzConnect(); LDQ.printers = await qz.printers.find(); LDQ.details = {}; try { for (const d of await qz.printers.details()) LDQ.details[d.name] = d; } catch (e) {} }
   catch (e) {
     body.innerHTML = `<p style="margin:0 0 10px"><b>QZ Tray is not running on this computer.</b></p>
       <ol class="ld-steps"><li>Download QZ Tray (free) from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a> and install it. Amazon sellers often have it already.</li>
@@ -4335,9 +4348,14 @@ async function ldPrintOpen() {
       <label class="ld-f">Printer on this computer<select id="ldPrName">${LDQ.printers.map(n => `<option${n === guess ? " selected" : ""}>${ldEsc(n)}</option>`).join("")}</select></label>
       <label class="ld-f">Number of labels<input id="ldPrQty" type="number" min="1" max="99999" value="${per}" step="1"></label>
     </div>
+    <div class="ld-grid2" id="ldPrRawRow">
+      <label class="ld-f">Printer resolution <small>Must match the printer, or labels print the wrong size</small><select id="ldPrDpi"><option value="203">203 dpi (8 dots/mm)</option><option value="300">300 dpi (12 dots/mm)</option><option value="600">600 dpi (24 dots/mm)</option></select></label>
+      <label class="ld-f">Printer language<select id="ldPrLang">${Object.keys(DZ_LANG_NAME).map(l => `<option value="${l}">${ldEsc(DZ_LANG_NAME[l])}</option>`).join("")}</select></label>
+    </div>
+    <p class="dz-cap" id="ldPrDpiNote" hidden></p>
     <div class="ld-grid2">
       <label class="ld-f">Send as<select id="ldPrMode">
-        ${colourOnly ? "" : `<option value="raw" selected>${ldEsc(D.lang)} commands, ${D.lang === "EPL2" ? 203 : D.dpi} dpi (sharpest)</option>`}
+        ${colourOnly ? "" : `<option value="raw" selected>Printer commands (sharpest, fastest)</option>`}
         <option value="image"${colourOnly ? " selected" : ""}>Image via driver${p.colour ? " (colour)" : ""}</option></select></label>
       <div class="ld-f">Label<small id="ldPrInfo"></small></div>
     </div>
@@ -4347,6 +4365,18 @@ async function ldPrintOpen() {
   const info = () => { const q = Math.max(1, +document.getElementById("ldPrQty").value || 1), rows = Math.ceil(q / per);
     document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm${per > 1 ? `, ${per} across: ${rows} row(s) = ${rows * per} labels` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
   document.getElementById("ldPrQty").oninput = info; info();
+  const $p = id => document.getElementById(id);
+  const fit = () => { // per Windows printer: saved choice, else read from its name/driver, else the design's own settings
+    const name = $p("ldPrName").value, g = ldGuessPrinter(name), lang = $p("ldPrLang").value;
+    $p("ldPrDpi").value = String(g.dpi); $p("ldPrLang").value = g.lang; note();
+  };
+  const note = () => { const dpi = +$p("ldPrDpi").value, lang = $p("ldPrLang").value, raw = $p("ldPrMode").value === "raw", n = $p("ldPrDpiNote");
+    $p("ldPrRawRow").hidden = !raw; $p("ldPrDpi").disabled = lang === "EPL2"; if (lang === "EPL2") $p("ldPrDpi").value = "203";
+    const msg = [];
+    if (raw && dpi !== D.dpi && lang !== "EPL2") msg.push(`The design is set for ${D.dpi} dpi; it will be made at ${dpi} dpi for this printer. The size in mm stays the same.`);
+    if (raw && lang !== D.lang) msg.push(`Commands will be ${DZ_LANG_NAME[lang]} instead of the design's ${DZ_LANG_NAME[D.lang]}.`);
+    n.hidden = !msg.length; n.textContent = msg.join(" "); };
+  $p("ldPrName").onchange = fit; $p("ldPrDpi").onchange = note; $p("ldPrLang").onchange = note; $p("ldPrMode").onchange = note; fit();
   document.getElementById("ldPrGo").onclick = () => ldPrintRun(false);
   document.getElementById("ldPrTest").onclick = () => ldPrintRun(true);
 }
@@ -4361,7 +4391,9 @@ async function ldPrintRun(test) {
     store.set(ldPrKey(), name);
     if (mode === "raw") {
       if (!dzCheck()) throw new Error("Fix the problems shown on the label first.");
-      const dpi = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayout(), D.lang, dpi), q = ldWithQty(prn, D.lang, rows);
+      const lang = document.getElementById("ldPrLang").value, dpi = lang === "EPL2" ? 203 : +document.getElementById("ldPrDpi").value;
+      store.set("ld-pr:" + name, JSON.stringify({ dpi, lang }));
+      const { prn } = layoutPRN(dzLayout(), lang, dpi), q = ldWithQty(prn, lang, rows);
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
     } else {
