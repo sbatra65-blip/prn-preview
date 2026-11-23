@@ -204,7 +204,33 @@ async function designs(request, env, url) {
   if (!/^[A-Za-z0-9_-]{32,128}$/.test(tok)) return json({ error: "Missing workspace key" }, 401);
   if (env.DESIGN_LIMITER) { const { success } = await env.DESIGN_LIMITER.limit({ key: tok }); if (!success) return json({ error: "Too many saves; wait a minute." }, 429); }
   const owner = await sha256hex("owner:" + tok), id = url.pathname.split("/")[3] || "", m = request.method;
-  if (id && !/^[A-Za-z0-9]{12}$/.test(id)) return json({ error: "Bad design id" }, 400);
+  // Backup: every design of this workspace in one file, encrypted and sealed by the server (any edit makes it refuse to restore)
+  if (id === "backup" && m === "GET") {
+    const { results } = await env.LEADS.prepare("SELECT * FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 500").bind(owner).all();
+    const list = [];
+    for (const row of results) { try { list.push({ id: row.id, name: row.name, updated: row.updated, design: await unseal(key, row) }); } catch (e) {} }
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode("p2l-backup-v1") }, key, new TextEncoder().encode(JSON.stringify({ made: new Date().toISOString(), designs: list })));
+    return new Response(JSON.stringify({ app: "Pic2Label PRN Studio", kind: "design-backup", v: 1, count: list.length, iv: b64e(iv), data: b64e(ct) }), { headers: { "content-type": "application/json", "content-disposition": `attachment; filename="label-designs-backup-${new Date().toISOString().slice(0, 10)}.p2lbak"`, "cache-control": "no-store" } });
+  }
+  if (id === "backup" && m === "POST") {
+    const text = await request.text(); if (text.length > 30000000) return json({ error: "Backup file is too large" }, 413);
+    let b, inner; try { b = JSON.parse(text); } catch (e) { return json({ error: "That is not a backup file" }, 400); }
+    if (b.kind !== "design-backup" || !b.iv || !b.data) return json({ error: "That is not a backup file" }, 400);
+    try { inner = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(b.iv), additionalData: new TextEncoder().encode("p2l-backup-v1") }, key, b64d(b.data)))); }
+    catch (e) { return json({ error: "This backup was changed or made for another site, so it was not restored." }, 409); }
+    let added = 0, replaced = 0;
+    for (const d of inner.designs || []) {
+      if (!d.design || !Array.isArray(d.design.items)) continue;
+      const mine = /^[A-Za-z0-9]{12}$/.test(d.id || "") && await env.LEADS.prepare("SELECT id FROM designs WHERE id = ?1 AND owner = ?2").bind(d.id, owner).first();
+      const did = mine ? d.id : [...crypto.getRandomValues(new Uint8Array(12))].map(x => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"[x % 56]).join("");
+      const sl = await seal(key, did, owner, d.design), size = JSON.stringify(d.design).length, name = String(d.name || "Restored label").slice(0, 80);
+      if (mine) { await env.LEADS.prepare("UPDATE designs SET name = ?1, iv = ?2, data = ?3, size = ?4, updated = datetime('now') WHERE id = ?5 AND owner = ?6").bind(name, sl.iv, sl.data, size, did, owner).run(); replaced++; }
+      else { await env.LEADS.prepare("INSERT INTO designs (id, owner, name, iv, data, size) VALUES (?1,?2,?3,?4,?5,?6)").bind(did, owner, name, sl.iv, sl.data, size).run(); added++; }
+    }
+    return json({ ok: true, added, replaced });
+  }
+  if (id && id !== "backup" && !/^[A-Za-z0-9]{12}$/.test(id)) return json({ error: "Bad design id" }, 400);
   if (!id && m === "GET") {
     const { results } = await env.LEADS.prepare("SELECT id, name, size, updated FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 200").bind(owner).all();
     return json({ designs: results });
