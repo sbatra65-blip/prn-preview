@@ -532,7 +532,7 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
         <button type="button" class="btn" data-add="box">Box</button>
         <label class="btn" for="dzImgFile">Image</label><input type="file" id="dzImgFile" accept="image/*,.bmp,.jpg,.jpeg,.png" hidden>
       </div>
-      <p class="dz-cap">Design on the outlined label. The other labels across repeat it. Drag to move, use the corner handle to resize, arrow keys nudge 0.5 mm (Shift: 5 mm), Delete removes, Ctrl+D duplicates.</p>
+      <p class="dz-cap">Design on the outlined label. The other labels across repeat it. Drag to move, use the corner handle to resize, arrow keys nudge 0.5 mm (Shift: 5 mm), R turns 90°, Delete removes, Ctrl+D duplicates.</p>
     </aside>
 
     <div class="dz-main">
@@ -769,10 +769,10 @@ function parseEPL(t, dpi) {
     if (/^q\d/.test(line)) m.w = +line.slice(1);
     else if (/^Q\d/.test(line)) m.h = +line.slice(1).split(",")[0];
     else if (/^A\d/.test(line)) { const a = csv(line.slice(1)); const f = EPL_F[+a[3]] || [10, 16];
-      m.items.push({ k: "text", x: +a[0], y: +a[1], em: f[1] * +a[5], cw: f[0] * +a[4], s: unq(a[a.length - 1]), mono: true }); }
+      m.items.push({ k: "text", x: +a[0], y: +a[1], em: f[1] * +a[5], cw: f[0] * +a[4], s: unq(a[a.length - 1]), mono: true, deg: (+a[2] % 4) * 90, tspl: true }); }
     else if (/^LO\d/.test(line)) { const a = line.slice(2).split(",").map(Number); m.items.push({ k: "rect", x: a[0], y: a[1], w: a[2], h: a[3] }); }
     else if (/^B\d/.test(line)) { const a = csv(line.slice(1)); const type = a[3].toUpperCase(), data = unq(a[a.length - 1]);
-      const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[6], mod: +a[4], hri: a[7] === "B" };
+      const bc = { k: "bar", x: +a[0], y: +a[1], h: +a[6], mod: +a[4], hri: a[7] === "B", deg: (+a[2] % 4) * 90, tspl: true };
       if (type === "E30") Object.assign(bc, { bcid: "ean13", text: data, hriText: ean13Full(data) });
       else if (type === "1E") { const p = gs1Paren(data); Object.assign(bc, { bcid: "gs1-128", text: p, hriText: p }); }
       else if (type === "1") Object.assign(bc, { bcid: "code128", text: data, hriText: data });
@@ -1185,13 +1185,14 @@ function layoutPRN2(L, lang, dpi) {
   if (lang === "CPCL") out.push(`! 0 ${dpi === 203 ? 200 : dpi} ${dpi === 203 ? 200 : dpi} ${H} 1`, `PAGE-WIDTH ${W}`);
   for (const e of L.items) {
     const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
+    if (+e.rot && e.type !== "image" && !warn.some(t => t.startsWith("Turned"))) warn.push(`Turned text and barcodes are written at 0° in ${lang === "FP" ? "Fingerprint" : lang} here; use TSPL, ZPL or EPL2 for rotation.`);
     if (e.type === "image") {
       const im = e.imgEl;
       if (lang !== "CPCL") { warn.push(`Images are not written in ${lang === "FP" ? "Fingerprint" : lang} here; these printers usually also accept ZPL.`); continue; }
       if (!im || !im.naturalWidth) { warn.push("An image had not loaded and was skipped."); continue; }
-      const r = rasterize(im, w, h, e.method || "threshold", e.threshold ?? 128, !!e.invert); let hex = "";
+      const rt = (((+e.rot || 0) % 360) + 360) % 360, [src, bw, bhh] = turnImage(im, w, h, rt), r = rasterize(src, bw, bhh, e.method || "threshold", e.threshold ?? 128, !!e.invert); let hex = "";
       for (const b of r.bytes) hex += b.toString(16).padStart(2, "0").toUpperCase();
-      out.push(`EG ${r.wb} ${h} ${x} ${y} ${hex}`); continue;
+      out.push(`EG ${r.wb} ${bhh} ${x} ${y} ${hex}`); continue;
     }
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
@@ -1515,7 +1516,7 @@ function draw() {
   if (chunks.length > 1 && $("labelSel").options.length !== chunks.length) $("labelSel").innerHTML = chunks.map((_, i) => `<option value="${i}">Label ${i + 1} of ${chunks.length}</option>`).join("");
   $("labelSel").value = state.labelIdx || 0;
   const model = parseAny(text, lang, dpi);
-  const view = state.view === "auto" ? autoView(model) : +state.view;
+  const view = state.view === "auto" ? (state.source && state.source.design ? 0 : autoView(model)) : +state.view;
   if (state.fileSize && (state.fileSize[0] !== model.w || state.fileSize[1] !== model.h)) clearOv();
   const { W, H, VW, VH, bb } = render(model, $("label"), { grid: $("grid").checked, view, ov: state.ov });
   if ($("printLook").checked) printLook(model, view);
@@ -1587,6 +1588,13 @@ async function loadImage(file) {
   try { const im = new Image(); im.src = url; await im.decode(); return im; } finally { setTimeout(() => URL.revokeObjectURL(url), 2000); }
 }
 // image -> 1-bit rows (1 = black), packed MSB first
+// draw an image at w x h dots, turned clockwise; returns [canvas, boxWidth, boxHeight]
+function turnImage(img, w, h, rot) {
+  if (!rot) return [img, w, h];
+  const sw = rot % 180 ? h : w, sh = rot % 180 ? w : h, c = document.createElement("canvas"); c.width = sw; c.height = sh;
+  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, sw, sh); x.translate(sw / 2, sh / 2); x.rotate(rot * Math.PI / 180); x.drawImage(img, -w / 2, -h / 2, w, h);
+  return [c, sw, sh];
+}
 function rasterize(img, wd, hd, method, threshold, invert) {
   const c = document.createElement("canvas"); c.width = wd; c.height = hd;
   const ctx = c.getContext("2d", { willReadFrequently: true });
@@ -1651,12 +1659,17 @@ function layoutPRN(L, lang, dpi) {
   const pgl = { alpha: [], horz: [], vert: [], box: [], bars: [] };
   for (const e of items) {
     const x = D(e.x), y = D(e.y), w = D(e.w), h = D(e.h);
+    // e.x/e.y = top-left of the item's box on the label; e.w/e.h = its size before turning; rot = degrees clockwise
+    const rot = (((+e.rot || 0) % 360) + 360) % 360, ZR = { 0: "N", 90: "R", 180: "I", 270: "B" }[rot] || "N";
+    const mp = (lx, ly) => rot === 90 ? [x + h - ly, y + lx] : rot === 180 ? [x + w - lx, y + h - ly] : rot === 270 ? [x + ly, y + w - lx] : [x + lx, y + ly];
+    const zo = (lx, ly, ew, eh) => { const c = [mp(lx, ly), mp(lx + ew, ly), mp(lx, ly + eh), mp(lx + ew, ly + eh)]; return [Math.min(...c.map(q => q[0])), Math.min(...c.map(q => q[1]))]; };
+    if (rot && lang === "PGL" && e.type !== "image") warn.push("Turned text and barcodes are written at 0° in PGL here; use TSPL or ZPL for rotation.");
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
       const em = Math.max(8, Math.round(h * 1.2)); // box_2d hugs the glyphs; the em square is taller
       const sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
-      if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)); out.push(`TEXT ${x},${y},"0",0,${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
-      else if (lang === "ZPL") out.push(`^FO${x},${y}^A0N,${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`);
+      if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)), [ax, ay] = mp(0, 0); out.push(`TEXT ${ax},${ay},"0",${rot},${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
+      else if (lang === "ZPL") { const [fx, fy] = zo(0, 0, w, h); out.push(`^FO${fx},${fy}^A0${ZR},${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`); }
       else if (lang === "EPL2") {
         // EPL2 fonts are fixed-pitch: pick font + multipliers closest in height that still fit the width
         let best = [2, 1, 1], score = 1e9;
@@ -1664,7 +1677,7 @@ function layoutPRN(L, lang, dpi) {
           const tw = EPL_F[f][0] * hm * s.length, sc = Math.abs(EPL_F[f][1] * vm - em) + (w && tw > w * 1.05 ? 1000 + tw - w : 0) + Math.abs(hm - vm) * 0.5;
           if (sc < score) { score = sc; best = [f, hm, vm]; }
         }
-        out.push(`A${x},${y},0,${best[0]},${best[1]},${best[2]},N,"${s.replace(/"/g, '\\"')}"`);
+        const [ax, ay] = mp(0, 0); out.push(`A${ax},${ay},${rot / 90},${best[0]},${best[1]},${best[2]},N,"${s.replace(/"/g, '\\"')}"`);
       } else { const dl = ["*", "|", "#", "~"].find(c => !s.includes(c)) || "*"; pgl.alpha.push(`POINT;${y};${x};${Math.max(4, Math.round(em / dpi * 72))};0;${dl}${s}${dl}`); }
     } else if (e.type === "barcode") {
       const sym = normSym(e.symbology); let data = String(e.data || "").trim();
@@ -1689,15 +1702,16 @@ function layoutPRN(L, lang, dpi) {
       if (lang === "TSPL") {
         const t = { code128: "128", ean13: "EAN13", code39: "39", "gs1-128": "128M" }[kind];
         const g1 = kind === "gs1-128" ? "!102" + gs1Raw(paren, "!102") : data; // 128M: !102 is FNC1
-        out.push(`BARCODE ${bx},${y},"${t}",${bh},1,0,${n},${kind === "code39" ? n * 3 : n},"${tsplQ(g1)}"`);
+        const [ax, ay] = mp(bx - x, 0); out.push(`BARCODE ${ax},${ay},"${t}",${bh},1,${rot},${n},${kind === "code39" ? n * 3 : n},"${tsplQ(g1)}"`);
       } else if (lang === "ZPL") {
-        if (kind === "ean13") out.push(`^BY${n}^FO${bx},${y}^BEN,${bh},Y,N^FD${data}^FS`);
-        else if (kind === "code39") out.push(`^BY${n},3^FO${bx},${y}^B3N,N,${bh},Y,N^FD${data}^FS`);
-        else if (kind === "gs1-128") out.push(`^BY${n}^FO${bx},${y}^BCN,${bh},Y,N,N,D^FD${paren}^FS`);
-        else out.push(`^BY${n}^FO${bx},${y}^BCN,${bh},Y,N,N^FD${data}^FS`);
+        const [fx, fy] = zo(bx - x, 0, mods * n, h);
+        if (kind === "ean13") out.push(`^BY${n}^FO${fx},${fy}^BE${ZR},${bh},Y,N^FD${data}^FS`);
+        else if (kind === "code39") out.push(`^BY${n},3^FO${fx},${fy}^B3${ZR},N,${bh},Y,N^FD${data}^FS`);
+        else if (kind === "gs1-128") out.push(`^BY${n}^FO${fx},${fy}^BC${ZR},${bh},Y,N,N,D^FD${paren}^FS`);
+        else out.push(`^BY${n}^FO${fx},${fy}^BC${ZR},${bh},Y,N,N^FD${data}^FS`);
       } else if (lang === "EPL2") {
         const t = { code128: "1", ean13: "E30", code39: "3", "gs1-128": "1E" }[kind];
-        out.push(`B${bx},${y},0,${t},${n},${kind === "code39" ? n * 3 : n},${bh},B,"${kind === "gs1-128" ? raw : data}"`);
+        const [ax, ay] = mp(bx - x, 0); out.push(`B${ax},${ay},${rot / 90},${t},${n},${kind === "code39" ? n * 3 : n},${bh},B,"${kind === "gs1-128" ? raw : data}"`);
       } else {
         const t = { code128: "C128B", ean13: "EAN13", code39: "C3/9", "gs1-128": "UCC-128" }[kind];
         const hin = bh / dpi, tenth = Math.max(1, Math.floor(hin * 10)), extra = Math.max(0, bh - Math.round(tenth / 10 * dpi));
@@ -1705,10 +1719,10 @@ function layoutPRN(L, lang, dpi) {
       }
     } else if (e.type === "image") {
       const im = e.imgEl; if (!im || !im.naturalWidth) { warn.push("An image had not loaded and was skipped."); continue; }
-      const r = rasterize(im, w, h, e.method || "threshold", e.threshold ?? 128, !!e.invert), inv = r.bytes.map(b => 255 - b);
-      if (lang === "TSPL") out.push(`BITMAP ${x},${y},${r.wb},${h},0,${putBin(inv)}`);
-      else if (lang === "ZPL") out.push(`^FO${x},${y}^GFA,${r.bytes.length},${r.bytes.length},${r.wb},${zplHexEncode(r.bytes, r.wb, h)}^FS`);
-      else if (lang === "EPL2") out.push(`GW${x},${y},${r.wb},${h},${putBin(inv)}`);
+      const [src, bw, bhh] = turnImage(im, w, h, rot), r = rasterize(src, bw, bhh, e.method || "threshold", e.threshold ?? 128, !!e.invert), inv = r.bytes.map(b => 255 - b);
+      if (lang === "TSPL") out.push(`BITMAP ${x},${y},${r.wb},${bhh},0,${putBin(inv)}`);
+      else if (lang === "ZPL") out.push(`^FO${x},${y}^GFA,${r.bytes.length},${r.bytes.length},${r.wb},${zplHexEncode(r.bytes, r.wb, bhh)}^FS`);
+      else if (lang === "EPL2") out.push(`GW${x},${y},${r.wb},${bhh},${putBin(inv)}`);
       else warn.push("Images are not written in PGL here; most Printronix printers also take ZPL.");
     } else if (e.type === "line" || e.type === "box") {
       const th = Math.max(1, D(e.thickness || 0.3));
@@ -2401,8 +2415,9 @@ function dzEl(it, s, live) {
 function dzPaint(el, it, s) {
   const lw = dzLW(), D = dz.D;
   if (it.type === "text") it.w = dzTextW(it);
-  Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: Math.max(1, it.w * s) + "px", height: Math.max(1, it.h * s) + "px", border: "", background: "" });
-  el.classList.toggle("over", it.x < -0.01 || it.y < -0.01 || it.x + it.w > lw + 0.05 || it.y + it.h > D.h + 0.05);
+  const bx = dzBox(it);
+  Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: Math.max(1, bx.w * s) + "px", height: Math.max(1, bx.h * s) + "px", border: "", background: "" });
+  el.classList.toggle("over", it.x < -0.01 || it.y < -0.01 || it.x + bx.w > lw + 0.05 || it.y + bx.h > D.h + 0.05);
   const keep = el.querySelector(".h");
   if (it.type === "text") {
     const t = document.createElement("span"); t.className = "t"; t.textContent = it.text || " ";
@@ -2434,7 +2449,20 @@ function dzPaint(el, it, s) {
       } }
     catch (e) { const t = document.createElement("span"); t.className = "t"; t.style.cssText = "color:var(--bad);font-size:12px;font-family:var(--font)"; t.textContent = "Check barcode data"; el.replaceChildren(t); }
   }
+  const r = dzRot(it);
+  if (r && el.firstChild) { // turn the content inside the item's box: CSS rotate maps the same way the printers do
+    const inn = document.createElement("div"); inn.append(...el.childNodes);
+    const t = r === 90 ? `translate(${it.h * s}px,0) rotate(90deg)` : r === 180 ? `translate(${it.w * s}px,${it.h * s}px) rotate(180deg)` : `translate(0,${it.w * s}px) rotate(270deg)`;
+    Object.assign(inn.style, { position: "absolute", left: 0, top: 0, width: it.w * s + "px", height: it.h * s + "px", transformOrigin: "0 0", transform: t });
+    el.replaceChildren(inn);
+  }
   if (keep) el.append(keep);
+}
+function dzRot(it) { return it.type === "text" || it.type === "image" || (it.type === "barcode" && !dzIs2D(it)) ? ((+it.rot || 0) % 360 + 360) % 360 : 0; }
+function dzBox(it) { return dzRot(it) % 180 ? { w: it.h, h: it.w } : { w: it.w, h: it.h }; }
+function dzTurn(it, by) { // turn about the box centre so the item stays where it was
+  const b = dzBox(it), cx = it.x + b.w / 2, cy = it.y + b.h / 2;
+  it.rot = ((dzRot(it) + by) % 360 + 360) % 360; const n = dzBox(it); it.x = r1(Math.max(0, Math.min(dzLW() - n.w, cx - n.w / 2))); it.y = r1(Math.max(0, Math.min(dz.D.h - n.h, cy - n.h / 2)));
 }
 function dzSelect(id) {
   dz.sel = id;
@@ -2449,7 +2477,8 @@ function dzGrab(e, it, resize) {
   const sx = e.clientX, sy = e.clientY, o = { x: it.x, y: it.y, w: it.w, h: it.h }, s = dz.s, snap = +$("dzSnap").value;
   const sn = v => snap ? Math.round(v / snap) * snap : r1(v);
   const move = ev => {
-    const dx = (ev.clientX - sx) / s, dy = (ev.clientY - sy) / s;
+    let dx = (ev.clientX - sx) / s, dy = (ev.clientY - sy) / s;
+    if (resize && dzRot(it) % 180) [dx, dy] = [dy, dx];
     if (!resize) { it.x = sn(o.x + dx); it.y = sn(o.y + dy); }
     else if (it.type === "text") it.h = Math.max(1, sn(o.h + dy));
     else if (dzIs2D(it)) { const v = Math.max(4, sn(Math.max(o.w + dx, o.h + dy))); it.w = it.h = v; }
@@ -2458,7 +2487,7 @@ function dzGrab(e, it, resize) {
     else { it.w = Math.max(2, sn(o.w + dx)); it.h = Math.max(2, sn(o.h + dy)); }
     for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${it.id}"]`)) {
       if (resize && it.type !== "line" && it.type !== "box" && it.type !== "image") dzPaint(el, it, s);
-      else Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: it.w * s + "px", height: it.h * s + "px" });
+      else { const b = dzBox(it); Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: b.w * s + "px", height: b.h * s + "px" }); }
     }
   };
   const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); dzRefresh(it); dzProps(); dzSave(); };
@@ -2492,6 +2521,10 @@ function dzProps() {
     f.push(`<label>Threshold<input data-k="threshold" type="range" min="1" max="254" value="${it.threshold ?? 128}"></label>`);
     f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);align-self:end"><input type="checkbox" data-k="invert" style="width:auto"${it.invert ? " checked" : ""}> Invert</label>`);
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
+  if (dzRot(it) || it.type === "text" || it.type === "image" || (it.type === "barcode" && !dzIs2D(it))) {
+    const r = dzRot(it);
+    f.push(`<div class="full" style="grid-column:1/-1"><div style="font-size:12px;color:var(--muted);margin-bottom:3px">Rotation</div><div class="seg" id="dzRot" role="group" aria-label="Rotation">${[0, 90, 180, 270].map(d => `<button type="button" data-r="${d}" aria-pressed="${d === r}">${d}°</button>`).join("")}</div></div>`);
+  }
   const hints = { contact: "Scanning adds the contact to the phone. TSPL and ZPL carry a full vCard; other printer languages get the one-line MECARD form. Keep the QR at least 20 mm and print a test to check it scans.", ean13: "12 digits; the check digit is added.", upca: "11 digits; the check digit is added.", "gs1-128": "Use (AI) brackets, e.g. (01)08901234567890(10)AB12.", datamatrix: "For GS1 DataMatrix start with (01)…" };
   box.innerHTML = `<div class="dz-f">${f.join("")}</div>${it.type === "barcode" && (it.qrKind === "contact" && it.symbology === "qrcode" ? `<p class="dz-cap">${hints.contact}</p>` : hints[it.symbology] ? `<p class="dz-cap">${hints[it.symbology]}</p>` : "")}
     <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzDup">Duplicate</button><button type="button" class="btn" id="dzCenter">Centre across</button><button type="button" class="btn" id="dzDel" style="color:var(--bad)">Delete</button></div>`;
@@ -2514,7 +2547,8 @@ function dzProps() {
   });
   for (const inp of box.querySelectorAll("[data-c]")) inp.addEventListener("input", () => { it.contact = Object.assign({}, it.contact, { [inp.dataset.c]: inp.value }); it.data = dzContact(it); dzRefresh(it); dzSave(); });
   $("dzDel").onclick = () => dzDelete(); $("dzDup").onclick = () => dzDuplicate();
-  $("dzCenter").onclick = () => { it.x = r1((dzLW() - it.w) / 2); dzRefresh(it); dzProps(); dzSave(); };
+  $("dzCenter").onclick = () => { it.x = r1((dzLW() - dzBox(it).w) / 2); dzRefresh(it); dzProps(); dzSave(); };
+  if ($("dzRot")) for (const b of $("dzRot").querySelectorAll("button")) b.onclick = () => { const want = +b.dataset.r; dzTurn(it, want - dzRot(it)); dzRefresh(it); dzProps(); dzSave(); };
 }
 const DZ_CONTACT = [["name", "Full name"], ["org", "Company"], ["title", "Job title"], ["tel", "Phone"], ["email", "Email"], ["url", "Website"], ["adr", "Address"]];
 function dzContact(it, fmt) { // vCard 3.0 (multi-line, read by every phone) or MECARD (one line, for printer languages that cannot carry line breaks)
@@ -2560,7 +2594,7 @@ function dzLayout() {
   return { w: D.paper, h: D.h, gap: D.vgap, items };
 }
 function dzCheck() {
-  const D = dz.D, lw = dzLW(), bad = D.items.filter(i => i.x < 0 || i.y < 0 || i.x + i.w > lw + 0.05 || i.y + i.h > D.h + 0.05);
+  const D = dz.D, lw = dzLW(), bad = D.items.filter(i => { const b = dzBox(i); return i.x < 0 || i.y < 0 || i.x + b.w > lw + 0.05 || i.y + b.h > D.h + 0.05; });
   if (lw <= 0) { toast("Labels are too narrow for this liner"); return false; }
   if (bad.length) toast(`${bad.length} object${bad.length > 1 ? "s run" : " runs"} off the label (outlined red)`);
   return true;
@@ -2645,6 +2679,7 @@ $("dzDlg").addEventListener("keydown", e => {
   const st = e.shiftKey ? 5 : 0.5, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
   if (mv) { e.preventDefault(); it.x = r1(it.x + mv[0]); it.y = r1(it.y + mv[1]); dzRefresh(it); dzProps(); dzSave(); }
   else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); dzDelete(); }
+  else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && dzRot(Object.assign({}, it, { rot: 90 }))) { e.preventDefault(); dzTurn(it, e.shiftKey ? -90 : 90); dzRefresh(it); dzProps(); dzSave(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); dzDuplicate(); }
 });
 addEventListener("resize", () => { if ($("dzDlg").open) dzDraw(); });
