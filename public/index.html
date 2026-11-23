@@ -2635,10 +2635,29 @@ const DZ_SYM_EXAMPLE = { code128: "12345678", "gs1-128": "(01)08901234567890(10)
   microqrcode: "1234", datamatrixrectangular: "1234", pdf417: "LabelDesk PDF417", pdf417compact: "LabelDesk", micropdf417: "MicroPDF417",
   azteccode: "LabelDesk", azteccodecompact: "1234", maxicode: "This is MaxiCode", dotcode: "This is DotCode", hanxin: "LabelDesk", codablockf: "CODABLOCK F", code16k: "Code 16K", code49: "CODE 49",
   onecode: "0123456709498765432101234567891", postnet: "01234", planet: "01234567890", royalmail: "LE28HS9Z", kix: "1231FZ13XHS", japanpost: "6540123789-A-K-Z", auspost: "5956439111ABA 9", daft: "FATDAFTDAD" };
+// Groups shown in the Group dropdown, in this order
+const DZ_SYM_GROUPS = [
+  ["Linear 1D", ["code128", "code39", "code39ext", "code93", "code93ext", "interleaved2of5", "rationalizedCodabar", "code11", "code2of5", "industrial2of5", "iata2of5", "matrix2of5", "msi", "plessey", "telepen", "channelcode"]],
+  ["2D", ["qrcode", "microqrcode", "datamatrix", "datamatrixrectangular", "pdf417", "pdf417compact", "micropdf417", "azteccode", "azteccodecompact", "maxicode", "dotcode", "hanxin", "codablockf", "code16k", "code49"]],
+  ["GS1 (supply chain)", ["gs1-128", "itf14", "sscc18", "datamatrix", "qrcode", "databaromni", "databartruncated", "databarlimited", "databarexpanded", "databarstacked", "databarstackedomni", "databarexpandedstacked"]],
+  ["Retail: EAN / UPC / ISBN", ["ean13", "ean8", "upca", "upce", "isbn", "ismn", "issn"]],
+  ["Healthcare & pharma", ["hibccode128", "hibccode39", "hibcdatamatrix", "hibcqrcode", "pharmacode", "pzn", "datamatrix"]],
+  ["Postal", ["onecode", "postnet", "planet", "royalmail", "kix", "japanpost", "auspost", "daft"]],
+];
+const dzSymGroup = v => (DZ_SYM_GROUPS.find(([, l]) => l.includes(v)) || DZ_SYM_GROUPS[0])[0];
+const dzGroupOptions = g => DZ_SYM_GROUPS.map(([n, l]) => `<option value="${n}"${n === g ? " selected" : ""}>${n} (${l.length})</option>`).join("");
+const dzSymInGroup = (g, cur) => (DZ_SYM_GROUPS.find(([n]) => n === g) || DZ_SYM_GROUPS[0])[1].map(v => `<option value="${v}"${v === cur ? " selected" : ""}>${DZ_SYMS.find(x => x[0] === v)[1]}${DZ_NATIVE_SYM.has(v) ? "" : " ·"}</option>`).join("");
 const DZ_SYM = Object.fromEntries(DZ_SYMS.map(([v, n, g, k]) => [v, { name: n, group: g, kind: k || "1d" }]));
 const DZ_NATIVE_SYM = new Set(["code128", "gs1-128", "ean13", "upca", "code39", "qrcode", "datamatrix"]);
 const dzSymKind = it => (DZ_SYM[it.symbology] || { kind: "1d" }).kind;
 const dzSymOptions = cur => [...new Set(DZ_SYMS.map(x => x[2]))].map(g => `<optgroup label="${g}">${DZ_SYMS.filter(x => x[2] === g).map(([v, n]) => `<option value="${v}"${v === cur ? " selected" : ""}>${n}${DZ_NATIVE_SYM.has(v) ? "" : " ·"}</option>`).join("")}</optgroup>`).join("");
+function dzSetSym(it, v) { // change a barcode's type: size to suit, keep the data if it still encodes, else a valid example
+  if (!DZ_SYM[v]) return; const was = dzSymKind(it); it.symbology = v; const now = dzSymKind(it);
+  if (!(it._grp && DZ_SYM_GROUPS.some(([n, l]) => n === it._grp && l.includes(v)))) it._grp = dzSymGroup(v);
+  if (now !== was) { if (now === "sq") it.w = it.h = Math.min(Math.max(it.w, 10), 20); else if (now === "2d") { it.w = 40; it.h = 15; } else if (now === "post") { it.w = 60; it.h = 6; } else { it.w = 50; it.h = 15; } }
+  const ex = DZ_SYM_EXAMPLE[v]; if (ex && !it.parts && !bwipCanvas({ bcid: dzBcid(it, it.data || ""), text: String(it.data || ""), ...dzBw(it) })) it.data = ex;
+  dzRefresh(it); dzSave(); dzProps();
+}
 function dzBcid(it, data) { const s = it.symbology; return s === "datamatrix" && /^\(\d/.test(data) ? "gs1datamatrix" : s === "qrcode" && /^\(\d/.test(data) ? "gs1qrcode" : s; }
 const dz = { zoom: 1, sel: null, seq: 1, D: null };
 const r1 = v => Math.round(v * 10) / 10;
@@ -3289,7 +3308,9 @@ function dzProps() {
       f.push(`<label>Height, mm<input value="${r1(dzDims(it).h)}" readonly title="${dzParaLines(it).length} line(s)"></label>`);
     } else f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
   } else if (it.type === "barcode") {
-    f.push(`<label class="full">Type <small style="font-weight:400">· = drawn as a graphic</small><select data-k="symbology">${dzSymOptions(it.symbology)}</select></label>`);
+    { const g = it._grp && DZ_SYM_GROUPS.some(([n, l]) => n === it._grp && l.includes(it.symbology)) ? it._grp : dzSymGroup(it.symbology);
+      f.push(`<label class="full">Barcode group<select id="dzSymGrp">${dzGroupOptions(g)}</select></label>`);
+      f.push(`<label class="full">Barcode <small style="font-weight:400">· = drawn as a graphic</small><select data-k="symbology">${dzSymInGroup(g, it.symbology)}</select></label>`); }
     if (it.symbology === "qrcode") f.push(`<label class="full">QR holds<select data-k="qrKind"><option value="text"${it.qrKind !== "contact" ? " selected" : ""}>Text or link</option><option value="contact"${it.qrKind === "contact" ? " selected" : ""}>Contact card (vCard)</option></select></label>`);
     if (it.symbology === "qrcode" && it.qrKind === "contact") for (const [k, n] of DZ_CONTACT) f.push(`<label class="full">${n}<input data-c="${k}" value="${String((it.contact || {})[k] || "").replace(/"/g, "&quot;")}"${k === "tel" ? ' inputmode="tel"' : k === "email" ? ' inputmode="email"' : ""}></label>`);
     else if (dzLinkSrc(it)) f.push(`<label class="full">Data (from the linked object)<textarea readonly>${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
@@ -3394,10 +3415,7 @@ function dzProps() {
     if (it.type === "image" && it.lock !== false && (k === "w" || k === "h")) { const n = +v || 1; if (k === "w") { it.w = n; it.h = r1(n * it.ratio); } else { it.h = n; it.w = r1(n / it.ratio); } dzRefresh(it); dzSave(); return; }
     if (k === "qrKind") { it.qrKind = v; if (v === "contact") { it.contact = it.contact || { name: "", org: "", tel: "", email: "", url: "", adr: "", title: "" }; it.data = dzContact(it); } dzRefresh(it); dzSave(); return dzProps(); }
     if (k === "text" || k === "data") { it[k] = v; dzSyncLinks(); }
-    else if (k === "symbology") { const was = dzSymKind(it); it.symbology = v; const now = dzSymKind(it);
-      if (now !== was) { if (now === "sq") it.w = it.h = Math.min(Math.max(it.w, 10), 20); else if (now === "2d") { it.w = 40; it.h = 15; } else if (now === "post") { it.w = 60; it.h = 6; } else { it.w = 50; it.h = 15; } }
-      const ex = DZ_SYM_EXAMPLE[v]; if (ex && !bwipCanvas({ bcid: dzBcid(it, it.data || ""), text: String(it.data || "") })) it.data = ex; // keep the data if it still encodes, else a valid example
-      dzRefresh(it); dzSave(); return dzProps(); }
+    else if (k === "symbology") { if (!v) return; dzSetSym(it, v); return; }
     else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
     else if (k === "len") { const n = Math.max(1, +v || 1); if (it.w >= it.h) it.w = n; else it.h = n; }
     else if (k === "thickness") { it.thickness = Math.max(0.1, +v || 0.1); if (it.type === "line") { if (it.w >= it.h) it.h = it.thickness; else it.w = it.thickness; } }
@@ -3420,6 +3438,9 @@ function dzProps() {
   };
   if ($("dzGs1")) $("dzGs1").onclick = () => dzGs1Builder(it);
   if ($("dzParts")) $("dzParts").onclick = () => dzVarBuilder(it);
+  if ($("dzSymGrp")) $("dzSymGrp").onchange = e => { // a new group: switch to its first barcode type
+    const g = e.target.value, first = DZ_SYM_GROUPS.find(([n]) => n === g)[1][0], sel = box.querySelector('select[data-k="symbology"]');
+    it._grp = g; dzSetSym(it, first); };
   if ($("dzLinkText")) $("dzLinkText").onclick = () => { // a separate text that always shows this barcode's data
     const b = dzBox(it), t = { id: dz.seq++, type: "text", x: it.x, y: r1(Math.min(dz.D.h - 4, it.y + b.h + 0.8)), h: 2.5, text: "", link: it.id };
     it.hri = "none"; dz.D.items.push(t); dzSyncLinks(); dz.sel = t.id; dzDraw(); dzProps(); dzSave();
@@ -3766,13 +3787,17 @@ function dzRibbonShow(tab) {
         const w = document.createElement("div"); w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center";
         const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Barcode type"); s.style.maxWidth = "230px";
         const cur = dz.D && dz.D.items.find(i => i.id === dz.sel && i.type === "barcode");
-        s.innerHTML = `<option value="">${cur ? "Change type: " + (DZ_SYM[cur.symbology] || { name: "" }).name : "Insert barcode type…"}</option>` + dzSymOptions("");
+        const gs = document.createElement("select"); gs.className = "rfont"; gs.setAttribute("aria-label", "Barcode group"); gs.style.maxWidth = "230px";
+        dz.ribGrp = cur ? (cur._grp || dzSymGroup(cur.symbology)) : dz.ribGrp || DZ_SYM_GROUPS[0][0]; gs.innerHTML = dzGroupOptions(dz.ribGrp);
+        const fill = () => { s.innerHTML = `<option value="">${cur ? "Change to…" : "Insert…"}</option>` + dzSymInGroup(dz.ribGrp, ""); };
+        gs.onchange = () => { dz.ribGrp = gs.value; fill(); s.focus(); }; fill();
         s.onchange = () => { const v = s.value; if (!v) return; const it = dz.D.items.find(i => i.id === dz.sel && i.type === "barcode");
-          if (it) { const p = document.querySelector('select[data-k="symbology"]'); if (p) { p.value = v; p.dispatchEvent(new Event("change")); } }
-          else { dzAdd("barcode"); const n = dz.D.items[dz.D.items.length - 1], sel = document.querySelector('select[data-k="symbology"]'); if (n && sel) { sel.value = v; sel.dispatchEvent(new Event("change")); } }
+          if (it) { it._grp = dz.ribGrp; dzSetSym(it, v); }
+          else { dzAdd("barcode"); const n = dz.D.items[dz.D.items.length - 1]; if (n) { n._grp = dz.ribGrp; dzSetSym(n, v); } }
           s.value = ""; };
         const l = document.createElement("small"); l.textContent = `${DZ_SYMS.length} barcode types`; l.style.cssText = "font-size:11px;color:var(--muted);text-align:center";
-        w.append(s, l); row.append(w); continue; }
+        l.textContent = cur ? `Selected: ${(DZ_SYM[cur.symbology] || { name: "" }).name}` : `${DZ_SYMS.length} barcode types in ${DZ_SYM_GROUPS.length} groups`;
+        w.append(gs, s, l); row.append(w); continue; }
       if (b.snap) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Snap"); s.innerHTML = [["0", "No snap"], ["0.5", "Snap 0.5 mm"], ["1", "Snap 1 mm"]].map(([v, n]) => `<option value="${v}"${$("dzSnap").value === v ? " selected" : ""}>${n}</option>`).join(""); s.onchange = () => { $("dzSnap").value = s.value; }; row.append(s); continue; }
       const el = document.createElement("button"); el.type = "button"; el.className = "rb"; el.title = b.title || b.label;
       el.innerHTML = `${dzIcon(b.ic)}<span></span>`; el.lastChild.textContent = b.label;
