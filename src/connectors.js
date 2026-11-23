@@ -90,6 +90,29 @@ const KINDS = {
     const base = safeUrl(c.url).origin, rpc = async (service, method, args) => { const j = await getJSON(base + "/jsonrpc", { "content-type": "application/json" }, { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", method: "call", params: { service, method, args }, id: 1 }) }); if (j.error) throw new Error("Odoo: " + (j.error.data && j.error.data.message || j.error.message)); return j.result; };
     const uid = await rpc("common", "login", [c.db, c.user, c.key]); if (!uid) throw new Error("Odoo login failed: check database, user and API key");
     return rpc("object", "execute_kw", [c.db, uid, c.key, "product.product", "search_read", [[["active", "=", true]]], { fields: ["default_code", "name", "barcode", "list_price", "standard_price", "uom_id", "categ_id", "description_sale", "weight", "hs_code"].filter(Boolean), limit: MAX_ROWS }]); } },
+  hubspot: { name: "HubSpot (forms / contacts)", async rows(c) {
+    const h = { authorization: "Bearer " + c.token }, out = [], api = "https://api.hubapi.com";
+    if ((c.mode || "form") === "form") {
+      const g = String(c.form || "").trim();
+      if (!/^[0-9a-f-]{20,}$/i.test(g)) { // no form chosen: list them so the user can copy the ID
+        const f = await getJSON(`${api}/marketing/v3/forms?limit=50`, h).catch(() => ({ results: [] }));
+        throw new Error("Enter the form ID. Your forms: " + ((f.results || []).map(x => `${x.name} = ${x.id}`).join("; ") || "none found (the private app needs the 'forms' scope)"));
+      }
+      let after = "";
+      for (let p = 0; p < MAX_PAGES && out.length < MAX_ROWS; p++) {
+        const j = await getJSON(`${api}/form-integrations/v1/submissions/forms/${encodeURIComponent(g)}?limit=50${after ? "&after=" + encodeURIComponent(after) : ""}`, h);
+        for (const r of j.results || []) { const o = { submitted: r.submittedAt ? new Date(r.submittedAt).toISOString().slice(0, 16).replace("T", " ") : "", page: r.pageUrl || "" }; for (const v of r.values || []) o[v.name] = o[v.name] ? o[v.name] + ", " + v.value : v.value; out.push(o); }
+        after = j.paging && j.paging.next && j.paging.next.after; if (!after) break;
+      }
+      return out;
+    }
+    const props = (c.props || "firstname,lastname,company,email,phone,address,city,state,zip,country").replace(/\s/g, "");
+    let after = "";
+    for (let p = 0; p < MAX_PAGES && out.length < MAX_ROWS; p++) {
+      const j = await getJSON(`${api}/crm/v3/objects/contacts?limit=100&properties=${encodeURIComponent(props)}${after ? "&after=" + encodeURIComponent(after) : ""}`, h);
+      out.push(...(j.results || []).map(r => Object.assign({ id: r.id }, r.properties || {}))); after = j.paging && j.paging.next && j.paging.next.after; if (!after) break;
+    }
+    return out; } },
   zoho: { name: "Zoho Inventory", async rows(c, env) {
     if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET) throw new Error("Zoho is not set up on this server (ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET).");
     const t = await fetch(`${c.accounts}/oauth/v2/token`, { method: "POST", body: new URLSearchParams({ refresh_token: c.refresh, client_id: env.ZOHO_CLIENT_ID, client_secret: env.ZOHO_CLIENT_SECRET, grant_type: "refresh_token" }) }).then(r => r.json());
@@ -100,7 +123,7 @@ const KINDS = {
       if (!(j.page_context && j.page_context.has_more_page)) break; }
     return out; } },
 };
-const PUBLIC_FIELDS = { generic: ["url", "auth", "user", "header", "path"], sap_s4: ["host", "user", "service", "filter"], sap_b1: ["url", "company", "user", "select", "filter"], oracle_fusion: ["host", "user", "org"], bc: ["tenant", "environment", "company", "client_id"], odoo: ["url", "db", "user"], zoho: ["org", "org_name", "api"] };
+const PUBLIC_FIELDS = { generic: ["url", "auth", "user", "header", "path"], sap_s4: ["host", "user", "service", "filter"], sap_b1: ["url", "company", "user", "select", "filter"], oracle_fusion: ["host", "user", "org"], bc: ["tenant", "environment", "company", "client_id"], odoo: ["url", "db", "user"], hubspot: ["mode", "form", "props"], zoho: ["org", "org_name", "api"] };
 
 export async function connectors(request, env, url) {
   const p = url.pathname, m = request.method;
