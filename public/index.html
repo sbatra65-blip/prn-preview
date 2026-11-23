@@ -192,6 +192,56 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   .dim.h { display: none; }
   .vbar .tools { width: 100%; }
 }
+/* ---------------- designer ---------------- */
+dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; border: 0; }
+.dz-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.dz-head h2 { font: 600 18px var(--font-head); margin: 0 auto 0 0; }
+.dz-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 290px 1fr 270px; }
+.dz-side { overflow: auto; padding: 14px 16px; border-right: 1px solid var(--line); background: var(--surface); }
+.dz-props { border-right: 0; border-left: 1px solid var(--line); }
+.dz-side h3 { font: 600 12px var(--font); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 16px 0 8px; }
+.dz-side h3:first-child { margin-top: 0; }
+.dz-f { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.dz-f label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.dz-f label.full { grid-column: 1 / -1; }
+.dz-f input, .dz-f select, .dz-f textarea { font: 14px var(--font); padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); width: 100%; min-width: 0; }
+.dz-f textarea { min-height: 54px; resize: vertical; font-family: var(--font-mono); font-size: 13px; }
+.dz-f input[readonly] { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-ink); font-weight: 600; }
+.dz-cap { font-size: 12.5px; color: var(--muted); background: var(--bg); border-radius: 8px; padding: 8px 10px; margin-top: 8px; line-height: 1.5; }
+.dz-cap b { color: var(--ink); font-weight: 600; }
+.dz-warn { font-size: 12.5px; color: var(--bad); background: var(--bad-soft); border-radius: 8px; padding: 7px 10px; margin-top: 8px; }
+.dz-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.dz-tools .btn { padding: 6px 10px; font-size: 13px; }
+.dz-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--stage); }
+.dz-bar { display: flex; gap: 6px; align-items: center; padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.dz-bar .sp { flex: 1; }
+.dz-bar .btn { padding: 6px 10px; font-size: 13px; }
+.dz-bar select { font: 13px var(--font); padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; }
+.dz-stage { flex: 1; overflow: auto; position: relative; padding: 40px; }
+.dz-paper { position: relative; background: #d9d4c7; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+.dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 11px var(--font-mono); }
+.dz-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
+.dz-ruler i { position: absolute; bottom: 0; width: 1px; height: 5px; background: #64748b; }
+.dz-label { position: absolute; background: #fff; border-radius: 3px; overflow: hidden; }
+.dz-label.ghost { opacity: .55; pointer-events: none; }
+.dz-label.edit { outline: 2px solid var(--accent); outline-offset: 0; overflow: visible; }
+.dz-label.grid { background-image: linear-gradient(#eef1f5 1px, transparent 1px), linear-gradient(90deg, #eef1f5 1px, transparent 1px); }
+.dz-o { position: absolute; cursor: move; user-select: none; touch-action: none; color: #000; }
+.dz-o.sel { outline: 1.5px dashed var(--accent); outline-offset: 1px; z-index: 2; }
+.dz-o.over { outline: 1.5px solid var(--bad); }
+.dz-o .t { white-space: pre; font-family: "Roboto Condensed", "Arial Narrow", sans-serif; font-weight: 700; transform-origin: 0 0; display: block; }
+.dz-o canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.dz-o .h { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; background: var(--accent); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; display: none; }
+.dz-o.sel .h { display: block; }
+.dz-empty { color: var(--muted); font-size: 13px; }
+.dz-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
+.dz-foot .sp { flex: 1; }
+.dz-foot small { color: var(--muted); }
+@media (max-width: 1000px) {
+  .dz-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(360px, 1fr) auto; overflow: auto; }
+  .dz-side, .dz-props { border: 0; border-bottom: 1px solid var(--line); overflow: visible; }
+  .dz-head h2 { flex-basis: 100%; }
+}
 </style>
 </head>
 <body>
@@ -199,6 +249,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   <a class="brand" href="./"><span class="mark" aria-hidden="true">P2</span><b>Pic2Label <span>PRN Studio</span></b></a>
   <nav class="topnav" aria-label="Main">
     <a href="#viewer" class="on">Viewer</a>
+    <button type="button" data-open="dz">Designer</button>
     <button type="button" data-open="pic">From picture</button>
     <button type="button" data-open="lib">Library</button>
     <a href="gs1.html">GS1 guide</a>
@@ -234,12 +285,19 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
       <p>Ready labels: LMPC retail, GS1 pallet, courier, pharma, garment, jewellery, asset and bin tags.</p>
       <div class="act"><button type="button" class="btn" data-open="lib" id="libBtn">Browse library</button></div>
     </article>
+    <article class="start">
+      <div class="ic"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/><path d="M5 9h4M15 9h4M5 13h2M15 13h2"/></svg></div>
+      <h3>Design a label</h3>
+      <p>Pick your printer, set the liner width and labels across, then place text, barcodes and lines.</p>
+      <div class="act"><button type="button" class="btn" data-open="dz">Open designer</button></div>
+    </article>
   </div>
 
   <section class="viewer" id="viewer" aria-label="Label viewer">
     <div class="vmain">
       <div class="vbar">
         <span class="file" id="fileName"></span>
+        <button type="button" class="btn sm soft" id="dzBack" hidden>Edit in designer</button>
         <div class="tools">
           <select id="labelSel" class="sel unit" aria-label="Label in this file" hidden></select>
           <div class="seg" role="group" aria-label="View rotation" id="viewSeg">
@@ -404,6 +462,77 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   <div class="dlg-foot"><button type="button" class="btn soft" data-lead="lmpc" style="margin-right:auto">Get an expert review</button><button type="button" class="btn" id="lmpcCopy">Copy report</button><button type="button" class="btn primary" data-close>Done</button></div>
 </dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
+  <div class="dz-head">
+    <h2 id="dzTitle">Label designer</h2>
+    <button type="button" class="btn" id="dzNew">New</button>
+    <label class="btn" for="dzOpenFile">Open design</label><input type="file" id="dzOpenFile" accept=".json,.p2l" hidden>
+    <button type="button" class="btn" id="dzSave">Save design</button>
+    <button type="button" class="btn primary" id="dzToViewer">Preview as printed</button>
+    <button type="button" class="btn" id="dzPrn">Download .prn</button>
+    <button type="button" class="x" id="dzClose" aria-label="Close designer">×</button>
+  </div>
+  <div class="dz-body">
+    <aside class="dz-side" aria-label="Printer and media setup">
+      <h3>1 · Printer</h3>
+      <div class="dz-f">
+        <label class="full">Printer model<select id="dzPrinter"></select></label>
+        <label>Language<select id="dzLang"></select></label>
+        <label>Resolution<select id="dzDpi"></select></label>
+        <label id="dzCustomPW" hidden>Max print width (mm)<input id="dzMaxPW" type="number" min="20" max="300" step="0.1"></label>
+        <label id="dzCustomMW" hidden>Max media width (mm)<input id="dzMaxMW" type="number" min="20" max="320" step="0.1"></label>
+      </div>
+      <div class="dz-cap" id="dzCaps"></div>
+
+      <h3>2 · Media</h3>
+      <div class="dz-f">
+        <label class="full">Liner (paper) width, mm<input id="dzPaper" type="number" min="10" max="320" step="0.5" value="104"></label>
+        <label>Labels across<input id="dzAcross" type="number" min="1" max="20" step="1" value="1"></label>
+        <label>Gap between, mm<input id="dzHGap" type="number" min="0" max="20" step="0.5" value="3"></label>
+        <label>Left / right edge, mm<input id="dzEdge" type="number" min="0" max="20" step="0.5" value="2"></label>
+        <label>Label height, mm<input id="dzH" type="number" min="5" max="400" step="0.5" value="50"></label>
+        <label>Gap below, mm<input id="dzVGap" type="number" min="0" max="20" step="0.5" value="3"></label>
+        <label>Label width, mm (auto)<input id="dzW" readonly></label>
+      </div>
+      <div class="dz-warn" id="dzMediaWarn" hidden></div>
+
+      <h3>3 · Add objects</h3>
+      <div class="dz-tools">
+        <button type="button" class="btn" data-add="text">Text</button>
+        <button type="button" class="btn" data-add="barcode">Barcode</button>
+        <button type="button" class="btn" data-add="qrcode">QR code</button>
+        <button type="button" class="btn" data-add="datamatrix">DataMatrix</button>
+        <button type="button" class="btn" data-add="line">Line</button>
+        <button type="button" class="btn" data-add="box">Box</button>
+      </div>
+      <p class="dz-cap">Design on the outlined label. The other labels across repeat it. Drag to move, use the corner handle to resize, arrow keys nudge 0.5 mm (Shift: 5 mm), Delete removes, Ctrl+D duplicates.</p>
+    </aside>
+
+    <div class="dz-main">
+      <div class="dz-bar">
+        <span id="dzInfo" style="font-size:13px;color:var(--muted)"></span>
+        <span class="sp"></span>
+        <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="dzGrid" checked> Grid</label>
+        <select id="dzSnap" aria-label="Snap"><option value="0">No snap</option><option value="0.5" selected>Snap 0.5 mm</option><option value="1">Snap 1 mm</option></select>
+        <button type="button" class="btn" id="dzZoomOut" aria-label="Zoom out">−</button>
+        <button type="button" class="btn" id="dzZoomFit">Fit</button>
+        <button type="button" class="btn" id="dzZoomIn" aria-label="Zoom in">+</button>
+      </div>
+      <div class="dz-stage" id="dzStage"><div class="dz-paper" id="dzPaperEl"></div></div>
+    </div>
+
+    <aside class="dz-side dz-props" aria-label="Object properties">
+      <h3>Properties</h3>
+      <div id="dzProps"><p class="dz-empty">Select an object on the label, or add one from the left.</p></div>
+    </aside>
+  </div>
+  <div class="dz-foot">
+    <small id="dzStatus">Saved in this browser as you work.</small>
+    <span class="sp"></span>
+    <small>Printer specs are typical values; check the model's datasheet.</small>
+  </div>
+</dialog>
 
 <script src="https://cdn.jsdelivr.net/npm/bwip-js@4.5.1/dist/bwip-js-min.js"></script>
 <script>
@@ -1331,6 +1460,7 @@ const UNIT = { mm: 1, cm: 10, in: 25.4 };
 const toU = mm => +(mm / UNIT[state.unit || "mm"]).toFixed(state.unit === "in" ? 2 : 1);
 const fromU = v => v * UNIT[state.unit || "mm"];
 function draw() {
+  if ($("dzBack")) $("dzBack").hidden = !(state.source && state.source.design);
   const all = $("prn").value;
   const lang = detect(all);
   const t = currentTpl();
@@ -1472,7 +1602,7 @@ function layoutPRN(L, lang, dpi) {
   if (NEW_LANGS.includes(lang)) return layoutPRN2(L, lang, dpi);
   const D = mm => dotsOf(mm, dpi), W = D(L.w), H = D(L.h), out = [], warn = [];
   const items = L.items.filter(e => e.w > 0 && e.h > 0 || e.type === "line");
-  if (lang === "TSPL") out.push(`SIZE ${L.w} mm, ${L.h} mm`, "GAP 2 mm, 0 mm", "DIRECTION 1", "CODEPAGE UTF-8", "CLS");
+  if (lang === "TSPL") out.push(`SIZE ${L.w} mm, ${L.h} mm`, `GAP ${L.gap ?? 2} mm, 0 mm`, "DIRECTION 1", "CODEPAGE UTF-8", "CLS");
   if (lang === "ZPL") out.push("^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0");
   if (lang === "EPL2") out.push("N", `q${W}`, `Q${H},24`);
   const pgl = { alpha: [], horz: [], vert: [], box: [], bars: [] };
@@ -1727,13 +1857,13 @@ function regenSource(lang, dpi, first) {
   const L = p2l.layout; if (!L) return; state.sizeHint = [L.w, L.h];
   const d = lang === "EPL2" ? 203 : dpi; if (lang !== "EPL2") state.dpi = dpi;
   const { prn, warn } = layoutPRN(L, lang, d);
-  showGenerated(prn, `${src.lib || "pic2label"}_${lang}_${d}dpi.prn`, [...(src.lib ? [] : ["AI draft from a photo: check every text line and barcode value against the original before printing."]), ...warn]);
-  state.source = { kind: "ai", lib: src.lib }; srcBadge();
+  showGenerated(prn, `${src.lib || (src.design ? "design" : "pic2label")}_${lang}_${d}dpi.prn`, [...(src.lib || src.design ? [] : ["AI draft from a photo: check every text line and barcode value against the original before printing."]), ...warn]);
+  state.source = { kind: "ai", lib: src.lib, design: src.design }; srcBadge();
 }
 function srcBadge() {
   const src = state.source, el = $("srcBadge"); if (!el) return;
   el.hidden = !src;
-  if (src) el.textContent = src.lib ? `Library: ${src.lib} · switch language or dpi freely` : src.kind === "ai" ? "From AI layout · switch language or dpi freely, no new AI call" : "From picture · switch language or dpi to regenerate";
+  if (src) el.textContent = src.design ? "From the designer · switch language or dpi freely" : src.lib ? `Library: ${src.lib} · switch language or dpi freely` : src.kind === "ai" ? "From AI layout · switch language or dpi freely, no new AI call" : "From picture · switch language or dpi to regenerate";
 }
 // Download with binary bitmaps restored, CRLF line ends
 function prnBytes(text) {
@@ -1906,7 +2036,7 @@ $("lmpcCopy").onclick = async () => { const txt = $("lmpcSummary").textContent +
   try { await navigator.clipboard.writeText(txt); toast("Report copied"); } catch (e) { toast("Copy is blocked here"); } };
 // generic dialog openers and closers
 document.addEventListener("click", e => {
-  const o = e.target.closest("[data-open]"); if (o) { if (o.dataset.open === "lib") openLibrary(); else if (o.dataset.open === "pic") $("picDlg").showModal(); }
+  const o = e.target.closest("[data-open]"); if (o) { if (o.dataset.open === "lib") openLibrary(); else if (o.dataset.open === "dz") dzOpen(); else if (o.dataset.open === "pic") $("picDlg").showModal(); }
   const c = e.target.closest("[data-close]"); if (c) c.closest("dialog").close();
 });
 for (const d of document.querySelectorAll("dialog")) d.addEventListener("click", e => { if (e.target === d) d.close(); }); // click on the backdrop
@@ -2082,6 +2212,309 @@ if (libParam) setTimeout(() => { if (libParam === "1") openLibrary(); else { loa
 loadFromHash().then(ok => { if (!ok && $("rememberChk").checked && store.get("p2l-last")) { try { unpackState(store.get("p2l-last")); toast("Your last label is back"); } catch (e) {} } });
 window.addEventListener("hashchange", loadFromHash);
 if (document.fonts) document.fonts.ready.then(draw);
+/* ---------------- label designer ---------------- */
+// Typical specs from maker datasheets (print width = printhead width). "custom" lets the user type their own.
+const DZ_PRINTERS = [
+  ["TSC", "TE244", [203], ["TSPL", "ZPL", "EPL2", "DPL"], 108, 112, "Desktop"],
+  ["TSC", "TE344", [300], ["TSPL", "ZPL", "EPL2", "DPL"], 106, 112, "Desktop"],
+  ["TSC", "TX210", [203], ["TSPL", "ZPL", "EPL2", "DPL"], 108, 118, "Desktop"],
+  ["TSC", "TX310", [300], ["TSPL", "ZPL", "EPL2", "DPL"], 106, 118, "Desktop"],
+  ["TSC", "TX610", [600], ["TSPL", "ZPL", "EPL2", "DPL"], 104, 118, "Desktop"],
+  ["TSC", "ML240P", [203], ["TSPL", "ZPL", "EPL2", "DPL"], 108, 118, "Industrial"],
+  ["TSC", "ML340P", [300], ["TSPL", "ZPL", "EPL2", "DPL"], 106, 118, "Industrial"],
+  ["TSC", "MH241", [203], ["TSPL", "ZPL", "EPL2", "DPL"], 108, 116, "Industrial"],
+  ["TSC", "MH341", [300], ["TSPL", "ZPL", "EPL2", "DPL"], 106, 116, "Industrial"],
+  ["TSC", "MH641", [600], ["TSPL", "ZPL", "EPL2", "DPL"], 105.7, 116, "Industrial"],
+  ["TSC", "TTP-2610MT (6 inch)", [203], ["TSPL", "ZPL", "EPL2", "DPL"], 168, 178, "Industrial"],
+  ["TSC", "TTP-368MT (6 inch)", [300], ["TSPL", "ZPL", "EPL2", "DPL"], 168, 178, "Industrial"],
+  ["TSC", "Alpha-30L (mobile)", [203], ["TSPL", "CPCL", "ZPL"], 72, 80, "Mobile"],
+  ["TSC", "Alpha-40L (mobile)", [203], ["TSPL", "CPCL", "ZPL"], 104, 112, "Mobile"],
+  ["Printronix", "T4000 (4 inch)", [203, 300], ["PGL", "ZPL", "DPL"], 104, 114, "Industrial"],
+  ["Printronix", "T6000 (4 inch)", [203, 300, 600], ["PGL", "ZPL", "DPL"], 104, 114, "Industrial"],
+  ["Printronix", "T6000 (6 inch)", [203, 300], ["PGL", "ZPL", "DPL"], 168, 180, "Industrial"],
+  ["Honeywell", "PC42t", [203], ["ZPL", "EPL2", "DPL"], 104, 110, "Desktop"],
+  ["Honeywell", "PD45S", [203, 300], ["FP", "DPL", "ZPL"], 108, 118, "Industrial"],
+  ["Honeywell", "PM45", [203, 300], ["FP", "DPL", "ZPL"], 108, 118, "Industrial"],
+  ["Honeywell", "RP4 (mobile)", [203], ["CPCL", "ZPL", "FP", "DPL"], 104, 112, "Mobile"],
+  ["Datamax", "I-4212e", [203], ["DPL"], 104, 118, "Industrial"],
+  ["Datamax", "I-4310e", [300], ["DPL"], 106, 118, "Industrial"],
+  ["Zebra", "ZD421t", [203, 300], ["ZPL", "EPL2"], 104, 118, "Desktop"],
+  ["Zebra", "ZT411", [203, 300, 600], ["ZPL"], 104, 114, "Industrial"],
+  ["SATO", "CL4NX Plus", [203, 300, 600], ["SBPL", "ZPL", "DPL"], 104, 128, "Industrial"],
+  ["Citizen", "CL-S621II", [203], ["ZPL", "DPL", "EPL2"], 104, 118, "Desktop"],
+  ["Any", "Custom printer", [203, 300, 600], ["TSPL", "ZPL", "EPL2", "PGL", "DPL", "FP", "SBPL", "CPCL"], 104, 112, "Custom"],
+].map(([brand, model, dpis, langs, pw, mw, kind]) => ({ id: (brand + "-" + model).replace(/\W+/g, "-").toLowerCase(), brand, model, dpis, langs, pw, mw, kind }));
+const DZ_LANG_NAME = { TSPL: "TSPL · TSC", ZPL: "ZPL · Zebra", EPL2: "EPL2 · Eltron", PGL: "PGL · Printronix", DPL: "DPL · Datamax", FP: "Fingerprint · Honeywell", SBPL: "SBPL · SATO", CPCL: "CPCL · mobile" };
+const DZ_SYMS = [["code128", "Code 128"], ["gs1-128", "GS1-128"], ["ean13", "EAN-13"], ["upca", "UPC-A"], ["code39", "Code 39"], ["qrcode", "QR code"], ["datamatrix", "DataMatrix"]];
+const dz = { zoom: 1, sel: null, seq: 1, D: null };
+const r1 = v => Math.round(v * 10) / 10;
+
+function dzDefault() {
+  return { printer: "tsc-te244", lang: "TSPL", dpi: 203, pw: 104, mw: 112, paper: 104, across: 1, hgap: 3, edge: 2, h: 50, vgap: 3, items: [
+    { id: 1, type: "text", x: 3, y: 3, h: 4, text: "PRODUCT NAME" },
+    { id: 2, type: "text", x: 3, y: 9, h: 3, text: "MRP Rs. 0.00 (incl. of all taxes)" },
+    { id: 3, type: "line", x: 3, y: 14, w: 94, h: 0.4, thickness: 0.4 },
+    { id: 4, type: "barcode", symbology: "code128", data: "1234567890", x: 3, y: 17, w: 60, h: 16 },
+    { id: 5, type: "barcode", symbology: "qrcode", data: "https://labels.infinitesolutions.co.in", x: 76, y: 17, w: 20, h: 20 },
+  ] };
+}
+const dzPrinter = () => DZ_PRINTERS.find(p => p.id === dz.D.printer) || DZ_PRINTERS[0];
+const dzLW = (D = dz.D) => (D.paper - 2 * D.edge - (D.across - 1) * D.hgap) / D.across;
+const dzIs2D = it => it.type === "barcode" && (it.symbology === "qrcode" || it.symbology === "datamatrix");
+function dzTextW(it) { return measureEm(it.text || " ", it.h * 1.2 * 20) / 20 * 1.02; }
+function dzSave() { store.set("p2l-design", JSON.stringify(dz.D)); $("dzStatus").textContent = "Saved in this browser as you work."; }
+
+function dzOpen() {
+  if (!dz.D) { try { dz.D = JSON.parse(store.get("p2l-design")); } catch (e) {} if (!dz.D || !dz.D.items) dz.D = dzDefault(); }
+  dz.seq = Math.max(1, ...dz.D.items.map(i => i.id)) + 1;
+  for (const d of document.querySelectorAll("dialog[open]")) d.close();
+  $("dzDlg").showModal(); dzSetupForm(); dzFit();
+}
+
+/* setup panel */
+function dzSetupForm() {
+  const D = dz.D, sel = $("dzPrinter");
+  if (!sel.options.length) {
+    for (const brand of [...new Set(DZ_PRINTERS.map(p => p.brand))]) {
+      const g = document.createElement("optgroup"); g.label = brand;
+      for (const p of DZ_PRINTERS.filter(p => p.brand === brand)) g.append(new Option(`${p.brand === "Any" ? "" : p.brand + " "}${p.model}`, p.id));
+      sel.append(g);
+    }
+  }
+  sel.value = D.printer; dzPrinterChanged(true);
+  for (const k of ["paper", "across", "hgap", "edge", "h", "vgap"]) $("dz" + { paper: "Paper", across: "Across", hgap: "HGap", edge: "Edge", h: "H", vgap: "VGap" }[k]).value = D[k];
+  dzMedia();
+}
+function dzPrinterChanged(keep) {
+  const D = dz.D, p = DZ_PRINTERS.find(x => x.id === $("dzPrinter").value) || DZ_PRINTERS[0]; D.printer = p.id;
+  const custom = p.kind === "Custom";
+  $("dzCustomPW").hidden = $("dzCustomMW").hidden = !custom;
+  if (!custom) { D.pw = p.pw; D.mw = p.mw; } else { $("dzMaxPW").value = D.pw; $("dzMaxMW").value = D.mw; }
+  if (!p.langs.includes(D.lang)) D.lang = p.langs[0];
+  if (!p.dpis.includes(D.dpi)) D.dpi = p.dpis[0];
+  $("dzLang").replaceChildren(...p.langs.map(l => new Option(DZ_LANG_NAME[l], l))); $("dzLang").value = D.lang;
+  $("dzDpi").replaceChildren(...p.dpis.map(d => new Option(d + " dpi", d))); $("dzDpi").value = D.dpi;
+  if (!keep && D.paper > D.mw) { D.paper = D.mw; $("dzPaper").value = D.paper; }
+  dzCaps(); if (!keep) dzMedia();
+}
+function dzCaps() {
+  const D = dz.D, p = dzPrinter();
+  $("dzCaps").innerHTML = `<b>${p.kind}</b> printer · print width <b>${D.pw} mm</b> · media up to <b>${D.mw} mm</b><br>Languages: ${p.langs.map(l => DZ_LANG_NAME[l].split(" · ")[0]).join(", ")}<br>Resolution: ${p.dpis.join(" / ")} dpi · 1 mm = ${r1(D.dpi / 25.4)} dots`;
+}
+function dzMedia() {
+  const D = dz.D, num = (id, min, max) => Math.min(max, Math.max(min, +$(id).value || 0));
+  D.paper = num("dzPaper", 10, 320); D.across = Math.round(num("dzAcross", 1, 20)); D.hgap = num("dzHGap", 0, 20);
+  D.edge = num("dzEdge", 0, 20); D.h = num("dzH", 5, 400); D.vgap = num("dzVGap", 0, 20);
+  const lw = dzLW(); $("dzW").value = lw > 0 ? r1(lw) : "too narrow";
+  const w = [];
+  if (lw < 5) w.push("Labels are too narrow: reduce labels across, gaps or edges, or use wider liner.");
+  if (D.paper > D.mw) w.push(`Liner ${D.paper} mm is wider than this printer takes (${D.mw} mm).`);
+  else if (D.paper - D.edge > D.pw) w.push(`Print width is ${D.pw} mm: anything beyond ${D.pw} mm from the left edge of the liner will not print.`);
+  $("dzMediaWarn").hidden = !w.length; $("dzMediaWarn").textContent = w.join(" ");
+  dzDraw(); dzSave();
+}
+
+/* canvas */
+function dzFit() { dz.zoom = 1; dzDraw(); }
+function dzScale() {
+  const st = $("dzStage"), D = dz.D, avail = Math.max(200, st.clientWidth - 80), availH = Math.max(200, st.clientHeight - 80);
+  return Math.max(1.5, Math.min(24, Math.min(avail / D.paper, availH / (D.h + 2 * D.vgap)))) * dz.zoom;
+}
+function dzDraw() {
+  const D = dz.D, s = dzScale(), lw = dzLW(), paper = $("dzPaperEl"); dz.s = s;
+  paper.style.width = D.paper * s + "px"; paper.style.height = (D.h + 2 * D.vgap) * s + "px";
+  paper.replaceChildren();
+  const ruler = document.createElement("div"); ruler.className = "dz-ruler";
+  const step = s > 8 ? 5 : s > 4 ? 10 : 20;
+  for (let m = 0; m <= D.paper; m += step) { const i = document.createElement("i"); i.style.left = m * s + "px"; ruler.append(i); if (m % (step * 2) === 0) { const t = document.createElement("span"); t.style.left = m * s + "px"; t.textContent = m; ruler.append(t); } }
+  paper.append(ruler);
+  if (lw <= 0) return;
+  for (let c = 0; c < D.across; c++) {
+    const lab = document.createElement("div");
+    lab.className = "dz-label" + (c ? " ghost" : " edit") + ($("dzGrid").checked ? " grid" : "");
+    Object.assign(lab.style, { left: (D.edge + c * (lw + D.hgap)) * s + "px", top: D.vgap * s + "px", width: lw * s + "px", height: D.h * s + "px", backgroundSize: `${s * 5}px ${s * 5}px` });
+    for (const it of D.items) lab.append(dzEl(it, s, !c));
+    if (!c) { lab.id = "dzLab"; lab.addEventListener("pointerdown", e => { if (e.target === lab) dzSelect(null); }); }
+    paper.append(lab);
+  }
+  $("dzInfo").textContent = `${D.across} × ${r1(lw)} × ${D.h} mm on ${D.paper} mm liner · ${DZ_LANG_NAME[D.lang].split(" · ")[0]} ${D.dpi} dpi`;
+}
+function dzEl(it, s, live) {
+  const el = document.createElement("div"); el.className = "dz-o" + (live && dz.sel === it.id ? " sel" : ""); el.dataset.id = it.id;
+  dzPaint(el, it, s);
+  if (live) {
+    const h = document.createElement("span"); h.className = "h"; el.append(h);
+    el.addEventListener("pointerdown", e => dzGrab(e, it, e.target === h));
+  }
+  return el;
+}
+function dzPaint(el, it, s) {
+  const lw = dzLW(), D = dz.D;
+  if (it.type === "text") it.w = dzTextW(it);
+  Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: Math.max(1, it.w * s) + "px", height: Math.max(1, it.h * s) + "px", border: "", background: "" });
+  el.classList.toggle("over", it.x < -0.01 || it.y < -0.01 || it.x + it.w > lw + 0.05 || it.y + it.h > D.h + 0.05);
+  const keep = el.querySelector(".h");
+  if (it.type === "text") {
+    const t = document.createElement("span"); t.className = "t"; t.textContent = it.text || " ";
+    t.style.fontSize = it.h * 1.2 * s + "px"; t.style.lineHeight = it.h * s + "px";
+    el.replaceChildren(t);
+  } else if (it.type === "line") { el.style.background = "#000"; el.replaceChildren(); }
+  else if (it.type === "box") { el.style.border = `${Math.max(1, (it.thickness || 0.3) * s)}px solid #000`; el.replaceChildren(); }
+  else {
+    const sym = it.symbology, two = sym === "qrcode" || sym === "datamatrix", c = document.createElement("canvas");
+    let data = String(it.data || "");
+    if (sym === "ean13") data = data.replace(/\D/g, "").slice(0, 12);
+    if (sym === "upca") data = data.replace(/\D/g, "").slice(0, 11);
+    const bcid = { "gs1-128": "gs1-128", upca: "upca" }[sym] || sym;
+    try { bwipjs.toCanvas(c, Object.assign({ bcid, text: sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, scale: 2 }, two ? {} : { height: 10, includetext: true, textsize: 8 })); el.replaceChildren(c);
+      if (!two) { // show the width the printer will really use: whole dots per module, centred in the box
+        const mods = linearModules(bcid, sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data) || 80, wd = dotsOf(it.w, D.dpi);
+        let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
+        c.style.width = Math.min(100, mods * n / wd * 100) + "%"; c.style.margin = "0 auto";
+      } }
+    catch (e) { const t = document.createElement("span"); t.className = "t"; t.style.cssText = "color:var(--bad);font-size:12px;font-family:var(--font)"; t.textContent = "Check barcode data"; el.replaceChildren(t); }
+  }
+  if (keep) el.append(keep);
+}
+function dzSelect(id) {
+  dz.sel = id;
+  for (const el of document.querySelectorAll("#dzLab .dz-o")) el.classList.toggle("sel", +el.dataset.id === id);
+  dzProps();
+}
+function dzRefresh(it) { // repaint one object on every label across
+  for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${it.id}"]`)) dzPaint(el, it, dz.s);
+}
+function dzGrab(e, it, resize) {
+  e.preventDefault(); e.stopPropagation(); dzSelect(it.id);
+  const sx = e.clientX, sy = e.clientY, o = { x: it.x, y: it.y, w: it.w, h: it.h }, s = dz.s, snap = +$("dzSnap").value;
+  const sn = v => snap ? Math.round(v / snap) * snap : r1(v);
+  const move = ev => {
+    const dx = (ev.clientX - sx) / s, dy = (ev.clientY - sy) / s;
+    if (!resize) { it.x = sn(o.x + dx); it.y = sn(o.y + dy); }
+    else if (it.type === "text") it.h = Math.max(1, sn(o.h + dy));
+    else if (dzIs2D(it)) { const v = Math.max(4, sn(Math.max(o.w + dx, o.h + dy))); it.w = it.h = v; }
+    else if (it.type === "line") { if (o.w >= o.h) it.w = Math.max(1, sn(o.w + dx)); else it.h = Math.max(1, sn(o.h + dy)); }
+    else { it.w = Math.max(2, sn(o.w + dx)); it.h = Math.max(2, sn(o.h + dy)); }
+    for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${it.id}"]`)) {
+      if (resize && it.type !== "line" && it.type !== "box") dzPaint(el, it, s);
+      else Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: it.w * s + "px", height: it.h * s + "px" });
+    }
+  };
+  const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); dzRefresh(it); dzProps(); dzSave(); };
+  addEventListener("pointermove", move); addEventListener("pointerup", up);
+}
+
+/* properties */
+function dzProps() {
+  const box = $("dzProps"), it = dz.D.items.find(i => i.id === dz.sel);
+  if (!it) { box.innerHTML = '<p class="dz-empty">Select an object on the label, or add one from the left.</p>'; return; }
+  const f = [], num = (k, label, step = 0.5, min = 0) => f.push(`<label>${label}<input data-k="${k}" type="number" step="${step}" min="${min}" value="${r1(it[k] ?? 0)}"></label>`);
+  num("x", "X, mm", 0.5, -50); num("y", "Y, mm", 0.5, -50);
+  if (it.type === "text") {
+    f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
+    num("h", "Text height, mm", 0.5, 1); f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
+  } else if (it.type === "barcode") {
+    f.push(`<label class="full">Type<select data-k="symbology">${DZ_SYMS.map(([v, n]) => `<option value="${v}"${v === it.symbology ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
+    f.push(`<label class="full">Data<textarea data-k="data">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
+    if (dzIs2D(it)) num("w", "Size, mm", 0.5, 4); else { num("w", "Width, mm", 0.5, 5); num("h", "Height, mm", 0.5, 3); }
+  } else if (it.type === "line") {
+    const horiz = it.w >= it.h;
+    f.push(`<label class="full">Direction<select data-k="dir"><option value="h"${horiz ? " selected" : ""}>Horizontal</option><option value="v"${horiz ? "" : " selected"}>Vertical</option></select></label>`);
+    f.push(`<label>Length, mm<input data-k="len" type="number" step="0.5" min="1" value="${r1(Math.max(it.w, it.h))}"></label>`);
+    num("thickness", "Thickness, mm", 0.1, 0.1);
+  } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
+  const hints = { ean13: "12 digits; the check digit is added.", upca: "11 digits; the check digit is added.", "gs1-128": "Use (AI) brackets, e.g. (01)08901234567890(10)AB12.", datamatrix: "For GS1 DataMatrix start with (01)…" };
+  box.innerHTML = `<div class="dz-f">${f.join("")}</div>${it.type === "barcode" && hints[it.symbology] ? `<p class="dz-cap">${hints[it.symbology]}</p>` : ""}
+    <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzDup">Duplicate</button><button type="button" class="btn" id="dzCenter">Centre across</button><button type="button" class="btn" id="dzDel" style="color:var(--bad)">Delete</button></div>`;
+  for (const inp of box.querySelectorAll("[data-k]")) inp.addEventListener(inp.tagName === "SELECT" ? "change" : "input", () => {
+    const k = inp.dataset.k, v = inp.value;
+    if (k === "text" || k === "data") it[k] = v;
+    else if (k === "symbology") { const was2 = dzIs2D(it); it.symbology = v; if (dzIs2D(it) && !was2) it.w = it.h = Math.min(it.w, 20); if (!dzIs2D(it) && was2) { it.w = 50; it.h = 15; } dzRefresh(it); dzSave(); return dzProps(); }
+    else if (k === "dir") { const len = Math.max(it.w, it.h), th = it.thickness || 0.4; if (v === "h") { it.w = len; it.h = th; } else { it.h = len; it.w = th; } }
+    else if (k === "len") { const n = Math.max(1, +v || 1); if (it.w >= it.h) it.w = n; else it.h = n; }
+    else if (k === "thickness") { it.thickness = Math.max(0.1, +v || 0.1); if (it.type === "line") { if (it.w >= it.h) it.h = it.thickness; else it.w = it.thickness; } }
+    else { it[k] = +v || 0; if (k === "w" && dzIs2D(it)) it.h = it.w; }
+    dzRefresh(it); dzSave();
+  });
+  $("dzDel").onclick = () => dzDelete(); $("dzDup").onclick = () => dzDuplicate();
+  $("dzCenter").onclick = () => { it.x = r1((dzLW() - it.w) / 2); dzRefresh(it); dzProps(); dzSave(); };
+}
+function dzAdd(kind) {
+  const lw = dzLW(), D = dz.D, id = dz.seq++;
+  const base = { text: { type: "text", h: 3.5, text: "New text" }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
+    qrcode: { type: "barcode", symbology: "qrcode", data: "https://", w: 18, h: 18 }, datamatrix: { type: "barcode", symbology: "datamatrix", data: "(01)08901234567890", w: 15, h: 15 },
+    line: { type: "line", w: Math.max(5, lw - 6), h: 0.4, thickness: 0.4 }, box: { type: "box", w: Math.min(30, lw - 6), h: Math.min(15, D.h - 6), thickness: 0.4 } }[kind];
+  const it = Object.assign({ id, x: 3, y: Math.min(D.h - 5, 3 + (D.items.length % 6) * 4) }, base);
+  D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave();
+}
+function dzDelete() { const D = dz.D; D.items = D.items.filter(i => i.id !== dz.sel); dz.sel = null; dzDraw(); dzProps(); dzSave(); }
+function dzDuplicate() { const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; const c = Object.assign({}, it, { id: dz.seq++, x: it.x + 2, y: it.y + 2 }); dz.D.items.push(c); dz.sel = c.id; dzDraw(); dzProps(); dzSave(); }
+
+/* output */
+function dzLayout() {
+  const D = dz.D, lw = dzLW(), items = [];
+  for (let c = 0; c < D.across; c++) {
+    const ox = D.edge + c * (lw + D.hgap);
+    for (const it of D.items) {
+      const o = Object.assign({}, it, { x: r1(it.x + ox), y: r1(it.y) });
+      if (o.type === "barcode" && o.symbology === "upca") { o.data = "0" + String(o.data || "").replace(/\D/g, "").slice(0, 11); o.symbology = "ean13"; }
+      items.push(o);
+    }
+  }
+  return { w: D.paper, h: D.h, gap: D.vgap, items };
+}
+function dzCheck() {
+  const D = dz.D, lw = dzLW(), bad = D.items.filter(i => i.x < 0 || i.y < 0 || i.x + i.w > lw + 0.05 || i.y + i.h > D.h + 0.05);
+  if (lw <= 0) { toast("Labels are too narrow for this liner"); return false; }
+  if (bad.length) toast(`${bad.length} object${bad.length > 1 ? "s run" : " runs"} off the label (outlined red)`);
+  return true;
+}
+function dzToViewer() {
+  if (!dzCheck()) return;
+  const D = dz.D;
+  p2l.layout = dzLayout(); state.source = { kind: "ai", design: true };
+  $("dzDlg").close(); regenSource(D.lang, D.dpi, true);
+  $("viewer").scrollIntoView({ block: "start" });
+}
+function dzDownload() {
+  if (!dzCheck()) return;
+  const D = dz.D, d = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayout(), D.lang, d);
+  const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `design_${D.across}up_${D.lang}_${d}dpi.prn`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* wiring */
+$("dzPrinter").addEventListener("change", () => { dzPrinterChanged(false); dzDraw(); dzSave(); });
+$("dzLang").addEventListener("change", () => { dz.D.lang = $("dzLang").value; dzDraw(); dzSave(); });
+$("dzDpi").addEventListener("change", () => { dz.D.dpi = +$("dzDpi").value; dzCaps(); dzDraw(); dzSave(); });
+for (const id of ["dzMaxPW", "dzMaxMW"]) $(id).addEventListener("input", () => { dz.D.pw = +$("dzMaxPW").value || 104; dz.D.mw = +$("dzMaxMW").value || 112; dzCaps(); dzMedia(); });
+for (const id of ["dzPaper", "dzAcross", "dzHGap", "dzEdge", "dzH", "dzVGap"]) $(id).addEventListener("input", dzMedia);
+for (const b of document.querySelectorAll("[data-add]")) b.addEventListener("click", () => dzAdd(b.dataset.add));
+$("dzGrid").addEventListener("change", dzDraw);
+$("dzZoomIn").onclick = () => { dz.zoom = Math.min(4, dz.zoom * 1.25); dzDraw(); };
+$("dzZoomOut").onclick = () => { dz.zoom = Math.max(0.3, dz.zoom / 1.25); dzDraw(); };
+$("dzZoomFit").onclick = dzFit;
+$("dzClose").onclick = () => $("dzDlg").close();
+$("dzToViewer").onclick = dzToViewer;
+$("dzPrn").onclick = dzDownload;
+$("dzNew").onclick = () => { if (!confirm("Start a new blank design? The current one in this browser is replaced.")) return; const p = dz.D; dz.D = Object.assign(dzDefault(), { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw, items: [] }); dz.sel = null; dzSetupForm(); dzProps(); };
+$("dzSave").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(dz.D, null, 1)], { type: "application/json" })); a.download = "label-design.p2l.json"; a.click(); };
+$("dzOpenFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.items)) throw 0; dz.D = Object.assign(dzDefault(), d); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1; dzSetupForm(); dzProps(); dzSave(); }
+  catch (err) { toast("That file is not a label design"); }
+});
+$("dzDlg").addEventListener("keydown", e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || dz.sel == null) return;
+  const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return;
+  const st = e.shiftKey ? 5 : 0.5, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
+  if (mv) { e.preventDefault(); it.x = r1(it.x + mv[0]); it.y = r1(it.y + mv[1]); dzRefresh(it); dzProps(); dzSave(); }
+  else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); dzDelete(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") { e.preventDefault(); dzDuplicate(); }
+});
+addEventListener("resize", () => { if ($("dzDlg").open) dzDraw(); });
+if ($("dzBack")) $("dzBack").onclick = dzOpen;
+if (new URLSearchParams(location.search).has("design")) setTimeout(dzOpen, 300);
 </script>
 </body>
 </html>
