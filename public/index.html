@@ -311,6 +311,8 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-ribbon .rb:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-line); }
 .dz-ribbon .rb[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
 .dz-ribbon .rb:disabled { color: #b3b9c4; cursor: default; }
+.dz-ribbon .rsize { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); margin-right: 6px; }
+.dz-ribbon .rsize input { width: 64px; font: 13px var(--font); padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 8px; }
 .dz-ribbon .rfont { font: 13px var(--font); padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; max-width: 220px; margin-right: 4px; }
 .dz-setup { display: flex; align-items: stretch; overflow-x: auto; padding: 6px 8px 2px; min-height: 84px; }
 .dz-setup[hidden] { display: none; }
@@ -644,6 +646,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
     </details>
   </div>
 </dialog>
+<datalist id="dzPtList"><option value="5"><option value="6"><option value="7"><option value="8"><option value="9"><option value="10"><option value="11"><option value="12"><option value="14"><option value="16"><option value="18"><option value="20"><option value="24"><option value="28"><option value="32"><option value="36"><option value="42"><option value="48"><option value="60"><option value="72"></datalist>
 <dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
   <div class="dz-head">
     <h2 id="dzTitle" class="dz-brand"><span class="mark" aria-hidden="true">P2</span>Pic2Label <span>PRN Studio</span></h2>
@@ -3109,6 +3112,7 @@ function dzMultiPanel(ids) {
     <h3>Align with each other</h3>
     <div class="dz-f" style="margin-bottom:6px"><label class="full">Line up to<select id="dzAlignTo"><option value="first"${(dz.alignTo || "first") === "first" ? " selected" : ""}>The first object picked (stays put)</option><option value="bounds"${dz.alignTo === "bounds" ? " selected" : ""}>The outer edges of the selection</option></select></label></div><div class="dz-mgrid">${btn("al", "Left", "left")}${btn("ac", "Centre", "center")}${btn("ar", "Right", "right")}${btn("at", "Top", "top")}${btn("am", "Middle", "middle")}${btn("ab", "Bottom", "bottom")}</div>
     <h3>Space evenly</h3><div class="dz-mgrid">${btn("dh", "Across", "dx")}${btn("dv", "Down", "dy")}</div>
+    <h3>Font size</h3><div class="dz-f"><label>All text, pt<input id="dzMultiPt" type="number" min="3" max="400" step="0.5" list="dzPtList" placeholder="e.g. 10"></label><label>&nbsp;<button type="button" class="btn sm" id="dzMultiPtGo">Apply</button></label></div>
     <h3>Turn together</h3><div class="dz-mgrid">${btn("rotr", "90° right", "tr")}${btn("rotl", "90° left", "tl")}${btn("straight", "180°", "t2")}</div>
     <h3>Align on the label</h3><div class="dz-mgrid">${btn("ac", "Centre across", "lcenter")}${btn("am", "Middle", "lmiddle")}</div>
     <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzMDup">Duplicate</button><button type="button" class="btn" id="dzMDel" style="color:var(--bad)">Delete</button></div>
@@ -3125,6 +3129,8 @@ function dzProps() {
     if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
     const box = $("dzProps"); box.innerHTML = dzMultiPanel(ids) + dzObjList(); dzObjWire(); dzWarnCount();
     for (const b of box.querySelectorAll("[data-m]")) b.onclick = () => { const m = b.dataset.m; if (m === "tr") dzTurnGroup(90); else if (m === "tl") dzTurnGroup(-90); else if (m === "t2") dzTurnGroup(180); else if (m === "dx") dzDistribute("x"); else if (m === "dy") dzDistribute("y"); else if (m[0] === "l" && m !== "left") dzGroupToLabel(m); else dzAlignMany(m, ids); };
+    $("dzMultiPtGo").onclick = () => dzSetPt($("dzMultiPt").value, ids); $("dzMultiPt").onkeydown = e => { if (e.key === "Enter") dzSetPt($("dzMultiPt").value, ids); };
+    { const t = ids.map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h)); if (t.length && t.every(v => v === t[0])) $("dzMultiPt").value = t[0]; }
     $("dzMDup").onclick = dzDuplicate; $("dzMDel").onclick = dzDelete; $("dzAlignTo").onchange = e => { dz.alignTo = e.target.value; dzMarkSel(); };
     return;
   } }
@@ -3140,7 +3146,7 @@ function dzProps() {
   if (it.type === "text" && dzLinkSrc(it)) f.push(`<label class="full">Text (from the linked object)<input value="${(it.text || "").replace(/"/g, "&quot;")}" readonly></label>`);
   if (it.type === "text" && !dzLinkSrc(it)) {
     f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
-    num("h", "Text height, mm", 0.5, 1); f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
+    f.push(`<label>Font size, pt<input data-pt="h" type="number" min="3" max="400" step="0.5" value="${dzToPt(it.h)}" list="dzPtList"></label>`); f.push(`<label>Width, mm<input value="${r1(it.w)}" readonly></label>`);
   } else if (it.type === "barcode") {
     f.push(`<label class="full">Type<select data-k="symbology">${DZ_SYMS.map(([v, n]) => `<option value="${v}"${v === it.symbology ? " selected" : ""}>${n}</option>`).join("")}</select></label>`);
     if (it.symbology === "qrcode") f.push(`<label class="full">QR holds<select data-k="qrKind"><option value="text"${it.qrKind !== "contact" ? " selected" : ""}>Text or link</option><option value="contact"${it.qrKind === "contact" ? " selected" : ""}>Contact card (vCard)</option></select></label>`);
@@ -3166,13 +3172,13 @@ function dzProps() {
     f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);align-self:end"><input type="checkbox" data-k="fill" style="width:auto"${it.fill ? " checked" : ""}> Solid (white text)</label>`);
     f.push(`<label class="full">Text inside (Enter for a new line)<textarea data-k="text">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
     f.push(`<label>Align<select data-k="align">${["left", "center", "right"].map(a => `<option value="${a}"${(it.align || "center") === a ? " selected" : ""}>${a[0].toUpperCase() + a.slice(1)}</option>`).join("")}</select></label>`);
-    num("maxH", "Max text height, mm", 0.5, 0);
-    const ft = dzFitText(it); f.push(`<p class="dz-cap" style="grid-column:1/-1;margin:0">${String(it.text || "").trim() ? ft.length ? `Text fits at ${r1(ft[0].h)} mm on ${ft.length} line${ft.length > 1 ? "s" : ""}.` : "Text does not fit: make the shape bigger or the text shorter." : "Shape only."}</p>`);
+    f.push(`<label>Max font size, pt<input data-pt="maxH" type="number" min="0" max="400" step="0.5" value="${+it.maxH > 0 ? dzToPt(it.maxH) : 0}" list="dzPtList" title="0 = as big as fits"></label>`);
+    const ft = dzFitText(it); f.push(`<p class="dz-cap" style="grid-column:1/-1;margin:0">${String(it.text || "").trim() ? ft.length ? `Text fits at ${dzToPt(ft[0].h)} pt on ${ft.length} line${ft.length > 1 ? "s" : ""}.` : "Text does not fit: make the shape bigger or the text shorter." : "Shape only."}</p>`);
   } else { num("w", "Width, mm", 0.5, 2); num("h", "Height, mm", 0.5, 2); num("thickness", "Line, mm", 0.1, 0.1); }
   if (it.type === "barcode" && !dzIs2D(it)) {
     f.push(`<label>Human readable<select data-h="hri"><option value="below"${(it.hri || "below") === "below" ? " selected" : ""}>Below the bars</option><option value="above"${it.hri === "above" ? " selected" : ""}>Above the bars</option><option value="none"${it.hri === "none" ? " selected" : ""}>Off</option></select></label>`);
     if (it.hri !== "none") {
-      f.push(`<label>Digits height, mm<input data-h="hriSize" type="number" min="0" step="0.1" value="${+it.hriSize || 0}" title="0 = automatic"></label>`);
+      f.push(`<label>Digits size, pt<input data-h="hriPt" type="number" min="0" step="0.5" value="${+it.hriSize > 0 ? dzToPt(it.hriSize / 0.86) : 0}" title="0 = automatic" list="dzPtList"></label>`);
       f.push(`<label class="full">Digits font<select data-h="hriFont">${dzFontOptions(it.hriFont).replace("Printer font (sharpest)", "Printer's own barcode digits")}</select></label>`);
       if (it.hriFont) f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-h="hriBold" style="width:auto"${it.hriBold ? " checked" : ""}> Bold digits</label>`);
     }
@@ -3229,7 +3235,7 @@ function dzProps() {
     if (it.type === "shape" && k === "textonly") { if (inp.checked) { if (+it.thickness > 0) it.lastTh = it.thickness; it.thickness = 0; it.fill = false; } else it.thickness = it.lastTh || 0.5; dzRefresh(it); dzSave(); return dzProps(); }
     if (it.type === "shape" && ["kind", "align", "fill", "text"].includes(k)) {
       if (k === "fill") it.fill = inp.checked; else it[k] = v;
-      dzRefresh(it); dzSave(); if (k !== "text") dzProps(); else { const cap = box.querySelector("p.dz-cap"); const ft = dzFitText(it); if (cap) cap.textContent = String(it.text || "").trim() ? ft.length ? `Text fits at ${r1(ft[0].h)} mm on ${ft.length} line${ft.length > 1 ? "s" : ""}.` : "Text does not fit: make the shape bigger or the text shorter." : "Shape only."; }
+      dzRefresh(it); dzSave(); if (k !== "text") dzProps(); else { const cap = box.querySelector("p.dz-cap"); const ft = dzFitText(it); if (cap) cap.textContent = String(it.text || "").trim() ? ft.length ? `Text fits at ${dzToPt(ft[0].h)} pt on ${ft.length} line${ft.length > 1 ? "s" : ""}.` : "Text does not fit: make the shape bigger or the text shorter." : "Shape only."; }
       return;
     }
     if (it.type === "image" && ["lock", "invert", "method", "threshold"].includes(k)) {
@@ -3247,10 +3253,12 @@ function dzProps() {
     else { it[k] = +v || 0; if (k === "w" && dzIs2D(it)) it.h = it.w; }
     dzRefresh(it); dzSave();
   });
+  for (const inp of box.querySelectorAll("[data-pt]")) inp.addEventListener("input", () => { const v = +inp.value; if (!(v >= 0)) return; const k = inp.dataset.pt; it[k] = k === "maxH" && !v ? 0 : dzFromPt(Math.max(3, v)); if (it._fit) it._fit = null; dzRefresh(it); dzSave(); });
   for (const inp of box.querySelectorAll("[data-h]")) inp.addEventListener(inp.tagName === "SELECT" || inp.type === "checkbox" ? "change" : "input", () => {
     const k = inp.dataset.h, v = inp.type === "checkbox" ? inp.checked : inp.value;
     if (k === "link") { if (v) it.link = +v; else { delete it.link; delete it.linkPre; delete it.linkPost; } }
     else if (k === "hriSize") it.hriSize = Math.max(0, +v || 0);
+    else if (k === "hriPt") it.hriSize = +v > 0 ? dzFromPt(+v) * 0.86 : 0;
     else if (k === "hriFont") { it.hriFont = v || undefined; if (v === "__local") { delete it.hriFont; dzPickLocalFont().then(f => { if (f) { it.hriFont = f; dzRefresh(it); dzSave(); } dzProps(); }); return; } if (it.hriFont) dzLoadFont(it.hriFont); }
     else it[k] = v;
     dzSave(); dzRefresh(it); if (inp.tagName === "SELECT" || inp.type === "checkbox") dzProps();
@@ -3470,7 +3478,18 @@ function dzSelNext(back) { const a = dz.D.items; if (!a.length) return; const i 
 function dzSelTextLike() { const it = dz.D.items.find(i => i.id === dz.sel); return it && (it.type === "text" || it.type === "shape") ? it : null; }
 function dzSetFont(v) { const it = dzSelTextLike(); if (!it) return; it.font = v || undefined; if (!v) { delete it.bold; delete it.italic; } dzEnsureFont(it); dzRefresh(it); dzProps(); dzSave(); }
 function dzToggle(k) { const it = dzSelTextLike(); if (!it) return; if (!it.font) return toast("Bold and italic need a font other than the printer font"); it[k] = !it[k]; dzEnsureFont(it); dzRefresh(it); dzProps(); dzSave(); }
-function dzSize(d) { const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; if (it.type === "text") it.h = Math.max(1, r1(it.h + d)); else if (it.type === "shape") it.maxH = Math.max(0, r1((+it.maxH || (dzFitText(it)[0] || { h: 4 }).h) + d)); else return; dzRefresh(it); dzProps(); dzSave(); }
+const DZ_PT = 72 * 1.2 / 25.4, dzToPt = hmm => Math.round(hmm * DZ_PT * 2) / 2, dzFromPt = pt => Math.round(pt / DZ_PT * 100) / 100;
+const DZ_PT_LIST = [5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 60, 72];
+function dzSetPt(pt, ids) { // one size for every text-like object in the selection
+  pt = Math.max(3, Math.min(400, +pt || 0)); if (!pt) return;
+  for (const id of ids || dzSelIds()) { const it = dz.D.items.find(i => i.id === id); if (!it) continue;
+    if (it.type === "text") it.h = dzFromPt(pt); else if (it.type === "shape") it.maxH = dzFromPt(pt); else if (it.type === "barcode" && !dzIs2D(it) && it.hri !== "none") it.hriSize = dzFromPt(pt) * 0.86; else continue;
+    if (it._fit) it._fit = null; dzRefresh(it); }
+  dzProps(); dzSave();
+}
+function dzSize(d) { // Bigger / Smaller: one point at a time, for the whole selection
+  const ids = dzSelIds(); if (ids.length > 1) { for (const id of ids) { const o = dz.D.items.find(i => i.id === id); if (o && o.type === "text") o.h = dzFromPt(Math.max(3, dzToPt(o.h) + Math.sign(d))); if (o) dzRefresh(o); } dzProps(); dzSave(); return; }
+  d = Math.sign(d) / DZ_PT; const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; if (it.type === "text") it.h = Math.max(dzFromPt(3), it.h + d); else if (it.type === "shape") it.maxH = Math.max(0, (+it.maxH || (dzFitText(it)[0] || { h: 4 }).h) + d); else return; dzRefresh(it); dzProps(); dzSave(); }
 function dzPathTo(v) { const it = dz.D.items.find(i => i.id === dz.sel); if (!it || it.type !== "text") return; dzProps(); const sel = $("dzPath"); if (sel) { sel.value = v; sel.onchange({ target: sel }); } }
 function dzCurveTo(v) { const it = dz.D.items.find(i => i.id === dz.sel); if (!it || it.type !== "text") return toast("Select a text object"); const b = dzBox(it), cx = it.x + b.w / 2, cy = it.y + b.h / 2; delete it.path; it.pathArc = !!v; it.curve = v; const n = dzBox(it); it.x = r1(Math.max(0, cx - n.w / 2)); it.y = r1(Math.max(0, cy - n.h / 2)); dzRefresh(it); dzProps(); dzSave(); }
 
@@ -3539,7 +3558,7 @@ function dzRibbonDef() {
       ["Space evenly", [B("dh", "Across", () => dzDistribute("x"), () => dzSelIds().length > 2), B("dv", "Down", () => dzDistribute("y"), () => dzSelIds().length > 2)]],
       ["Order", [B("front", "To front", () => dzOrder("front"), has), B("fwd", "Forward", () => dzOrder(1), has), B("bwd", "Backward", () => dzOrder(-1), has), B("back", "To back", () => dzOrder("back"), has)]],
       ["Rotate", [B("rotr", "90° right", turn(90), turnable, null, "R"), B("rotl", "90° left", turn(-90), turnable, null, "Shift+R"), B("straight", "Straighten", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, turnable)]]],
-    Text: [["Font", [{ font: true }, B("bold", "Bold", () => dzToggle("bold"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
+    Text: [["Font", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
       ["Curve", [B("flat", "Straight", () => dzCurveTo(0), isText, () => isText() && !dzCurve(sel()) && !dzOnPath(sel())), B("arcup", "Arch up", () => dzCurveTo(180), isText, () => isText() && dzCurve(sel()) > 0), B("arcdn", "Arch down", () => dzCurveTo(-180), isText, () => isText() && dzCurve(sel()) < 0), B("ring", "Circle", () => dzPathTo("circle"), isText, () => isText() && sel().path === "circle")]],
       ["Along an outline", ["rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => B(k === "wave" ? "wave" : k, DZ_PATHS[k], () => dzPathTo(k), isText, () => isText() && sel().path === k))]],
     Tools: [["Design", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing"), null, "Back to the label designer"), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing"), "Preview the design as printed")]],
@@ -3561,6 +3580,10 @@ function dzRibbonShow(tab) {
     const g = document.createElement("div"); g.className = "rg"; const row = document.createElement("div"); row.className = "rr";
     for (const b of btns) {
       if (b.font) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Font"); s.innerHTML = dzFontOptions(dzSelTextLike() && dzSelTextLike().font); s.disabled = !dzSelTextLike(); s.onchange = () => { if (s.value === "__local") dzPickLocalFont().then(v => v && dzSetFont(v)); else dzSetFont(s.value); }; row.append(s); continue; }
+      if (b.size) { const w = document.createElement("label"); w.className = "rsize"; w.title = "Font size of the selected text, in points";
+        const one = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h));
+        w.innerHTML = `<input type="number" min="3" max="400" step="0.5" list="dzPtList" aria-label="Font size in points" value="${one.length && one.every(v => v === one[0]) ? one[0] : ""}" placeholder="pt"${dzSelIds().length ? "" : " disabled"}><span>pt</span>`;
+        const inp = w.querySelector("input"); inp.onchange = () => dzSetPt(inp.value); row.append(w); continue; }
       if (b.snap) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Snap"); s.innerHTML = [["0", "No snap"], ["0.5", "Snap 0.5 mm"], ["1", "Snap 1 mm"]].map(([v, n]) => `<option value="${v}"${$("dzSnap").value === v ? " selected" : ""}>${n}</option>`).join(""); s.onchange = () => { $("dzSnap").value = s.value; }; row.append(s); continue; }
       const el = document.createElement("button"); el.type = "button"; el.className = "rb"; el.title = b.title || b.label;
       el.innerHTML = `${dzIcon(b.ic)}<span></span>`; el.lastChild.textContent = b.label;
