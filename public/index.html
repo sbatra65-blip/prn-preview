@@ -263,6 +263,11 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 .dz-objs button[data-st="off"] { color: #b91c1c; } .dz-objs button[data-st="off"] i { color: #dc2626; }
 .dz-objs button[data-st="head"] { color: #6d28d9; } .dz-objs button[data-st="head"] i { color: #7c3aed; }
 .dz-objs button[data-st="edge"] i { color: #d97706; }
+.dz-objs button[data-st="np"], .dz-objs button[data-st="parked"] { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(100,116,139,.5); }
+.dz-o.np, .dz-o.parked { opacity: .5; outline: 1.5px dashed #64748b; outline-offset: 1px; }
+.dz-o.np::before, .dz-o.parked::before { content: "Not printed"; position: absolute; left: 0; top: -17px; font: 600 10px var(--font); color: #fff; background: #64748b; padding: 1px 5px; border-radius: 4px; white-space: nowrap; pointer-events: none; }
+.dz-o.parked::before { content: "Outside the label · not printed"; }
+.dz-o.np.sel, .dz-o.parked.sel { opacity: .75; }
 .dz-o .t { white-space: pre; font-family: "Roboto Condensed", "Arial Narrow", sans-serif; font-weight: 700; transform-origin: 0 0; display: block; }
 .dz-o canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 .dz-o .h { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; background: var(--accent); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; display: none; }
@@ -2275,7 +2280,7 @@ function lmpcGather(from) {
   if (from === "design" && typeof dz !== "undefined" && dz.D) {
     const lines = [];
     for (const it of dz.D.items) {
-      if (it.type === "text" && String(it.text || "").trim()) lines.push({ s: it.text, mm: it.h * 0.86 });
+      if (it.type === "text" && dzPrints(it) && String(it.text || "").trim()) lines.push({ s: it.text, mm: it.h * 0.86 });
       if (it.type === "shape") for (const l of dzFitText(it)) lines.push({ s: l.s, mm: l.h * 0.86 });
     }
     return { lines, Wmm: dzLW(), Hmm: dz.D.h, name: (dz.D.cloud && dz.D.cloud.name) || "Current design", src: "design" };
@@ -2875,7 +2880,11 @@ function dzDraw() {
   $("dzInfo").textContent = `${D.across} × ${r1(lw)} × ${D.h} mm on ${D.paper} mm liner · ${DZ_LANG_NAME[D.lang].split(" · ")[0]} ${D.dpi} dpi`;
 }
 // "off": past the label edge (red) · "head": beyond the printhead width (purple) · "edge": within 1 mm of the edge (amber)
+// Objects that do not print: switched off, or moved completely off the label (kept in the design, parked)
+function dzOutside(it) { const lw = dzLW(), b = dzBox(it); return it.x >= lw || it.y >= dz.D.h || it.x + b.w <= 0 || it.y + b.h <= 0; }
+const dzPrints = it => !it.noprint && !dzOutside(it);
 function dzFit2Label(it, col = 0) {
+  if (it.noprint) return { state: "np", sides: [] }; if (dzOutside(it)) return { state: "parked", sides: [] };
   const D = dz.D, lw = dzLW(), b = dzBox(it), e = 0.05, sides = [];
   if (it.x < -e) sides.push("l"); if (it.y < -e) sides.push("t"); if (it.x + b.w > lw + e) sides.push("r"); if (it.y + b.h > D.h + e) sides.push("b");
   if (sides.length) return { state: "off", sides };
@@ -2887,8 +2896,9 @@ function dzFit2Label(it, col = 0) {
 }
 function dzMark(el, it) {
   const f = dzFit2Label(it, +el.dataset.col || 0);
-  el.classList.remove("over", "head", "edge"); for (const m of el.querySelectorAll(".em")) m.remove();
-  if (f.state === "ok") return f;
+  el.classList.remove("over", "head", "edge", "np", "parked"); for (const m of el.querySelectorAll(".em")) m.remove();
+  if (f.state === "ok") { el.title = ""; return f; }
+  if (f.state === "np" || f.state === "parked") { el.classList.add(f.state); el.title = f.state === "np" ? "Not printed: a guide only. Turn on “Print this object” to print it." : "Outside the label: kept in the design but not printed"; return f; }
   el.classList.add(f.state === "off" ? "over" : f.state);
   el.title = f.state === "off" ? "Runs off the label: it will be cut off" : f.state === "head" ? "Beyond the printhead width: this part will not print" : "Closer than 1 mm to the label edge: it may be cut when the label shifts";
   for (const sd of f.sides) { const m = document.createElement("span"); m.className = "em em-" + sd; el.append(m); }
@@ -2965,9 +2975,10 @@ function dzPaint(el, it, s) {
 }
 function dzWarnCount() { // summary in the canvas bar
   clearTimeout(dzWarnCount.t); dzWarnCount.t = setTimeout(() => {
-    if (!dz.D || !$("dzWarn")) return; const n = { off: 0, head: 0, edge: 0 };
+    if (!dz.D || !$("dzWarn")) return; const n = { off: 0, head: 0, edge: 0, np: 0, parked: 0 };
     for (const it of dz.D.items) for (let c = 0; c < dz.D.across; c++) { const st = dzFit2Label(it, c).state; if (st !== "ok") { n[st]++; break; } }
     const parts = []; if (n.off) parts.push(`<span class="wk off">●</span> ${n.off} off the label`); if (n.head) parts.push(`<span class="wk head">●</span> ${n.head} beyond printhead`); if (n.edge) parts.push(`<span class="wk edge">●</span> ${n.edge} within 1 mm of edge`);
+    if (n.np + n.parked) parts.push(`<span class="wk" style="color:#64748b">●</span> ${n.np + n.parked} not printed`);
     $("dzWarn").innerHTML = parts.join(" · ");
     for (const b of document.querySelectorAll("#dzProps [data-obj]")) { const it = dz.D.items.find(i => i.id === +b.dataset.obj); if (!it) continue; let st = "ok"; for (let c = 0; c < dz.D.across && st === "ok"; c++) st = dzFit2Label(it, c).state; b.dataset.st = st; }
   }, 30);
@@ -3332,6 +3343,7 @@ function dzProps() {
   if (!it) { box.innerHTML = '<p class="dz-empty">Select an object on the label, or add one from the left.</p>' + dzObjList(); dzObjWire(); dzWarnCount(); return; }
   const f = [], num = (k, label, step = 0.5, min = 0) => f.push(`<label>${label}<input data-k="${k}" type="number" step="${step}" min="${min}" value="${r1(it[k] ?? 0)}"></label>`);
   num("x", "X, mm", 0.5, -50); num("y", "Y, mm", 0.5, -50);
+  f.push(`<label class="full" style="flex-direction:row;align-items:center;gap:8px;color:var(--ink);grid-column:1/-1;background:${it.noprint || dzOutside(it) ? "var(--bg)" : "transparent"};border-radius:8px;padding:${it.noprint || dzOutside(it) ? "6px 8px" : "0"}"><input type="checkbox" id="dzPrintObj" style="width:auto"${it.noprint ? "" : " checked"}> <b>Print this object</b>${it.noprint ? '<small style="font-weight:400;color:var(--muted)">· guide only: shown here, never printed</small>' : dzOutside(it) ? '<small style="font-weight:400;color:var(--muted)">· it is outside the label, so it does not print; drag it back to print it</small>' : ""}</label>`);
   if (it.type === "text" || it.type === "shape") {
     f.push(`<label class="full">Font / language<select data-k="font">${dzFontOptions(it.font)}</select></label>`);
     if (it.font) f.push(`<label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-k="bold" style="width:auto"${it.bold ? " checked" : ""}> <b>Bold</b></label><label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" data-k="italic" style="width:auto"${it.italic ? " checked" : ""}> <i>Italic</i></label>`);
@@ -3479,6 +3491,7 @@ function dzProps() {
   };
   if ($("dzGs1")) $("dzGs1").onclick = () => dzGs1Builder(it);
   if ($("dzParts")) $("dzParts").onclick = () => dzVarBuilder(it);
+  if ($("dzPrintObj")) $("dzPrintObj").onchange = e => { if (e.target.checked) delete it.noprint; else it.noprint = true; dzRefresh(it); dzSave(); dzProps(); };
   dzSrcWire(it);
   if ($("dzSymGrp")) $("dzSymGrp").onchange = e => { // a new group: switch to its first barcode type
     const g = e.target.value, first = DZ_SYM_GROUPS.find(([n]) => n === g)[1][0], sel = box.querySelector('select[data-k="symbology"]');
@@ -3543,7 +3556,9 @@ function dzAdd(kind) {
     gs1: { type: "barcode", symbology: "gs1-128", data: "(01)08901234567890(17)271231(10)B123", w: Math.min(80, lw - 4), h: 18 }, barcode: { type: "barcode", symbology: "code128", data: "12345678", w: Math.min(50, lw - 4), h: 15 },
     qrcode: { type: "barcode", symbology: "qrcode", data: "https://", w: 18, h: 18 },
     vcard: { type: "barcode", symbology: "qrcode", qrKind: "contact", contact: { name: "Your Name", org: "Company", tel: "+91 ", email: "", url: "", adr: "", title: "" }, w: Math.min(24, lw - 6, D.h - 6), h: Math.min(24, lw - 6, D.h - 6) }, datamatrix: { type: "barcode", symbology: "datamatrix", data: "(01)08901234567890", w: 15, h: 15 },
-    line: { type: "line", w: Math.max(5, lw - 6), h: 0.4, thickness: 0.4 }, box: { type: "box", w: Math.min(30, lw - 6), h: Math.min(15, D.h - 6), thickness: 0.4 } }[kind];
+    line: { type: "line", w: Math.max(5, lw - 6), h: 0.4, thickness: 0.4 },
+    guide: { type: "line", w: Math.max(5, lw - 6), h: 0.2, thickness: 0.2, noprint: true, color: "#0ea5e9" },
+    vguide: { type: "line", w: 0.2, h: Math.max(5, D.h - 6), thickness: 0.2, noprint: true, color: "#0ea5e9" }, box: { type: "box", w: Math.min(30, lw - 6), h: Math.min(15, D.h - 6), thickness: 0.4 } }[kind];
   const it = Object.assign({ id, x: 3, y: Math.min(D.h - 5, 3 + (D.items.length % 6) * 4) }, base);
   if (it.qrKind === "contact") it.data = dzContact(it);
   D.items.push(it); dz.sel = id; dzDraw(); dzProps(); dzSave();
@@ -3558,6 +3573,7 @@ function dzLayout() {
   for (let c = 0; c < D.across; c++) {
     const ox = D.edge + c * (lw + D.hgap);
     for (const it of dzResolveCol(c)) {
+      if (!dzPrints(it)) continue; // guides and parked objects stay in the design only
       const o = Object.assign({}, it, { x: r1(it.x + ox), y: r1(it.y) });
       if (it.type === "shape" && !dzRot(it) && !it.fill && !it.font && !dzNonLatin(it)) {
         const th = +it.thickness || 0;
@@ -3592,7 +3608,7 @@ function dzLayout() {
   return { w: D.paper, h: D.h, gap: D.vgap, items };
 }
 function dzCheck() {
-  const D = dz.D, lw = dzLW(), bad = D.items.filter(i => { const b = dzBox(i); return i.x < 0 || i.y < 0 || i.x + b.w > lw + 0.05 || i.y + b.h > D.h + 0.05; });
+  const D = dz.D, lw = dzLW(), bad = D.items.filter(dzPrints).filter(i => { const b = dzBox(i); return i.x < 0 || i.y < 0 || i.x + b.w > lw + 0.05 || i.y + b.h > D.h + 0.05; });
   if (lw <= 0) { toast("Labels are too narrow for this liner"); return false; }
   if (bad.length) toast(`${bad.length} object${bad.length > 1 ? "s run" : " runs"} off the label (outlined red)`);
   return true;
@@ -3612,7 +3628,7 @@ function dzColourPNG(ret, opt) {
     for (let col = 0; col < D.across; col++) {
       const ox = (D.edge + col * (lw + D.hgap)) * k, oy = D.vgap * k;
       x.save(); x.beginPath(); x.rect(ox, oy, lw * k, D.h * k); x.clip(); x.fillStyle = D.stock || "#ffffff"; x.fillRect(ox, oy, lw * k, D.h * k);
-      for (const it of dzResolveCol(col)) {
+      for (const it of dzResolveCol(col)) { if (!dzPrints(it)) continue;
         const b = dzBox(it), px = ox + it.x * k, py = oy + it.y * k;
         if (it.type === "line" || it.type === "box") { x.fillStyle = x.strokeStyle = dzCol(it); if (it.type === "line") x.fillRect(px, py, Math.max(1, it.w * k), Math.max(1, it.h * k)); else { const t = (it.thickness || 0.3) * k; x.lineWidth = t; x.strokeRect(px + t / 2, py + t / 2, it.w * k - t, it.h * k - t); } continue; }
         let src = dzRenderItem(it, k, "all", false);
@@ -3792,10 +3808,11 @@ function dzRibbonDef() {
       ["Arrange", [B("ac", "Centre", () => dzAlign("center"), has), B("front", "To front", () => dzOrder("front"), has), B("rotr", "Turn 90°", turn(90), turnable)]],
       ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
     Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
-      ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box"))]],
+      ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box")), B("dh", "Guide line", () => dzAdd("guide"), null, null, "Horizontal alignment line that is never printed"), B("dv", "Vertical guide", () => dzAdd("vguide"), null, null, "Vertical alignment line that is never printed")]],
       ["Shapes · text fits inside", Object.keys(DZ_SHAPES).map(k => B(k, DZ_SHAPES[k].split(" ")[0].replace("Circle", "Circle"), () => dzAdd("shape:" + k), null, null, DZ_SHAPES[k]))],
       ["Text shaped like (no outline)", ["rect", "ellipse", "star", "hexagon"].map(k => B(k, DZ_SHAPES[k].split(" ")[0], () => dzAdd("tshape:" + k), null, null, "Text in the form of a " + DZ_SHAPES[k].toLowerCase()))]],
-    Arrange: [[dzSelIds().length > 1 ? "Align selection" : "Align on label", [B("al", "Left", () => dzAlign("left"), has), B("ac", "Centre", () => dzAlign("center"), has), B("ar", "Right", () => dzAlign("right"), has), B("at", "Top", () => dzAlign("top"), has), B("am", "Middle", () => dzAlign("middle"), has), B("ab", "Bottom", () => dzAlign("bottom"), has)]],
+    Arrange: [["Printing", [B("printer", "Don't print", () => { const its = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), off = !its.every(i => i.noprint); for (const it of its) { if (off) it.noprint = true; else delete it.noprint; dzRefresh(it); } dzSave(); dzProps(); toast(off ? `${its.length} object(s) will not print` : `${its.length} object(s) will print`); }, has, () => { const ids = dzSelIds(); return ids.length > 0 && ids.every(id => (dz.D.items.find(i => i.id === id) || {}).noprint); }, "Keep the selected objects as guides: shown on screen, never printed")]],
+      [dzSelIds().length > 1 ? "Align selection" : "Align on label", [B("al", "Left", () => dzAlign("left"), has), B("ac", "Centre", () => dzAlign("center"), has), B("ar", "Right", () => dzAlign("right"), has), B("at", "Top", () => dzAlign("top"), has), B("am", "Middle", () => dzAlign("middle"), has), B("ab", "Bottom", () => dzAlign("bottom"), has)]],
       ["Space evenly", [B("dh", "Across", () => dzDistribute("x"), () => dzSelIds().length > 2), B("dv", "Down", () => dzDistribute("y"), () => dzSelIds().length > 2)]],
       ["Order", [B("front", "To front", () => dzOrder("front"), has), B("fwd", "Forward", () => dzOrder(1), has), B("bwd", "Backward", () => dzOrder(-1), has), B("back", "To back", () => dzOrder("back"), has)]],
       ["Rotate", [B("rotr", "90° right", turn(90), turnable, null, "R"), B("rotl", "90° left", turn(-90), turnable, null, "Shift+R"), B("straight", "Straighten", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, turnable)]]],
