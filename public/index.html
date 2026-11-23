@@ -670,6 +670,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <label>Label height, mm<input id="dzH" type="number" min="5" max="400" step="0.5" value="50"></label>
         <label>Gap below, mm<input id="dzVGap" type="number" min="0" max="20" step="0.5" value="3"></label>
         <label>Label width (auto)<input id="dzW" readonly></label>
+        <label>&nbsp;<button type="button" class="btn sm" id="dzTurnLabel" title="Swap width and height and turn every object, e.g. a 150 × 100 mm label fed 100 mm wide">Turn label 90°</button></label>
       </div><div class="rl">Media and labels across</div></div>
       <div class="rg"><div class="rr sf">
         <label>Label colour<input id="dzStock" type="color" value="#ffffff"></label>
@@ -3619,6 +3620,18 @@ if (APP) {
   setTimeout(() => { dzOpen(); if (shared) dzShowViewer(); else if (!store.get("p2l-welcomed")) $("dzWelcome").hidden = false; }, 200);
 }
 $("dzGrid").addEventListener("change", dzDraw);
+$("dzTurnLabel").onclick = () => { // the whole label turns clockwise: width and height swap, every object turns with it
+  const D = dz.D, lw = dzLW(), H = D.h; clearTimeout(dzSave.t); dzHist();
+  for (const it of D.items) {
+    const b = dzBox(it), nx = H - it.y - b.h, ny = it.x;
+    if (it.type === "line" || it.type === "box") { const w = it.w; it.w = it.h; it.h = w; }
+    else it.rot = ((dzRot(it) + 90) % 360);
+    it.x = r1(nx); it.y = r1(ny);
+  }
+  D.h = r1(lw); D.paper = r1(D.across * H + 2 * D.edge + (D.across - 1) * D.hgap);
+  dzSetupForm(); dzProps(); dzSave();
+  toast(`Label is now ${r1(H)} mm wide × ${r1(lw)} mm long; Ctrl+Z undoes it`);
+};
 $("dzStock").addEventListener("input", () => { dz.D.stock = $("dzStock").value; dzDraw(); dzSave(); });
 $("dzInk").addEventListener("input", () => { dz.D.ink = $("dzInk").value; dzDraw(); dzSave(); });
 $("dzZoomIn").onclick = () => { dz.zoom = Math.min(4, dz.zoom * 1.25); dzDraw(); };
