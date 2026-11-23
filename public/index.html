@@ -3112,13 +3112,25 @@ function dzMultiPanel(ids) {
     <h3>Align with each other</h3>
     <div class="dz-f" style="margin-bottom:6px"><label class="full">Line up to<select id="dzAlignTo"><option value="first"${(dz.alignTo || "first") === "first" ? " selected" : ""}>The first object picked (stays put)</option><option value="bounds"${dz.alignTo === "bounds" ? " selected" : ""}>The outer edges of the selection</option></select></label></div><div class="dz-mgrid">${btn("al", "Left", "left")}${btn("ac", "Centre", "center")}${btn("ar", "Right", "right")}${btn("at", "Top", "top")}${btn("am", "Middle", "middle")}${btn("ab", "Bottom", "bottom")}</div>
     <h3>Space evenly</h3><div class="dz-mgrid">${btn("dh", "Across", "dx")}${btn("dv", "Down", "dy")}</div>
+    <h3>Font</h3><div class="dz-f"><label class="full">Font / language<select id="dzMultiFont">${(() => { const l = dzSelTextAll(), same = l.length && l.every(o => (o.font || "") === (l[0].font || "")); return dzFontOptions(same ? l[0].font : null) + (l.length && !same ? '<option value="" disabled selected>Mixed fonts</option>' : ""); })()}</select></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="dzMultiBold" style="width:auto"${dzSelTextAll().filter(o => o.font).length && dzSelTextAll().filter(o => o.font).every(o => o.bold) ? " checked" : ""}> <b>Bold</b></label>
+      <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="dzMultiItal" style="width:auto"${dzSelTextAll().filter(o => o.font).length && dzSelTextAll().filter(o => o.font).every(o => o.italic) ? " checked" : ""}> <i>Italic</i></label></div>
     <h3>Font size</h3><div class="dz-f"><label>All text, pt<input id="dzMultiPt" type="number" min="3" max="400" step="0.5" list="dzPtList" placeholder="e.g. 10"></label><label>&nbsp;<button type="button" class="btn sm" id="dzMultiPtGo">Apply</button></label></div>
     <h3>Turn together</h3><div class="dz-mgrid">${btn("rotr", "90° right", "tr")}${btn("rotl", "90° left", "tl")}${btn("straight", "180°", "t2")}</div>
     <h3>Align on the label</h3><div class="dz-mgrid">${btn("ac", "Centre across", "lcenter")}${btn("am", "Middle", "lmiddle")}</div>
     <div class="dz-tools" style="margin-top:14px"><button type="button" class="btn" id="dzMDup">Duplicate</button><button type="button" class="btn" id="dzMDel" style="color:var(--bad)">Delete</button></div>
-    <p class="dz-cap">Shift or Ctrl + click adds or removes an object. Drag on empty label space to select a group. Arrow keys move them together.</p>`;
+    ${dzView() ? '<p class="dz-cap">The label is shown turned: Left, Right, Top, Bottom and the arrow keys follow the screen.</p>' : ""}<p class="dz-cap">Shift or Ctrl + click adds or removes an object. Drag on empty label space to select a group. Arrow keys move them together.</p>`;
 }
-function dzGroupToLabel(where) { // move the selection as one block to the label centre
+// The canvas can show the label turned (Portrait/Landscape view). Buttons and arrow keys follow what you see.
+function dzMapDir(w) {
+  const v = typeof dzView === "function" ? dzView() : 0; if (!v) return w;
+  const cw = { left: "bottom", right: "top", top: "left", bottom: "right", center: "middle", middle: "center", lcenter: "lmiddle", lmiddle: "lcenter", x: "y", y: "x" };
+  const ccw = { left: "top", right: "bottom", top: "right", bottom: "left", center: "middle", middle: "center", lcenter: "lmiddle", lmiddle: "lcenter", x: "y", y: "x" };
+  return (v === 90 ? cw : ccw)[w] || w;
+}
+function dzMapDelta(dx, dy) { const v = typeof dzView === "function" ? dzView() : 0; return v === 90 ? [dy, -dx] : v === -90 ? [-dy, dx] : [dx, dy]; }
+function dzGroupToLabel(where) {
+  where = dzMapDir(where); // move the selection as one block to the label centre
   const ids = dzSelIds(), its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), bs = its.map(dzBox);
   const L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
   const dx = where === "lcenter" ? (dzLW() - (R - L)) / 2 - L : 0, dy = where === "lmiddle" ? (dz.D.h - (B - T)) / 2 - T : 0;
@@ -3129,6 +3141,8 @@ function dzProps() {
     if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
     const box = $("dzProps"); box.innerHTML = dzMultiPanel(ids) + dzObjList(); dzObjWire(); dzWarnCount();
     for (const b of box.querySelectorAll("[data-m]")) b.onclick = () => { const m = b.dataset.m; if (m === "tr") dzTurnGroup(90); else if (m === "tl") dzTurnGroup(-90); else if (m === "t2") dzTurnGroup(180); else if (m === "dx") dzDistribute("x"); else if (m === "dy") dzDistribute("y"); else if (m[0] === "l" && m !== "left") dzGroupToLabel(m); else dzAlignMany(m, ids); };
+    $("dzMultiFont").onchange = e => { const v = e.target.value; if (v === "__local") dzPickLocalFont().then(f => f && dzSetFont(f)); else dzSetFont(v); };
+    $("dzMultiBold").onchange = () => dzToggle("bold"); $("dzMultiItal").onchange = () => dzToggle("italic");
     $("dzMultiPtGo").onclick = () => dzSetPt($("dzMultiPt").value, ids); $("dzMultiPt").onkeydown = e => { if (e.key === "Enter") dzSetPt($("dzMultiPt").value, ids); };
     { const t = ids.map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h)); if (t.length && t.every(v => v === t[0])) $("dzMultiPt").value = t[0]; }
     $("dzMDup").onclick = dzDuplicate; $("dzMDel").onclick = dzDelete; $("dzAlignTo").onchange = e => { dz.alignTo = e.target.value; dzMarkSel(); };
@@ -3424,7 +3438,8 @@ function dzObjWire() { for (const b of $("dzProps").querySelectorAll("[data-obj]
 
 /* arrange and editing helpers */
 function dzAnchor() { const ids = dzSelIds(); return ids.length > 1 && dz.multi ? [...dz.multi].find(id => ids.includes(id)) : null; } // first object picked
-function dzAlignMany(where, ids) { // line objects up: to the first object picked (it stays put), or to the selection's outer edges
+function dzAlignMany(where, ids) {
+  where = dzMapDir(where); // line objects up: to the first object picked (it stays put), or to the selection's outer edges
   const its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), bs = its.map(dzBox);
   let L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
   const a = (dz.alignTo || "first") === "first" ? its.find(i => i.id === dzAnchor()) : null;
@@ -3450,6 +3465,7 @@ function dzTurnGroup(by) { // the selection turns as one block about its centre,
   dzDraw(); dzMarkSel(); dzProps(); dzSave();
 }
 function dzDistribute(axis) { // equal gaps between three or more objects
+  axis = dzMapDir(axis);
   const ids = dzSelIds(); if (ids.length < 3) return toast("Select three or more objects to space them evenly");
   const its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), pos = axis === "x" ? "x" : "y", size = it => axis === "x" ? dzBox(it).w : dzBox(it).h;
   its.sort((a, b) => a[pos] - b[pos]);
@@ -3459,6 +3475,7 @@ function dzDistribute(axis) { // equal gaps between three or more objects
 }
 function dzAlign(where) {
   const ids = dzSelIds(); if (ids.length > 1) return dzAlignMany(where, ids);
+  where = dzMapDir(where);
   const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; const b = dzBox(it), lw = dzLW(), m = 1;
   if (where === "left") it.x = m; if (where === "center") it.x = r1((lw - b.w) / 2); if (where === "right") it.x = r1(lw - b.w - m);
   if (where === "top") it.y = m; if (where === "middle") it.y = r1((dz.D.h - b.h) / 2); if (where === "bottom") it.y = r1(dz.D.h - b.h - m);
@@ -3476,8 +3493,16 @@ function dzPaste() {
 }
 function dzSelNext(back) { const a = dz.D.items; if (!a.length) return; const i = a.findIndex(x => x.id === dz.sel); const n = (i + (back ? -1 : 1) + a.length) % a.length; dzSelect(a[i < 0 ? 0 : n].id); }
 function dzSelTextLike() { const it = dz.D.items.find(i => i.id === dz.sel); return it && (it.type === "text" || it.type === "shape") ? it : null; }
-function dzSetFont(v) { const it = dzSelTextLike(); if (!it) return; it.font = v || undefined; if (!v) { delete it.bold; delete it.italic; } dzEnsureFont(it); dzRefresh(it); dzProps(); dzSave(); }
-function dzToggle(k) { const it = dzSelTextLike(); if (!it) return; if (!it.font) return toast("Bold and italic need a font other than the printer font"); it[k] = !it[k]; dzEnsureFont(it); dzRefresh(it); dzProps(); dzSave(); }
+function dzSelTextAll() { return dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && (o.type === "text" || o.type === "shape")); }
+function dzSetFont(v) {
+  const list = dzSelTextAll(); if (!list.length) return;
+  for (const it of list) { it.font = v || undefined; if (!v) { delete it.bold; delete it.italic; } if (it._fit) it._fit = null; dzEnsureFont(it); dzRefresh(it); }
+  dzProps(); dzSave();
+}
+function dzToggle(k) {
+  const list = dzSelTextAll().filter(o => o.font); if (!list.length) return toast("Bold and italic need a font other than the printer font");
+  const on = !list.every(o => o[k]); for (const it of list) { it[k] = on; if (it._fit) it._fit = null; dzEnsureFont(it); dzRefresh(it); } dzProps(); dzSave();
+}
 const DZ_PT = 72 * 1.2 / 25.4, dzToPt = hmm => Math.round(hmm * DZ_PT * 2) / 2, dzFromPt = pt => Math.round(pt / DZ_PT * 100) / 100;
 const DZ_PT_LIST = [5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 42, 48, 60, 72];
 function dzSetPt(pt, ids) { // one size for every text-like object in the selection
@@ -3541,7 +3566,7 @@ const DZ_IC = { // 24x24 stroke icons, drawn for this app
 };
 const dzIcon = (k, sz = 20) => `<svg aria-hidden="true" width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${DZ_IC[k] || ""}"/></svg>`;
 function dzRibbonDef() {
-  const sel = () => dz.D && dz.D.items.find(i => i.id === dz.sel), has = () => !!sel(), txt = () => !!dzSelTextLike(), isText = () => !!sel() && sel().type === "text", click = id => () => $(id).click();
+  const sel = () => dz.D && dz.D.items.find(i => i.id === dz.sel), has = () => !!sel(), txt = () => dzSelTextAll().length > 0, isText = () => !!sel() && sel().type === "text", click = id => () => $(id).click();
   const turnable = () => dzSelIds().length > 1 || (!!sel() && sel().type !== "line" && sel().type !== "box"), turn = by => () => { if (dzSelIds().length > 1) return dzTurnGroup(by); const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   const B = (ic, label, run, en, ck, title) => ({ ic, label, run, en, ck, title });
   return {
@@ -3558,7 +3583,7 @@ function dzRibbonDef() {
       ["Space evenly", [B("dh", "Across", () => dzDistribute("x"), () => dzSelIds().length > 2), B("dv", "Down", () => dzDistribute("y"), () => dzSelIds().length > 2)]],
       ["Order", [B("front", "To front", () => dzOrder("front"), has), B("fwd", "Forward", () => dzOrder(1), has), B("bwd", "Backward", () => dzOrder(-1), has), B("back", "To back", () => dzOrder("back"), has)]],
       ["Rotate", [B("rotr", "90° right", turn(90), turnable, null, "R"), B("rotl", "90° left", turn(-90), turnable, null, "Shift+R"), B("straight", "Straighten", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, turnable)]]],
-    Text: [["Font", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
+    Text: [["Font", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
       ["Curve", [B("flat", "Straight", () => dzCurveTo(0), isText, () => isText() && !dzCurve(sel()) && !dzOnPath(sel())), B("arcup", "Arch up", () => dzCurveTo(180), isText, () => isText() && dzCurve(sel()) > 0), B("arcdn", "Arch down", () => dzCurveTo(-180), isText, () => isText() && dzCurve(sel()) < 0), B("ring", "Circle", () => dzPathTo("circle"), isText, () => isText() && sel().path === "circle")]],
       ["Along an outline", ["rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => B(k === "wave" ? "wave" : k, DZ_PATHS[k], () => dzPathTo(k), isText, () => isText() && sel().path === k))]],
     Tools: [["Design", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing"), null, "Back to the label designer"), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing"), "Preview the design as printed")]],
@@ -3579,7 +3604,7 @@ function dzRibbonShow(tab) {
   for (const [gname, btns] of dzRibbonDef()[dz.tab]) {
     const g = document.createElement("div"); g.className = "rg"; const row = document.createElement("div"); row.className = "rr";
     for (const b of btns) {
-      if (b.font) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Font"); s.innerHTML = dzFontOptions(dzSelTextLike() && dzSelTextLike().font); s.disabled = !dzSelTextLike(); s.onchange = () => { if (s.value === "__local") dzPickLocalFont().then(v => v && dzSetFont(v)); else dzSetFont(s.value); }; row.append(s); continue; }
+      if (b.font) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Font"); { const l = dzSelTextAll(), same = l.length && l.every(o => (o.font || "") === (l[0].font || "")); s.innerHTML = dzFontOptions(same ? l[0].font : null) + (l.length > 1 && !same ? '<option value="" disabled selected>Mixed fonts</option>' : ""); s.disabled = !l.length; } s.onchange = () => { if (s.value === "__local") dzPickLocalFont().then(v => v && dzSetFont(v)); else dzSetFont(s.value); }; row.append(s); continue; }
       if (b.size) { const w = document.createElement("label"); w.className = "rsize"; w.title = "Font size of the selected text, in points";
         const one = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h));
         w.innerHTML = `<input type="number" min="3" max="400" step="0.5" list="dzPtList" aria-label="Font size in points" value="${one.length && one.every(v => v === one[0]) ? one[0] : ""}" placeholder="pt"${dzSelIds().length ? "" : " disabled"}><span>pt</span>`;
@@ -3785,7 +3810,7 @@ $("dzDlg").addEventListener("keydown", e => {
   if (mod && e.key === "[") { e.preventDefault(); return dzSize(-0.5); }
   const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return;
   const st = e.shiftKey ? 5 : 0.5, mv = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, -st], ArrowDown: [0, st] }[e.key];
-  if (mv) { e.preventDefault(); for (const id of dzSelIds()) { const o = dz.D.items.find(i => i.id === id); if (!o) continue; o.x = r1(o.x + mv[0]); o.y = r1(o.y + mv[1]); dzRefresh(o); } dzProps(); dzSave(); }
+  if (mv) { e.preventDefault(); const [mx, my] = dzMapDelta(mv[0], mv[1]); for (const id of dzSelIds()) { const o = dz.D.items.find(i => i.id === id); if (!o) continue; o.x = r1(o.x + mx); o.y = r1(o.y + my); dzRefresh(o); } dzProps(); dzSave(); }
   else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); dzDelete(); }
   else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && dzSelIds().length > 1) { e.preventDefault(); dzTurnGroup(e.shiftKey ? -90 : 90); }
   else if (e.key.toLowerCase() === "r" && !e.ctrlKey && !e.metaKey && it.type !== "line" && it.type !== "box") { e.preventDefault(); dzTurn(it, e.shiftKey ? -90 : 90); dzRefresh(it); dzProps(); dzSave(); }
