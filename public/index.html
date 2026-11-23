@@ -2056,7 +2056,19 @@ $("bmFile").onchange = async e => {
     else { $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px · ${an.photo ? "photo: dithered" : "artwork: threshold " + an.threshold}`; genBitmap(); }
   } catch (err) { $("bmStatus").textContent = "Could not read that image."; }
 };
-$("bmGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : genBitmap(); };
+$("bmGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : (typeof APP !== "undefined" && APP ? dzImageDesign() : genBitmap()); };
+// Without AI, in the app: the picture becomes an image object on a new design, sized from the dialog
+function dzImageDesign() {
+  const im = p2l.img, lw = +$("bmW").value || 50, iwIn = +$("bmIW").value || 0, ratio = im.naturalHeight / im.naturalWidth;
+  let iw = iwIn || lw - 4, lh = +$("bmH").value || Math.max(10, Math.round(iw * ratio) + 4), ih = iw * ratio;
+  if (ih > lh - 2) { ih = lh - 2; iw = ih / ratio; }
+  const k = Math.min(1, 800 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(im.naturalWidth * k)); c.height = Math.max(1, Math.round(im.naturalHeight * k));
+  const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height);
+  const center = $("bmPos").value === "center", D0 = dz.D || dzDefault(); clearTimeout(dzSave.t); if (dz.D) dzHist();
+  dz.D = Object.assign(dzDefault(), { printer: D0.printer, lang: D0.lang, dpi: D0.dpi, pw: D0.pw, mw: D0.mw, paper: lw, across: 1, edge: 0, h: lh, items: [{ id: 1, type: "image", x: r1(center ? (lw - iw) / 2 : 2), y: r1(center ? (lh - ih) / 2 : 2), w: r1(iw), h: r1(ih), src: c.toDataURL("image/png"), ratio, name: p2l.name, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked }] });
+  dz.sel = 1; dz.seq = 2; $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
+  $("dzStatus").textContent = "Picture placed as an image object: add text, barcodes or shapes around it.";
+}
 for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen && !$("useAI").checked) genBitmap(true); });
 for (const id of ["bmW", "bmH", "bmIW", "bmThr"]) $(id).addEventListener("input", () => { clearTimeout(genBitmap.t); genBitmap.t = setTimeout(() => { if (p2l.gen && !$("useAI").checked) genBitmap(true); }, 350); });
 $("bmThr").addEventListener("input", () => { $("bmThrV").textContent = $("bmThr").value; });
@@ -2076,6 +2088,13 @@ async function runAI() {
     p2l.lastW = L.w; p2l.lastH = L.h; p2l.layout = L; p2l.provider = j.provider;
     const who = { claude: "Claude", gemini: "Gemini", "workers-ai": "Cloudflare Llama (backup)" }[j.provider] || j.provider || "AI";
     $("bmStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
+    if (typeof APP !== "undefined" && APP) { // in the app the photo becomes a design: every text, barcode and line is an object
+      const d = lang === "EPL2" ? 203 : dpi; clearTimeout(dzSave.t); if (dz.D) dzHist();
+      const notes = dzFromModel({ items: [], dpi: d }, lang, d, L);
+      $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
+      $("dzStatus").textContent = `Photo read into ${dz.D.items.length} objects${notes.length ? " · " + notes.join(" · ") : ""}. Check every text and barcode value against the label before printing.`;
+      toast(`Design made: ${dz.D.items.length} objects`); return;
+    }
     state.source = { kind: "ai" }; regenSource(lang, dpi, true);
   } catch (err) { $("bmStatus").textContent = "AI conversion failed: " + err.message; }
   finally { $("bmGo").disabled = false; }
@@ -3556,7 +3575,8 @@ $("dzWelcome").addEventListener("click", e => {
   if (w === "pic") $("picDlg").showModal(); if (w === "lib") openLibrary();
 });
 if (APP) {
-  document.body.classList.add("appmode"); document.title = "Pic2Label PRN Studio · label designer and PRN viewer";
+  document.body.classList.add("appmode"); $("bmGo").textContent = "Make design"; $("picTitle").textContent = "Picture to design";
+  const sub = document.querySelector("#picDlg .dlg-head .sub"); if (sub) sub.textContent = "Turns a label photo into a design you can edit, or places a logo on a new label."; document.title = "Pic2Label PRN Studio · label designer and PRN viewer";
   const qs = new URLSearchParams(location.search), shared = location.hash.startsWith("#prn=") || qs.has("lib");
   setTimeout(() => { dzOpen(); if (shared) dzShowViewer(); else if (!store.get("p2l-welcomed")) $("dzWelcome").hidden = false; }, 200);
 }
@@ -3685,8 +3705,8 @@ $("dzImgFile").addEventListener("change", async e => {
 
 /* code -> designer */
 const DZ_SYM_IN = { code128: "code128", "gs1-128": "gs1-128", ean13: "ean13", upca: "upca", code39: "code39", qrcode: "qrcode", datamatrix: "datamatrix", gs1datamatrix: "datamatrix", "gs1-128composite": "gs1-128" };
-function dzFromModel(model, lang, dpi) {
-  const L = modelToLayout(model), items = [];
+function dzFromModel(model, lang, dpi, Lpre) {
+  const L = Lpre || modelToLayout(model), items = [];
   let id = 1, odd = 0;
   for (const e of L.items) {
     const b = { id: id++, x: r1(e.x), y: r1(e.y) };
