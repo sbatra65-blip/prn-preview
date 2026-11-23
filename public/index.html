@@ -695,7 +695,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
     </div>
     <div class="dz-warn dz-mwarn" id="dzMediaWarn" hidden></div>
     <input type="file" id="dzImgFile" accept="image/*,.bmp,.jpg,.jpeg,.png" hidden>
-    <input type="file" id="dzDbFile" accept=".csv,.txt,.xlsx,.xls,.ods" hidden>
+    <input type="file" id="dzDbFile" accept=".csv,.txt,.xlsx,.xls,.ods,.json,.xml" hidden>
 </div>
   <div class="dz-body">
     <div class="dz-main">
@@ -3802,9 +3802,9 @@ function dzRibbonDef() {
     Text: [["Font", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
       ["Curve", [B("flat", "Straight", () => dzCurveTo(0), isText, () => isText() && !dzCurve(sel()) && !dzOnPath(sel())), B("arcup", "Arch up", () => dzCurveTo(180), isText, () => isText() && dzCurve(sel()) > 0), B("arcdn", "Arch down", () => dzCurveTo(-180), isText, () => isText() && dzCurve(sel()) < 0), B("ring", "Circle", () => dzPathTo("circle"), isText, () => isText() && sel().path === "circle")]],
       ["Along an outline", ["rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => B(k === "wave" ? "wave" : k, DZ_PATHS[k], () => dzPathTo(k), isText, () => isText() && sel().path === k))]],
-    Data: [["Database", [B("folder", "Connect file", () => $("dzDbFile").click(), null, null, "Connect a CSV or Excel file as the label's database"), B("del", "Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db), null, "Disconnect the database"), { dbinfo: true }]],
+    Data: [["Database", [B("folder", "Connect file", () => $("dzDbFile").click(), null, null, "CSV, Excel, JSON or XML file as the label's database"), B("lib", "Tally", () => dzTally(), null, null, "TallyPrime stock items: from a Tally export now, live through the LabelDesk agent"), B("cloud", "Zoho Inventory", () => dzZoho(), null, null, "Items from your Zoho Inventory organisation"), B("del", "Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db), null, "Disconnect the database"), { dbinfo: true }]],
       ["Fields: click to link the selected object", [{ dbfields: true }]],
-      ["Live database", [B("printers", "ODBC / SQL", () => dzDbLiveInfo(), null, null, "SQL Server, MySQL, Oracle, Tally and other ODBC databases through the LabelDesk agent")]]],
+      ["ERP and live data", [B("cloud", "SAP / Oracle / ERP", () => ldConnOpen(), null, null, "SAP S/4HANA Cloud, SAP Business One, Oracle Fusion, Dynamics 365 Business Central, Odoo, Zoho, any REST/OData API"), B("printers", "ODBC / SQL", () => dzDbLiveInfo(), null, null, "SQL Server, MySQL, Oracle, Tally and other ODBC databases through the LabelDesk agent")]]],
     Tools: [["Design", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing"), null, "Back to the label designer"), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing"), "Preview the design as printed")]],
       ["Printer files", [B("openf", "Open PRN", () => $("fileIn").click(), null, null, "Open a .prn file"), B("code", "Paste code", () => { dzShowViewer(); $("pasteBtn").click(); }, null, null, "Paste printer code to view it"), B("pic", "From picture", () => $("picDlg").showModal(), null, null, "Logo or label photo to PRN")]],
       ["Templates", [B("lib", "Library", () => openLibrary())]],
@@ -4859,12 +4859,51 @@ function ldParseCSV(text) {
   const head = (rows.shift() || []).map(h => h.trim());
   return rows.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? "").trim()])));
 }
+// Records from JSON: an array of objects, or the first array of objects found inside; nested keys become a.b
+function ldFlat(o, pre = "", out = {}) {
+  for (const [k, v] of Object.entries(o || {})) { const key = pre ? pre + "." + k : k;
+    if (v && typeof v === "object" && !Array.isArray(v)) ldFlat(v, key, out);
+    else if (Array.isArray(v)) { if (v.length === 2 && typeof v[0] === "number" && typeof v[1] === "string") out[key] = v[1]; else if (v.every(x => x == null || typeof x !== "object")) out[key] = v.join(", "); else if (v[0] && typeof v[0] === "object") ldFlat(v[0], key, out); }
+    else out[key] = v == null ? "" : String(v); }
+  return out;
+}
+function ldFromJSON(text) {
+  const j = JSON.parse(text), find = v => Array.isArray(v) ? v : v && typeof v === "object" ? Object.values(v).map(find).find(a => a && a.length && typeof a[0] === "object") : null;
+  const arr = Array.isArray(j) ? j : find(j); if (!arr || !arr.length) throw new Error("No list of records found in this JSON");
+  return arr.filter(x => x && typeof x === "object").map(x => ldFlat(x));
+}
+// Records from XML: the most repeated element with child elements; leaves become columns (short names where unique)
+function ldFromXML(text) {
+  const doc = new DOMParser().parseFromString(text.replace(/^\uFEFF/, ""), "application/xml"); if (doc.querySelector("parsererror")) throw new Error("This XML file could not be read");
+  const count = {}; for (const el of doc.getElementsByTagName("*")) if (el.children.length && el !== doc.documentElement) count[el.tagName] = (count[el.tagName] || 0) + 1;
+  const pref = ["STOCKITEM", "ITEM", "item", "Item", "record", "row", "product", "Product"].find(t => count[t]);
+  const tag = pref || Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0]; if (!tag) throw new Error("No repeating records found in this XML");
+  const tally = tag === "STOCKITEM";
+  return [...doc.getElementsByTagName(tag)].map(el => {
+    const rec = {}, add = (k, v) => { v = String(v ?? "").trim(); if (v !== "" && rec[k] == null) rec[k] = v; };
+    for (const a of el.attributes) add(a.name.toLowerCase(), a.value);
+    const walk = (n, path) => { for (const c of n.children) { const p = path ? path + "." + c.tagName : c.tagName; if (c.children.length) walk(c, p); else { add(p, c.textContent); for (const a of c.attributes) add(p + "@" + a.name.toLowerCase(), a.value); } } };
+    walk(el, "");
+    if (tally) { // friendly names for TallyPrime stock items
+      const pick = re => { const k = Object.keys(rec).find(k => re.test(k)); return k ? rec[k] : ""; };
+      const nice = { name: rec.name || pick(/^NAME(\.LIST\.NAME)?$/) || pick(/LANGUAGENAME\.LIST\.NAME\.LIST\.NAME$/), group: pick(/^PARENT$/), category: pick(/^CATEGORY$/), unit: pick(/^BASEUNITS$/),
+        hsn: pick(/HSNCODE$/), gst_rate: pick(/(RATEDETAILS\.LIST\.GSTRATE|GSTRATE|IGSTRATE)$/), mrp: pick(/MRPRATE$/), standard_price: pick(/STANDARDPRICELIST\.LIST\.RATE$/), standard_cost: pick(/STANDARDCOSTLIST\.LIST\.RATE$/),
+        opening_qty: pick(/^OPENINGBALANCE$/), opening_rate: pick(/^OPENINGRATE$/), part_no: pick(/MAILINGNAME|PARTNO|PARTNUMBER/), description: pick(/^DESCRIPTION$|NARRATION$/) };
+      for (const k of ["mrp", "standard_price", "standard_cost", "opening_rate"]) if (nice[k]) nice[k] = nice[k].replace(/\/.*$/, "").trim(); // "120.00/Pcs" -> "120.00"
+      return Object.assign(Object.fromEntries(Object.entries(nice).filter(([, v]) => v !== "")), rec);
+    }
+    const short = {}; for (const k of Object.keys(rec)) { const s = k.split(".").pop(); short[s] = (short[s] || 0) + 1; }
+    return Object.fromEntries(Object.entries(rec).map(([k, v]) => [short[k.split(".").pop()] === 1 ? k.split(".").pop() : k, v]));
+  });
+}
 async function ldReadTable(file) {
   if (/\.(xlsx|xls|ods)$/i.test(file.name)) {
     if (!window.XLSX) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"; s.onload = ok; s.onerror = () => bad(new Error("Could not load the Excel reader")); document.head.append(s); });
     const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true }), ws = wb.Sheets[wb.SheetNames[0]];
     return XLSX.utils.sheet_to_json(ws, { defval: "", raw: false });
   }
+  if (/\.json$/i.test(file.name)) return ldFromJSON(await file.text());
+  if (/\.xml$/i.test(file.name)) return ldFromXML(await file.text());
   return ldParseCSV(await file.text());
 }
 function ldVarPanel() {
@@ -4873,7 +4912,7 @@ function ldVarPanel() {
     ${need.fields.length ? `<div class="ld-row" style="margin:8px 0">${dz.db ? `<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="db" checked> Database: ${ldEsc(dz.db.name)} (${dz.db.rows.length})</label>` : ""}<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed"${dz.db ? "" : " checked"}> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
     ${dz.db ? `<div id="ldVarDb" class="ld-grid2"><label class="ld-f">From record<input id="ldDbFrom" type="number" min="1" max="${dz.db.rows.length}" value="1"></label><label class="ld-f">To record<input id="ldDbTo" type="number" min="1" max="${dz.db.rows.length}" value="${dz.db.rows.length}"></label></div>` : ""}
     <div id="ldVarTyped" class="ld-grid2"${dz.db ? " hidden" : ""}>${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
-    <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
+    <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods,.json,.xml"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
     ${need.serial ? `<p class="dz-cap">Serial numbers go up on every label in this print.</p>` : ""}</div>`;
 }
 function ldVarWire(onChange) {
@@ -4919,17 +4958,22 @@ dz.db = null; dz.recIdx = 0;
 function dzDbRestore() { // rows stay in this browser; the design keeps the file name and columns
   try { const j = JSON.parse(localStorage.getItem("ld-db-rows") || "null"); if (j && dz.D && dz.D.db && j.name === dz.D.db.name) dz.db = j; } catch (e) {}
 }
-async function dzDbConnect(file) {
+async function dzDbConnect(file, kind) {
   try {
     const rows = await ldReadTable(file); if (!rows.length) throw new Error("No records found in " + file.name);
-    const columns = Object.keys(rows[0]).filter(Boolean);
-    dz.db = { name: file.name, columns, rows }; dz.recIdx = 0;
-    dz.D.db = { kind: /\.(xlsx|xls|ods)$/i.test(file.name) ? "Excel" : "CSV", name: file.name, columns, count: rows.length, at: new Date().toISOString().slice(0, 10) };
+    dzDbUse(rows, file.name, kind || (/\.(xlsx|xls|ods)$/i.test(file.name) ? "Excel" : /\.json$/i.test(file.name) ? "JSON" : /\.xml$/i.test(file.name) ? (rows[0] && rows[0].unit !== undefined && rows[0].group !== undefined ? "Tally" : "XML") : "CSV"));
+  } catch (e) { toast(e.message); }
+}
+function dzDbUse(rows, name, kind) {
+  {
+    const columns = [...new Set(rows.slice(0, 200).flatMap(r => Object.keys(r)))].filter(Boolean);
+    dz.db = { name, columns, rows }; dz.recIdx = 0;
+    dz.D.db = { kind, name, columns, count: rows.length, at: new Date().toISOString().slice(0, 10) };
     const f = dzFields(); for (const c of columns) if (!f.some(x => x.name === c)) f.push({ name: c, sample: "" });
     try { const js = JSON.stringify(dz.db); if (js.length < 3e6) localStorage.setItem("ld-db-rows", js); else localStorage.removeItem("ld-db-rows"); } catch (e) {}
     dzDbShow(0); dzSave(); dzRibbonShow("Data"); dzProps();
-    toast(`${rows.length} records, ${columns.length} fields from ${file.name}`);
-  } catch (e) { toast(e.message); }
+    toast(`${rows.length} records, ${columns.length} fields from ${name}`);
+  }
 }
 function dzDbOff() { if (!dz.D.db) return; if (!confirm(`Disconnect ${dz.D.db.name}? Objects keep their field links and show the sample values.`)) return; delete dz.D.db; dz.db = null; try { localStorage.removeItem("ld-db-rows"); } catch (e) {} dzSave(); dzRibbonShow("Data"); dzProps(); }
 // Show record i on the label: field samples take that record's values
@@ -4984,7 +5028,7 @@ function dzDbLiveInfo() {
 // Ribbon: database status and record browser
 function dzDbRibbon(row) {
   const db = dz.D && dz.D.db, w = document.createElement("div"); w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center;min-width:230px;font-size:12px";
-  if (!db) { w.innerHTML = `<b style="font-size:13px">No database connected</b><span style="color:var(--muted)">Connect a CSV or Excel file; each column becomes a field you can link objects to.</span>`; row.append(w); return; }
+  if (!db) { w.innerHTML = `<b style="font-size:13px">No database connected</b><span style="color:var(--muted)">CSV, Excel, JSON, XML, Tally or Zoho Inventory; each column becomes a field you can link objects to.</span>`; row.append(w); return; }
   const live = !!dz.db, n = live ? dz.db.rows.length : db.count;
   w.innerHTML = `<b style="font-size:13px">${ldEsc(db.kind)}: ${ldEsc(db.name)}</b><span style="color:var(--muted)">${n} records · ${db.columns.length} fields${live ? "" : " · reopen the file to browse records"}</span>
     ${live ? `<div style="display:flex;gap:4px;align-items:center"><button type="button" class="btn sm" data-rec="-1" aria-label="Previous record" style="min-height:26px;padding:0 8px">◀</button>Record <input id="dzRecNo" type="number" min="1" max="${n}" value="${dz.recIdx + 1}" style="width:64px;padding:3px 6px;border:1px solid var(--line);border-radius:6px"> of ${n}<button type="button" class="btn sm" data-rec="1" aria-label="Next record" style="min-height:26px;padding:0 8px">▶</button></div>` : ""}`;
@@ -5002,6 +5046,79 @@ function dzDbFields(row) {
     let it = dz.D.items.find(i => i.id === dz.sel && (i.type === "text" || i.type === "barcode"));
     if (!it) { dzAdd("text"); it = dz.D.items[dz.D.items.length - 1]; }
     dzLinkField(it, b.dataset.fld, "", ""); dzProps(); toast(`Linked to ${b.dataset.fld}`); };
+}
+</script>
+
+<!-- ERP & API connections: SAP, Oracle, Dynamics, Odoo, Zoho, any REST/OData API; on-premise systems through the agent -->
+<dialog id="ldConn" aria-labelledby="ldConnH" style="width:min(860px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)">
+  <div class="dlg-head"><div><h2 id="ldConnH">ERP and API connections</h2><div class="sub">Load the item master from your ERP straight into the label's database. Passwords are stored encrypted for your company and never shown again.</div></div><button type="button" class="x" id="ldConnX" aria-label="Close">×</button></div>
+  <div class="ld-acct" id="ldConnBody"></div>
+</dialog>
+<script>
+const LD_CONN_FORMS = {
+  sap_s4: { name: "SAP S/4HANA Cloud", note: "Uses the Product master OData API (API_PRODUCT_SRV). Create a Communication Arrangement for scenario SAP_COM_0009 (product integration) and use its communication user.",
+    f: [["host", "S/4HANA API host", "https://my123456-api.s4hana.cloud.sap"], ["user", "Communication user"], ["pass", "Password", "", "password"], ["service", "Service / entity", "API_PRODUCT_SRV/A_Product"], ["filter", "Filter (optional)", "ProductType eq 'FERT'"]] },
+  sap_b1: { name: "SAP Business One (Service Layer)", note: "The Service Layer must be reachable on the internet over https (e.g. through your partner's cloud). If it is only on your office network, use the LabelDesk agent.",
+    f: [["url", "Service Layer address", "https://b1.yourcompany.com:50000/b1s/v1"], ["company", "Company database", "SBODEMOIN"], ["user", "User", "manager"], ["pass", "Password", "", "password"], ["select", "Fields (optional)", "ItemCode,ItemName,BarCode,SalesUnit"], ["filter", "Filter (optional)", "SalesItem eq 'tYES'"]] },
+  oracle_fusion: { name: "Oracle Fusion Cloud (SCM items)", note: "Reads the Items REST resource (itemsV2) with a user that has the Product Data Steward or item read privilege.",
+    f: [["host", "Fusion host", "https://xxxx.fa.ocs.oraclecloud.com"], ["user", "User"], ["pass", "Password", "", "password"], ["org", "Item organisation code (optional)", "M1"]] },
+  bc: { name: "Microsoft Dynamics 365 Business Central", note: "Register an app in Microsoft Entra ID with Business Central API.ReadWrite.All (application), grant consent, and add it in Business Central under Microsoft Entra Applications.",
+    f: [["tenant", "Tenant ID or domain", "contoso.onmicrosoft.com"], ["environment", "Environment", "production"], ["company", "Company name (optional)"], ["client_id", "Application (client) ID"], ["client_secret", "Client secret", "", "password"]] },
+  odoo: { name: "Odoo", note: "Create an API key in Odoo under My Profile → Account Security → New API Key. Reads active products (product.product).",
+    f: [["url", "Odoo address", "https://yourcompany.odoo.com"], ["db", "Database name"], ["user", "Login (email)"], ["key", "API key", "", "password"]] },
+  generic: { name: "Any web API (REST / OData / JSON)", note: "Any https address that returns JSON with a list of records: Oracle NetSuite RESTlets, Epicor, Infor, IFS, Acumatica, Shopify, WooCommerce, your own system. Next-page links (OData nextLink, __next, next) are followed.",
+    f: [["url", "Address (returns JSON)", "https://api.example.com/v1/items"], ["auth", "Sign-in", "none", "select:none=None,basic=User and password (Basic),bearer=Bearer token,header=API key in a header"], ["user", "User"], ["pass", "Password", "", "password"], ["token", "Bearer token", "", "password"], ["header", "Header name", "x-api-key"], ["value", "Header value", "", "password"], ["path", "Records are at (optional)", "data.items"]] },
+};
+async function ldConnOpen() {
+  const dlg = $("ldConn"), body = $("ldConnBody"); if (!dlg.open) dlg.showModal();
+  if (typeof LD === "undefined" || !LD.company) { body.innerHTML = `<p><b>Sign in and open a company first.</b> Connections are kept per company, encrypted, so everyone in the company can load the item master without knowing the ERP password.</p>${LD && LD.off ? '<p class="dz-cap">Sign-in is not switched on yet on this server (DESIGN_KEY secret). Until then, export the item master from your ERP as CSV, Excel, JSON or XML and use Connect file.</p>' : ""}`; return; }
+  body.innerHTML = '<p class="dz-empty">Loading…</p>';
+  let L; try { L = await ldApi("/api/connect/list"); } catch (e) { body.innerHTML = `<p class="dz-warn">${ldEsc(e.message)}</p>`; return; }
+  body.innerHTML = `
+    ${L.connections.length ? `<h3 style="margin-top:0">Saved connections</h3><table class="ld-tbl"><thead><tr><th>Name</th><th>System</th><th>Updated</th><th></th></tr></thead><tbody>${L.connections.map(c => `<tr><td><b>${ldEsc(c.name)}</b></td><td>${ldEsc(c.kindName)}</td><td>${ldEsc((c.updated || "").slice(0, 16))}</td><td style="white-space:nowrap"><button type="button" class="btn sm primary" data-load="${c.id}">Load items</button>${L.manage && c.kind !== "zoho" ? ` <button type="button" class="btn sm" data-edit="${c.id}">Edit</button>` : ""}${L.manage ? ` <button type="button" class="btn sm" data-del="${c.id}">Delete</button>` : ""}</td></tr>`).join("")}</tbody></table>` : ""}
+    <h3>${L.connections.length ? "Add another connection" : "Add a connection"}</h3>
+    ${L.manage ? `<label class="ld-f">System<select id="ldConnKind">
+      <optgroup label="Cloud ERP and apps">${Object.entries(LD_CONN_FORMS).filter(([k]) => k !== "generic").map(([k, v]) => `<option value="${k}">${v.name}</option>`).join("")}<option value="zoho">Zoho Inventory</option></optgroup>
+      <optgroup label="Others"><option value="generic">${LD_CONN_FORMS.generic.name}</option><option value="onprem">On-premise: SAP ECC, Oracle EBS, JD Edwards, Tally, Busy, Marg, SQL / ODBC…</option></optgroup></select></label>
+    <div id="ldConnForm"></div>` : '<p class="dz-cap">Only an owner or admin can add connections.</p>'}`;
+  for (const b of body.querySelectorAll("[data-load]")) b.onclick = async () => { b.disabled = true; b.textContent = "Loading…";
+    try { const j = await ldApi("/api/connect/fetch", { id: b.dataset.load }); if (!j.rows.length) throw new Error("No items came back"); dzDbUse(j.rows, j.name, j.kind); dlg.close(); } catch (e) { toast(e.message); b.disabled = false; b.textContent = "Load items"; } };
+  for (const b of body.querySelectorAll("[data-del]")) b.onclick = async () => { if (!confirm("Delete this connection? Its saved password is removed.")) return; try { await ldApi("/api/connect/delete", { id: b.dataset.del }); ldConnOpen(); } catch (e) { toast(e.message); } };
+  for (const b of body.querySelectorAll("[data-edit]")) b.onclick = () => { const c = L.connections.find(x => x.id === b.dataset.edit); $("ldConnKind").value = c.kind; form(c); };
+  const form = edit => {
+    const kind = $("ldConnKind").value, box = $("ldConnForm");
+    if (kind === "zoho") { box.innerHTML = L.zoho ? `<p class="dz-cap">You sign in to Zoho and allow LabelDesk to <b>read items</b>. Nothing in Zoho is changed.</p><div class="ld-row"><label class="ld-f" style="margin:0">Zoho data centre<select id="ldZdc"><option value="in" selected>India (zoho.in)</option><option value="com">US (zoho.com)</option><option value="eu">Europe (zoho.eu)</option><option value="com.au">Australia</option><option value="jp">Japan</option><option value="ca">Canada</option><option value="sa">Saudi Arabia</option></select></label><button type="button" class="btn primary" id="ldZgo" style="align-self:end">Connect Zoho Inventory</button></div>` : `<p class="dz-warn">Zoho is not set up on this server yet: the owner needs to register LabelDesk in the Zoho API console and add ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET. Meanwhile, export Items from Zoho Inventory (Items → ⋯ → Export) and use Connect file.</p>`;
+      if ($("ldZgo")) $("ldZgo").onclick = () => { location.href = "/api/zoho/connect?dc=" + encodeURIComponent($("ldZdc").value); }; return; }
+    if (kind === "onprem") { box.innerHTML = `<p>Systems inside your office network (SAP ECC / S/4HANA on-premise, SAP Business One on-premise, Oracle E-Business Suite, JD Edwards, live TallyPrime, Busy, Marg, Microsoft SQL Server, MySQL, PostgreSQL, Oracle Database, Access and any ODBC source) connect through the <b>LabelDesk agent</b>: a small Windows program on one PC in that network. It reads the item master locally and prints, so the database is never opened to the internet.</p><p class="dz-cap">Until the agent is available: export the items as CSV, Excel, XML or JSON (most ERPs can do this on a schedule) and use Connect file. Field links made now keep working with the live connection later.</p>`; return; }
+    const F = LD_CONN_FORMS[kind], v = (edit && edit.pub) || {};
+    box.innerHTML = `<p class="dz-cap">${F.note}</p><div class="ld-grid2"><label class="ld-f">Name for this connection<input id="ldCnName" value="${ldEsc(edit ? edit.name : F.name)}"></label>${F.f.map(([k, lab, ph, t]) => t && t.startsWith("select:") ? `<label class="ld-f">${lab}<select data-cf="${k}">${t.slice(7).split(",").map(o => { const [val, n] = o.split("="); return `<option value="${val}"${(v[k] || ph) === val ? " selected" : ""}>${n}</option>`; }).join("")}</select></label>` : `<label class="ld-f">${lab}<input data-cf="${k}" ${t === "password" ? 'type="password" autocomplete="new-password"' : ""} value="${ldEsc(v[k] || (t === "password" ? "" : ""))}" placeholder="${ldEsc(edit && t === "password" ? "(unchanged)" : ph || "")}"></label>`).join("")}</div>
+      <p class="ld-err" id="ldCnErr"></p><div class="ld-row"><button type="button" class="btn primary" id="ldCnSave">Test and save</button></div><div id="ldCnOut"></div>`;
+    $("ldCnSave").onclick = async () => { const b = $("ldCnSave"), cfg = {}; for (const el of box.querySelectorAll("[data-cf]")) cfg[el.dataset.cf] = el.value;
+      b.disabled = true; b.textContent = "Testing…"; $("ldCnErr").textContent = "";
+      try { const j = await ldApi("/api/connect/save", { id: edit && edit.id, kind, name: $("ldCnName").value, cfg });
+        $("ldCnOut").innerHTML = `<p class="ld-ok" style="margin-top:10px">Connected: ${j.count} item(s) found. Saved as “${ldEsc(j.name)}”.</p>${j.rows.length ? `<div style="overflow:auto;max-height:180px"><table class="ld-tbl"><thead><tr>${Object.keys(j.rows[0]).slice(0, 8).map(h => `<th>${ldEsc(h)}</th>`).join("")}</tr></thead><tbody>${j.rows.map(r => `<tr>${Object.keys(j.rows[0]).slice(0, 8).map(h => `<td>${ldEsc(String(r[h] ?? "").slice(0, 40))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : ""}<div class="ld-row" style="margin-top:8px"><button type="button" class="btn" id="ldCnBack">Done</button></div>`;
+        $("ldCnBack").onclick = () => ldConnOpen(); }
+      catch (e) { $("ldCnErr").textContent = e.message; } finally { b.disabled = false; b.textContent = "Test and save"; } };
+  };
+  if ($("ldConnKind")) { $("ldConnKind").onchange = () => form(); form(); }
+}
+$("ldConnX").onclick = () => $("ldConn").close();
+function dzZoho() { ldConnOpen().then(() => { const k = $("ldConnKind"); if (k) { k.value = "zoho"; k.dispatchEvent(new Event("change")); } }); }
+// Back from Zoho's sign-in page
+(function () { const z = new URLSearchParams(location.search).get("zoho"); if (!z) return; history.replaceState(null, "", location.pathname);
+  setTimeout(() => { toast(z === "connected" ? "Zoho Inventory connected: open Data → Zoho Inventory → Load items" : z); if (z === "connected") { const w = () => (typeof LD !== "undefined" && LD.company) ? ldConnOpen() : setTimeout(w, 500); w(); } }, 800); })();
+// Tally: export now, live through the agent later
+function dzTally() {
+  let d = $("dzTallyDlg");
+  if (!d) { d = document.createElement("dialog"); d.id = "dzTallyDlg"; d.style.cssText = "width:min(640px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)"; document.body.append(d); }
+  d.innerHTML = `<div class="dlg-head"><div><h2>TallyPrime stock items</h2><div class="sub">Item name, group, unit, HSN, GST rate, MRP and price from your Tally company.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div class="ld-acct"><h3 style="margin-top:0">From a Tally export (works now)</h3>
+    <ol class="ld-steps"><li>In TallyPrime: <b>Gateway of Tally → Display More Reports → List of Accounts</b>, choose <b>Stock Items</b>.</li><li>Press <b>Alt+E</b> (Export), set Format to <b>XML (Data Interchange)</b> or <b>Excel</b>, and export.</li><li>Choose that file here.</li></ol>
+    <div class="ld-row"><button type="button" class="btn primary" id="dzTallyFile">Choose Tally export…</button></div>
+    <h3>Live from Tally (with the LabelDesk agent)</h3><p class="dz-cap" style="margin:0">The agent reads Tally on the same PC or network through Tally's ODBC or its XML port (9000), so items, MRP and new batches are always current without exporting. Field links made with an export keep working.</p></div>`;
+  d.querySelector(".x").onclick = () => d.close();
+  d.querySelector("#dzTallyFile").onclick = () => { const i = document.createElement("input"); i.type = "file"; i.accept = ".xml,.xlsx,.xls,.csv"; i.onchange = () => { if (i.files[0]) { dzDbConnect(i.files[0], "Tally"); d.close(); } }; i.click(); };
+  d.showModal();
 }
 </script>
 

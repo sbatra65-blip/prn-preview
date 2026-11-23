@@ -1,4 +1,5 @@
 import { accounts, scope, aiGate, CAN_EDIT } from "./auth.js";
+import { connectors } from "./connectors.js";
 // prn-preview Worker: serves LabelDesk (labeldesk.app) from ./public, plus the AI, leads and design endpoints.
 // Providers tried in order: Claude (ANTHROPIC_API_KEY), Gemini (GEMINI_API_KEY), then Workers AI as last resort.
 const CLAUDE_MODEL = "claude-sonnet-5-5";
@@ -385,6 +386,7 @@ export default {
     if (url.pathname === "/api/design-ai") return designAI(request, env);
     if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
     if (url.pathname.startsWith("/api/qz/")) return qzTray(request, env, url);
+    if (url.pathname.startsWith("/api/connect/") || url.pathname.startsWith("/api/zoho/")) return connectors(request, env, url);
     if (url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/company") || url.pathname.startsWith("/api/admin/")) return accounts(request, env, url);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);
