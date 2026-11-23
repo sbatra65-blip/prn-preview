@@ -1823,7 +1823,7 @@ function bitmapPRN(lang, dpi, o) {
 /* ---- AI layout -> PRN in any language ---- */
 const tsplQ = s => s.replace(/"/g, '\\["]');
 function measureEm(s, emDots) { const c = measureEm.c || (measureEm.c = document.createElement("canvas").getContext("2d")); c.font = `700 ${emDots}px "Roboto Condensed", "Arial Narrow", sans-serif`; return c.measureText(s).width; }
-function linearModules(bcid, text) { const c = bwipCanvas({ bcid, text, height: 5 }); return c ? c.width : 0; }
+function linearModules(bcid, text, extra) { const c = bwipCanvas(Object.assign({ bcid, text, height: 5 }, extra || {})); return c ? c.width : 0; }
 // "(01)0890…(10)AB" -> "010890…10AB" with sep after variable-length AIs (FNC1 / GS)
 function gs1Raw(paren, sep) {
   const parts = [...paren.matchAll(/\((\d{2,4})\)([^(]*)/g)];
@@ -2732,7 +2732,10 @@ function dzUndo(step) {
   dz.restoring = true; dzSetupForm(); dzProps(); dz.restoring = false; try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) {}
 }
 function dzLinkSrc(it) { return it.link ? dz.D.items.find(i => i.id === it.link && i.id !== it.id) : null; }
-function dzContentOf(it) { return it.type === "barcode" ? (it.qrKind === "contact" ? dzObjName(it) : String(it.data || "")) : it.type === "shape" ? String(it.text || "") : String(it.text || ""); }
+// Escaped barcode data (from the data builder): ^FNC1 and ^ddd stand for FNC1 and control characters (bwip-js "parse" form)
+const dzBw = it => it && it.esc ? { parse: true, parsefnc: true } : {};
+const dzPlain = s => String(s || "").replace(/\^FNC[1-4]/g, "").replace(/\^(\d{3})/g, (m, d) => +d < 32 ? (+d === 10 ? "\n" : "") : String.fromCharCode(+d));
+function dzContentOf(it) { return it.type === "barcode" ? (it.qrKind === "contact" ? dzObjName(it) : it.esc ? dzPlain(it.data) : String(it.data || "")) : it.type === "shape" ? String(it.text || "") : String(it.text || ""); }
 function dzSyncLinks() { // copy linked content (a few passes so chains settle); repaint what changed
   if (!dz.D) return;
   for (let pass = 0; pass < 3; pass++) {
@@ -2917,9 +2920,9 @@ function dzPaint(el, it, s) {
     if (sym === "upca") data = data.replace(/\D/g, "").slice(0, 11);
     const bcid = dzBcid(it, data);
     const bc = dzCol(it).slice(1);
-    try { bwipjs.toCanvas(c, Object.assign({ bcid, text: sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, scale: 2, barcolor: bc, textcolor: bc }, two ? {} : { height: 10, includetext: true, textsize: 8 })); el.replaceChildren(c);
+    try { bwipjs.toCanvas(c, Object.assign({ bcid, ...dzBw(it), text: sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, scale: 2, barcolor: bc, textcolor: bc }, two ? {} : { height: 10, includetext: true, textsize: 8 })); el.replaceChildren(c);
       if (!two) { // show the width the printer will really use: whole dots per module, centred in the box
-        const mods = linearModules(bcid, sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data) || 80, wd = dotsOf(it.w, D.dpi);
+        const mods = linearModules(bcid, sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, dzBw(it)) || 80, wd = dotsOf(it.w, D.dpi);
         let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
         c.style.width = Math.min(100, mods * n / wd * 100) + "%"; c.style.margin = "0 auto";
       } }
@@ -2986,7 +2989,7 @@ function dzDims(it) { // the item's own size in mm, before any rotation
   return { w: it.w, h: it.h };
 }
 function dzBox(it) { const d = dzDims(it), r = dzRot(it) * Math.PI / 180, c = Math.abs(Math.cos(r)), sn = Math.abs(Math.sin(r)); return { w: d.w * c + d.h * sn, h: d.w * sn + d.h * c }; }
-const dzNative = it => it.type !== "shape" && !(it.type === "barcode" && !DZ_NATIVE_SYM.has(it.symbology)) && dzRot(it) % 90 === 0 && !dzCurve(it) && !dzOnPath(it) && !(it.type === "text" && (it.font || dzNonLatin(it) || it.para)); // printers turn these themselves; others print as a graphic
+const dzNative = it => it.type !== "shape" && !(it.type === "barcode" && (!DZ_NATIVE_SYM.has(it.symbology) || it.esc)) && dzRot(it) % 90 === 0 && !dzCurve(it) && !dzOnPath(it) && !(it.type === "text" && (it.font || dzNonLatin(it) || it.para)); // printers turn these themselves; others print as a graphic
 function dzTurn(it, by) { // turn about the box centre so the item stays where it was
   const b = dzBox(it), cx = it.x + b.w / 2, cy = it.y + b.h / 2;
   it.rot = Math.round((((dzRot(it) + by) % 360) + 360) % 360 * 10) / 10; const n = dzBox(it);
@@ -3096,7 +3099,7 @@ function dzRenderItem(it, k, part, guide) {
     let data = String(it.data || ""); const sym = it.symbology;
     const kind = dzSymKind(it);
     if (kind !== "1d") {
-      const b = bwipCanvas({ bcid: dzBcid(it, data), text: data, ...(kind === "post" ? { height: 5 } : {}) });
+      const b = bwipCanvas({ bcid: dzBcid(it, data), text: data, ...dzBw(it), ...(kind === "post" ? { height: 5 } : {}) });
       if (!b) { if (live) { x.fillStyle = "#b42318"; x.font = `${Math.max(8, H / 5)}px sans-serif`; x.fillText("Check barcode data", 2, H / 2); } }
       else if (kind === "sq") x.drawImage(b, 0, 0, W, H);
       else if (kind === "post") x.drawImage(b, 0, 0, W, H);
@@ -3104,7 +3107,7 @@ function dzRenderItem(it, k, part, guide) {
     }
     else {
       if (sym === "ean13" || sym === "upca") data = data.replace(/\D/g, "").slice(0, sym === "ean13" ? 12 : 11);
-      const bcid = sym, txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, b = bwipCanvas({ bcid, text: txt, height: 5 });
+      const bcid = sym, txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, b = bwipCanvas({ bcid, text: txt, height: 5, ...dzBw(it) });
       if (!b && live) { x.fillStyle = "#b42318"; x.font = `${Math.max(8, H / 5)}px sans-serif`; x.fillText("Check barcode data", 2, H / 2); }
       if (b) {
         const dpi = (dz.D && dz.D.dpi) || 203, mods = b.width, wd = dotsOf(it.w, dpi); let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
@@ -3143,7 +3146,7 @@ function dzSelect(id, add) {
 }
 function dzSelectMany(ids) { dz.multi = new Set(ids); dz.sel = ids.length ? ids[ids.length - 1] : null; dzMarkSel(); dzProps(); }
 function dzHriText(it) { // what prints under the bars
-  let d = String(it.data || ""); const sym = it.symbology;
+  let d = it.esc ? dzPlain(it.data) : String(it.data || ""); const sym = it.symbology;
   if (sym === "ean13") { d = d.replace(/\D/g, "").slice(0, 12); return d.length === 12 ? ean13Full(d) : d; }
   if (sym === "upca") return d.replace(/\D/g, "").slice(0, 11);
   if (sym === "gs1-128") return d.includes("(") ? d : gs1Paren("\x1d" + d);
@@ -3154,7 +3157,7 @@ function dzSnapBar(it) {
   if (!dzIsBars(it) || !dz.D) return;
   let data = String(it.data || ""); const sym = it.symbology;
   if (sym === "ean13" || sym === "upca") data = data.replace(/\D/g, "").slice(0, sym === "ean13" ? 12 : 11);
-  const txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, mods = linearModules(sym, txt); if (!mods) return;
+  const txt = sym === "gs1-128" && !data.includes("(") ? "(01)" + data : data, mods = linearModules(sym, txt, dzBw(it)); if (!mods) return;
   const dpi = dz.D.dpi, wd = dotsOf(it.w, dpi); let n = Math.max(1, Math.min(10, Math.round(wd / mods))); while (n > 1 && mods * n > wd * 1.01) n--;
   it.w = Math.ceil(mods * n / dpi * 25.4 * 100) / 100;
 }
@@ -3275,7 +3278,8 @@ function dzProps() {
   }
   if (it.type === "text" && dzLinkSrc(it)) f.push(`<label class="full">Text (from the linked object)<input value="${(it.text || "").replace(/"/g, "&quot;")}" readonly></label>`);
   if (it.type === "text" && !dzLinkSrc(it)) {
-    if (it.para) f.push(`<label class="full">Text (Enter for a new line; lines wrap to the box)<textarea data-k="text" style="min-height:90px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
+    if (it.parts) f.push(`<label class="full">Text (built from ${it.parts.length} part(s); sample shown)<textarea readonly style="min-height:${it.para ? 90 : 40}px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
+    else if (it.para) f.push(`<label class="full">Text (Enter for a new line; lines wrap to the box)<textarea data-k="text" style="min-height:90px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
     else f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
     f.push(`<label>Font size, pt<input data-pt="h" type="number" min="3" max="400" step="0.5" value="${dzToPt(it.h)}" list="dzPtList"></label>`);
     if (it.para) {
@@ -3290,8 +3294,9 @@ function dzProps() {
     if (it.symbology === "qrcode" && it.qrKind === "contact") for (const [k, n] of DZ_CONTACT) f.push(`<label class="full">${n}<input data-c="${k}" value="${String((it.contact || {})[k] || "").replace(/"/g, "&quot;")}"${k === "tel" ? ' inputmode="tel"' : k === "email" ? ' inputmode="email"' : ""}></label>`);
     else if (dzLinkSrc(it)) f.push(`<label class="full">Data (from the linked object)<textarea readonly>${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
     else {
-      f.push(`<label class="full">Data<textarea data-k="data" id="dzData">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
-      if (it.symbology === "gs1-128" || it.symbology === "datamatrix" || it.symbology === "qrcode")
+      if (it.parts) f.push(`<label class="full">Data (built from ${it.parts.length} part(s); sample shown)<textarea readonly>${dzPlain(it.data).replace(/</g, "&lt;")}</textarea></label>`);
+      else f.push(`<label class="full">Data<textarea data-k="data" id="dzData">${(it.data || "").replace(/</g, "&lt;")}</textarea></label>`);
+      if (!it.parts && (it.symbology === "gs1-128" || it.symbology === "datamatrix" || it.symbology === "qrcode"))
         f.push(`<div class="full" style="grid-column:1/-1"><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">${it.symbology === "qrcode" ? "" : DZ_AI_QUICK.map(a => `<button type="button" class="btn sm" data-ai="${a}" title="Insert (${a}) ${DZ_AI[a].n}" style="min-height:26px;padding:0 7px;font-size:12px">(${a}) ${DZ_AI[a].s}</button>`).join("")}</div><button type="button" class="btn sm soft" id="dzGs1">${it.symbology === "qrcode" ? "GS1 Digital Link builder…" : "GS1 builder: identifiers, check digits, dates…"}</button></div>`);
     }
     if (dzIs2D(it)) num("w", "Size, mm", 0.5, 4); else { num("w", "Width, mm", 0.5, 5); num("h", "Height, mm", 0.5, 3); }
@@ -3330,6 +3335,8 @@ function dzProps() {
     f.push(`<label class="full">Content linked to<select data-h="link"><option value="">Nothing (type it here)</option>${others.map(o => `<option value="${o.id}"${it.link === o.id ? " selected" : ""}>${dzObjName(o).slice(0, 40).replace(/</g, "&lt;")}</option>`).join("")}</select></label>`);
     if (dzLinkSrc(it)) f.push(`<label>Before<input data-h="linkPre" value="${(it.linkPre || "").replace(/"/g, "&quot;")}" placeholder="e.g. Batch: "></label><label>After<input data-h="linkPost" value="${(it.linkPost || "").replace(/"/g, "&quot;")}"></label>`);
   }
+  if ((it.type === "text" || it.type === "barcode") && !dzLinkSrc(it) && it.qrKind !== "contact")
+    f.push(`<div class="full" style="grid-column:1/-1"><button type="button" class="btn sm${it.parts ? " soft" : ""}" id="dzParts">${it.parts ? `Edit the ${it.parts.length} parts (fields, FNC1, dates, serials)…` : "Build from parts: database fields, FNC1/GS, dates, serial numbers…"}</button></div>`);
   { // colours: on screen and in the colour image; the printer prints in its ribbon colour
     const cl = (key, label, val) => `<label>${label}<input type="color" data-col="${key}" value="${val}" style="height:34px;padding:2px"></label>`;
     if (it.type === "shape") { const noLine = !it.fill && !(+it.thickness > 0);
@@ -3412,6 +3419,7 @@ function dzProps() {
     ta.value = ta.value.slice(0, a) + ins + ta.value.slice(z); ta.focus(); ta.selectionStart = ta.selectionEnd = a + ins.length; ta.dispatchEvent(new Event("input"));
   };
   if ($("dzGs1")) $("dzGs1").onclick = () => dzGs1Builder(it);
+  if ($("dzParts")) $("dzParts").onclick = () => dzVarBuilder(it);
   if ($("dzLinkText")) $("dzLinkText").onclick = () => { // a separate text that always shows this barcode's data
     const b = dzBox(it), t = { id: dz.seq++, type: "text", x: it.x, y: r1(Math.min(dz.D.h - 4, it.y + b.h + 0.8)), h: 2.5, text: "", link: it.id };
     it.hri = "none"; dz.D.items.push(t); dzSyncLinks(); dz.sel = t.id; dzDraw(); dzProps(); dzSave();
@@ -3486,7 +3494,7 @@ function dzLayout() {
   const D = dz.D, lw = dzLW(), items = [];
   for (let c = 0; c < D.across; c++) {
     const ox = D.edge + c * (lw + D.hgap);
-    for (const it of D.items) {
+    for (const it of dzResolveCol(c)) {
       const o = Object.assign({}, it, { x: r1(it.x + ox), y: r1(it.y) });
       if (it.type === "shape" && !dzRot(it) && !it.fill && !it.font && !dzNonLatin(it)) {
         const th = +it.thickness || 0;
@@ -4443,6 +4451,7 @@ async function ldPrintOpen() {
       <label class="ld-f">Printer on this computer<select id="ldPrName">${LDQ.printers.map(n => `<option${n === guess ? " selected" : ""}>${ldEsc(n)}</option>`).join("")}</select></label>
       <label class="ld-f">Number of labels<input id="ldPrQty" type="number" min="1" max="99999" value="${per}" step="1"></label>
     </div>
+    ${ldVarPanel()}
     <div class="ld-grid2" id="ldPrRawRow">
       <label class="ld-f">Printer resolution <small>Must match the printer, or labels print the wrong size</small><select id="ldPrDpi"><option value="203">203 dpi (8 dots/mm)</option><option value="300">300 dpi (12 dots/mm)</option><option value="600">600 dpi (24 dots/mm)</option></select></label>
       <label class="ld-f">Printer language<select id="ldPrLang">${Object.keys(DZ_LANG_NAME).map(l => `<option value="${l}">${ldEsc(DZ_LANG_NAME[l])}</option>`).join("")}</select></label>
@@ -4457,9 +4466,10 @@ async function ldPrintOpen() {
     <p class="ld-err" id="ldPrErr" role="alert"></p>
     <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo">Print</button><button type="button" class="btn" id="ldPrTest">Print 1 test label</button></div>
     <p class="dz-cap" style="margin-top:12px">Printer language mode needs the Windows printer set to a “Generic / Text Only” or the maker's driver with raw pass-through, which is the normal set-up for thermal printers. Image mode works with any driver; set the driver's label size to ${r1(D.paper)} × ${r1(D.h)} mm.</p>`;
-  const info = () => { const q = Math.max(1, +document.getElementById("ldPrQty").value || 1), rows = Math.ceil(q / per);
-    document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm${per > 1 ? `, ${per} across: ${rows} row(s) = ${rows * per} labels` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
+  const info = () => { const q0 = Math.max(1, +document.getElementById("ldPrQty").value || 1); let q = q0; if (dzVarNeeds().any) { try { q = ldVarLabels(q0).length || q0; } catch (e) {} } const rows = Math.ceil(q / per);
+    document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm · ${q} label(s)${per > 1 ? ` on ${rows} row(s), ${per} across` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
   document.getElementById("ldPrQty").oninput = info; info();
+  ldVarWire(() => { const file = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value === "file"; document.querySelector('label:has(#ldPrQty)').firstChild.textContent = file ? "Copies of each record" : "Number of labels"; info(); });
   const $p = id => document.getElementById(id);
   const fit = () => { // per Windows printer: saved choice, else read from its name/driver, else the design's own settings
     const name = $p("ldPrName").value, g = ldGuessPrinter(name), lang = $p("ldPrLang").value;
@@ -4488,10 +4498,17 @@ async function ldPrintRun(test) {
       if (!dzCheck()) throw new Error("Fix the problems shown on the label first.");
       const lang = document.getElementById("ldPrLang").value, dpi = lang === "EPL2" ? 203 : +document.getElementById("ldPrDpi").value;
       store.set("ld-pr:" + name, JSON.stringify({ dpi, lang }));
-      const { prn } = layoutPRN(dzLayout(), lang, dpi), q = ldWithQty(prn, lang, rows);
+      let q;
+      if (dzVarNeeds().any) { // fields, serial numbers: every label gets its own data
+        let labels = ldVarLabels(test ? 1 : qty); if (test) labels = labels.slice(0, D.across);
+        if (!labels.length) throw new Error("Nothing to print: the file has no rows, or every qty is 0.");
+        if (!test && labels.length > 2000 && !confirm(`Print ${labels.length} labels on ${name}?`)) return;
+        const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; toast(`${labels.length} label(s) prepared`);
+      } else { const { prn } = layoutPRN(dzLayout(), lang, dpi); q = ldWithQty(prn, lang, rows); }
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
     } else {
+      if (dzVarNeeds().any) throw new Error("Fields and serial numbers print in printer-language mode. Choose “Printer commands”, or remove the parts.");
       const full = dzColourPNG(true), k = full.width / D.paper, c = document.createElement("canvas"); // just the label row, without the gaps
       c.width = full.width; c.height = Math.round(D.h * k); c.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * k));
       const px = c.toDataURL("image/png").split(",")[1];
@@ -4641,6 +4658,171 @@ function dzGs1Builder(it) {
   $("dzGs1Use").onclick = () => { it.data = result; delete it.link; dzSyncLinks(); dzRefresh(it); dzSave(); dlg.close(); dzProps(); toast("GS1 data set"); };
   $("dzGs1Cancel").onclick = $("dzGs1X").onclick = () => dlg.close();
   draw(); dlg.showModal();
+}
+</script>
+
+<!-- Data builder: content made of parts (text, database fields, special characters, dates, serial numbers), filled per label at print time -->
+<dialog id="dzVarDlg" aria-labelledby="dzVarH" style="width:min(820px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)">
+  <div class="dlg-head"><div><h2 id="dzVarH">Build the data from parts</h2><div class="sub">Join fixed text, database fields, special characters (FNC1, GS…), dates and serial numbers into one string. Fields are filled from typed values or a CSV/Excel file when you print.</div></div><button type="button" class="x" id="dzVarX" aria-label="Close">×</button></div>
+  <div class="ld-acct">
+    <div id="dzVarRows" style="display:grid;gap:8px"></div>
+    <div class="ld-row" style="margin:10px 0"><button type="button" class="btn sm" data-add="text">+ Text</button><button type="button" class="btn sm" data-add="field">+ Database field</button><button type="button" class="btn sm" data-add="special">+ Special character</button><button type="button" class="btn sm" data-add="date">+ Date</button><button type="button" class="btn sm" data-add="serial">+ Serial number</button></div>
+    <h3>Result with the sample values</h3>
+    <div class="ld-secret" id="dzVarOut" style="text-align:left;white-space:pre-wrap"></div>
+    <p class="dz-cap" id="dzVarNote" style="margin:0 0 10px"></p>
+    <div class="ld-row"><button type="button" class="btn primary" id="dzVarSave">Use these parts</button><button type="button" class="btn" id="dzVarOff">Stop using parts</button><button type="button" class="btn" id="dzVarCancel">Cancel</button></div>
+  </div>
+</dialog>
+<script>
+/* ---------- data builder ---------- */
+const DZ_SPECIAL = { fnc1: ["FNC1", "^FNC1"], gs: ["GS · group separator (29)", "^029"], rs: ["RS · record separator (30)", "^030"], eot: ["EOT · end of transmission (4)", "^004"],
+  us: ["US · unit separator (31)", "^031"], cr: ["CR · carriage return", "^013"], lf: ["LF · new line", "^010"], crlf: ["CR + LF", "^013^010"], tab: ["TAB", "^009"], fnc2: ["FNC2", "^FNC2"], fnc3: ["FNC3", "^FNC3"], fnc4: ["FNC4", "^FNC4"],
+  iso15434: ["ISO 15434 header [)> RS 06 GS", "[)>^03006^029"], iso15434end: ["ISO 15434 end RS EOT", "^030^004"] };
+const DZ_DATEF = ["DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YY", "DDMMYY", "YYMMDD", "YYYYMMDD", "YYYY-MM-DD", "MM/YYYY", "MMM YYYY", "MMM-YY", "DD MMM YYYY", "HH:mm", "DD/MM/YYYY HH:mm"];
+const DZ_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+function dzFmtDate(p, when) {
+  const d = new Date(when || Date.now()), n = +p.off || 0;
+  if (p.unit === "months") d.setMonth(d.getMonth() + n); else d.setDate(d.getDate() + n);
+  const z = (v, l = 2) => String(v).padStart(l, "0");
+  return String(p.fmt || "DD/MM/YYYY").replace(/YYYY|YY|MMM|MM|DD|HH|mm/g, t => ({ YYYY: d.getFullYear(), YY: z(d.getFullYear() % 100), MMM: DZ_MON[d.getMonth()], MM: z(d.getMonth() + 1), DD: z(d.getDate()), HH: z(d.getHours()), mm: z(d.getMinutes()) }[t]));
+}
+const dzFields = () => (dz.D.fields = dz.D.fields || []);
+const dzHasSpecial = it => (it.parts || []).some(p => p.t === "special");
+// One label's content: rec = { field: value }, n = label number in the run (0, 1, 2 …)
+function dzCompose(it, rec, n) {
+  const bar = it.type === "barcode", esc = bar && dzHasSpecial(it), lit = v => esc ? String(v).replace(/\^/g, "^094") : String(v);
+  return (it.parts || []).map(p => {
+    if (p.t === "text") return lit(p.v || "");
+    if (p.t === "field") { const f = dzFields().find(x => x.name === p.name); const v = rec && rec[p.name] != null && rec[p.name] !== "" ? rec[p.name] : f ? f.sample : ""; return lit(v ?? ""); }
+    if (p.t === "special") return bar ? (DZ_SPECIAL[p.c] || [, ""])[1] : (p.c === "lf" || p.c === "crlf" || p.c === "cr" ? "\n" : p.c === "tab" ? "\t" : "");
+    if (p.t === "date") return lit(dzFmtDate(p));
+    if (p.t === "serial") { const v = (+p.start || 0) + (+p.step || 1) * (n || 0); return lit(String(v).padStart(+p.width || 0, "0")); }
+    return "";
+  }).join("");
+}
+const dzKeyOf = it => it.type === "barcode" ? "data" : "text";
+// The objects for one label column at print time (fields, serials and linked copies filled in)
+function dzResolveCol(col) {
+  const items = dz.D.items, ctx = dz.ctx; if (!ctx) return items;
+  const idx = ctx.base + col; if (ctx.labels && idx >= ctx.labels.length) return []; // last row not full: leave the label blank
+  const lab = ctx.labels ? ctx.labels[idx] : { rec: ctx.rec, n: idx };
+  const out = items.map(it => it.parts && it.parts.length ? Object.assign({}, it, { [dzKeyOf(it)]: dzCompose(it, lab.rec, lab.n), esc: it.type === "barcode" && dzHasSpecial(it) }) : it);
+  for (let pass = 0; pass < 3; pass++) for (let i = 0; i < out.length; i++) {
+    const it = out[i]; if (!it.link) continue; const src = out.find(o => o.id === it.link && o.id !== it.id); if (!src) continue;
+    out[i] = Object.assign({}, it, { [dzKeyOf(it)]: (it.linkPre || "") + dzContentOf(src) + (it.linkPost || "") });
+  }
+  return out;
+}
+const dzVarItems = () => dz.D.items.filter(it => it.parts && it.parts.length);
+function dzVarNeeds() { const used = new Set(), its = dzVarItems(); let serial = false;
+  for (const it of its) for (const p of it.parts) { if (p.t === "field") used.add(p.name); if (p.t === "serial") serial = true; }
+  return { fields: dzFields().filter(f => used.has(f.name)), serial, any: its.length > 0 };
+}
+function dzApplySample(it) { it[dzKeyOf(it)] = dzCompose(it, null, 0); it.esc = it.type === "barcode" && dzHasSpecial(it); if (!it.esc) delete it.esc; dzSyncLinks(); dzRefresh(it); }
+
+function dzVarBuilder(it) {
+  const dlg = $("dzVarDlg"), box = $("dzVarRows");
+  let parts = JSON.parse(JSON.stringify(it.parts && it.parts.length ? it.parts : [{ t: "text", v: dzContentOf(it) }]));
+  const fields = JSON.parse(JSON.stringify(dzFields()));
+  const fOpts = cur => fields.map(f => `<option${f.name === cur ? " selected" : ""}>${ldEsc(f.name)}</option>`).join("") + '<option value="__new">+ New field…</option>';
+  const row = (p, i) => {
+    let ins = "";
+    if (p.t === "text") ins = `<input data-i="${i}" data-p="v" value="${ldEsc(p.v || "")}" placeholder="Fixed text, e.g. Batch: " style="flex:1">`;
+    if (p.t === "field") { const f = fields.find(x => x.name === p.name) || {}; ins = `<select data-i="${i}" data-p="name" style="flex:1">${fOpts(p.name)}</select><input data-f="${ldEsc(p.name || "")}" value="${ldEsc(f.sample || "")}" placeholder="Sample value" title="Shown on screen and used when nothing is typed" style="flex:1">`; }
+    if (p.t === "special") ins = `<select data-i="${i}" data-p="c" style="flex:1">${Object.entries(DZ_SPECIAL).map(([k, [n]]) => `<option value="${k}"${k === p.c ? " selected" : ""}>${n}</option>`).join("")}</select>`;
+    if (p.t === "date") ins = `<select data-i="${i}" data-p="fmt">${DZ_DATEF.map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">today +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="days"${p.unit !== "months" ? " selected" : ""}>days</option><option value="months"${p.unit === "months" ? " selected" : ""}>months</option></select>`;
+    if (p.t === "serial") ins = `<span style="align-self:center">start</span><input data-i="${i}" data-p="start" type="number" value="${p.start ?? 1}" style="width:100px"><span style="align-self:center">step</span><input data-i="${i}" data-p="step" type="number" value="${p.step ?? 1}" style="width:70px"><span style="align-self:center">digits</span><input data-i="${i}" data-p="width" type="number" min="0" max="20" value="${p.width ?? 6}" style="width:70px">`;
+    const lab = { text: "Text", field: "Field", special: "Special", date: "Date", serial: "Serial" }[p.t];
+    return `<div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:6px 8px"><b style="align-self:center;min-width:56px;font-size:12px;color:var(--muted)">${i + 1}. ${lab}</b>${ins}
+      <span style="display:flex;gap:4px;margin-left:auto"><button type="button" class="btn sm" data-mv="${i}:-1" aria-label="Move up">↑</button><button type="button" class="btn sm" data-mv="${i}:1" aria-label="Move down">↓</button><button type="button" class="btn sm" data-rm="${i}" aria-label="Remove">×</button></span></div>`;
+  };
+  const show = () => {
+    const tmp = Object.assign({}, it, { parts }), old = dz.D.fields; dz.D.fields = fields; const v = dzCompose(tmp, null, 0); dz.D.fields = old;
+    $("dzVarOut").textContent = (it.type === "barcode" ? v.replace(/\^FNC([1-4])/g, "⟨FNC$1⟩").replace(/\^(\d{3})/g, (m, d) => ({ 29: "⟨GS⟩", 30: "⟨RS⟩", 4: "⟨EOT⟩", 31: "⟨US⟩", 13: "⟨CR⟩", 10: "⟨LF⟩", 9: "⟨TAB⟩", 94: "^" }[+d] || `⟨${+d}⟩`)) : v) || "—";
+    const sp = parts.some(p => p.t === "special");
+    $("dzVarNote").textContent = [it.type === "barcode" && sp ? "Special characters are encoded exactly; this barcode prints as a graphic so every printer language gets them right." : "",
+      parts.some(p => p.t === "serial") ? "Serial numbers go up by the step on each label printed." : "", parts.some(p => p.t === "field") ? "Fields are filled when you print: type values, or load a CSV/Excel file with columns of the same names." : "",
+      it.type === "barcode" && it.symbology === "gs1-128" && sp ? "For GS1-128 you usually do not need FNC1 parts: write (01)…(10)… and FNC1 is added automatically." : ""].filter(Boolean).join(" ");
+  };
+  const draw = () => { box.innerHTML = parts.map(row).join("") || '<p class="dz-empty">No parts yet: add some below.</p>';
+    for (const el of box.querySelectorAll("[data-p]")) el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => {
+      const p = parts[+el.dataset.i], k = el.dataset.p;
+      if (k === "name" && el.value === "__new") { const n = (prompt("Field name (the CSV/Excel column it reads), e.g. batch, mrp, gtin") || "").trim().replace(/[^\w ]/g, "").slice(0, 40); if (n && !fields.some(f => f.name === n)) fields.push({ name: n, sample: "" }); p.name = n || p.name; return draw(); }
+      p[k] = el.type === "number" ? +el.value : el.value; if (el.tagName === "SELECT") draw(); else show(); });
+    for (const el of box.querySelectorAll("[data-f]")) el.addEventListener("input", () => { const f = fields.find(x => x.name === el.dataset.f); if (f) f.sample = el.value; show(); });
+    for (const b of box.querySelectorAll("[data-rm]")) b.onclick = () => { parts.splice(+b.dataset.rm, 1); draw(); };
+    for (const b of box.querySelectorAll("[data-mv]")) b.onclick = () => { const [i, d] = b.dataset.mv.split(":").map(Number), j = i + d; if (j < 0 || j >= parts.length) return; [parts[i], parts[j]] = [parts[j], parts[i]]; draw(); };
+    show(); };
+  for (const b of dlg.querySelectorAll("[data-add]")) b.onclick = () => {
+    const t = b.dataset.add;
+    if (t === "field" && !fields.length) fields.push({ name: "batch", sample: "B123" });
+    parts.push(t === "text" ? { t, v: "" } : t === "field" ? { t, name: fields[0].name } : t === "special" ? { t, c: "fnc1" } : t === "date" ? { t, fmt: "DD/MM/YYYY", off: 0, unit: "days" } : { t, start: 1, step: 1, width: 6 });
+    draw(); };
+  $("dzVarSave").onclick = () => { dz.D.fields = fields; it.parts = parts; delete it.link; delete it.linkPre; delete it.linkPost; dzApplySample(it); dzSave(); dlg.close(); dzProps(); toast("Data built from " + parts.length + " part(s)"); };
+  $("dzVarOff").onclick = () => { delete it.parts; delete it.esc; it[dzKeyOf(it)] = dzPlain($("dzVarOut").textContent.replace(/⟨[^⟩]*⟩/g, "")); dzRefresh(it); dzSave(); dlg.close(); dzProps(); };
+  $("dzVarCancel").onclick = $("dzVarX").onclick = () => dlg.close();
+  draw(); dlg.showModal();
+}
+
+/* ---------- records at print time: typed values or a CSV / Excel file ---------- */
+const LDV = { recs: null, file: "" };
+function ldParseCSV(text) {
+  const rows = [], sep = (text.split(/\r?\n/)[0].match(/;/g) || []).length > (text.split(/\r?\n/)[0].match(/,/g) || []).length ? ";" : text.split(/\r?\n/)[0].includes("\t") ? "\t" : ",";
+  let row = [], cell = "", q = false;
+  for (let i = 0; i < text.length; i++) { const ch = text[i];
+    if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+    else if (ch === '"') q = true; else if (ch === sep) { row.push(cell); cell = ""; } else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(cell); cell = ""; if (row.some(c => c !== "")) rows.push(row); row = []; } else cell += ch; }
+  row.push(cell); if (row.some(c => c !== "")) rows.push(row);
+  const head = (rows.shift() || []).map(h => h.trim());
+  return rows.map(r => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? "").trim()])));
+}
+async function ldReadTable(file) {
+  if (/\.(xlsx|xls|ods)$/i.test(file.name)) {
+    if (!window.XLSX) await new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"; s.onload = ok; s.onerror = () => bad(new Error("Could not load the Excel reader")); document.head.append(s); });
+    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true }), ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, { defval: "", raw: false });
+  }
+  return ldParseCSV(await file.text());
+}
+function ldVarPanel() {
+  const need = dzVarNeeds(); if (!need.any) return "";
+  return `<div class="ld-sec" style="margin-top:4px"><b style="font-size:14px">Data for this print</b>
+    ${need.fields.length ? `<div class="ld-row" style="margin:8px 0"><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed" checked> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
+    <div id="ldVarTyped" class="ld-grid2">${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
+    <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
+    ${need.serial ? `<p class="dz-cap">Serial numbers go up on every label in this print.</p>` : ""}</div>`;
+}
+function ldVarWire(onChange) {
+  const need = dzVarNeeds(); if (!need.fields.length) return;
+  const src = () => (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value;
+  for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; onChange(); };
+  $("ldVarIn").onchange = async e => { const f = e.target.files[0]; if (!f) return;
+    try { LDV.recs = await ldReadTable(f); LDV.file = f.name; const cols = Object.keys(LDV.recs[0] || {}), miss = need.fields.filter(x => !cols.includes(x.name)).map(x => x.name);
+      $("ldVarInfo").innerHTML = `<b>${LDV.recs.length} record(s)</b> from ${ldEsc(f.name)}.${miss.length ? ` <span style="color:#b42318">No column for: ${miss.map(ldEsc).join(", ")} (their sample value is used).</span>` : " All fields matched."}`; }
+    catch (x) { LDV.recs = null; $("ldVarInfo").textContent = x.message; } onChange(); };
+}
+// The list of labels to print: [{ rec, n }] in order
+function ldVarLabels(qty) {
+  const need = dzVarNeeds(), src = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value, out = [];
+  if (src === "file") {
+    if (!LDV.recs || !LDV.recs.length) throw new Error("Choose a CSV or Excel file with the records first.");
+    for (const r of LDV.recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: r, n: out.length }); }
+    return out;
+  }
+  const rec = {}; for (const el of document.querySelectorAll("[data-fv]")) rec[el.dataset.fv] = el.value;
+  for (let i = 0; i < qty; i++) out.push({ rec, n: i });
+  return out;
+}
+// Printer commands for every label; identical rows in a row are merged into one copy command
+function ldVarPRN(labels, lang, dpi) {
+  const D = dz.D, rows = Math.ceil(labels.length / D.across), chunks = [];
+  try {
+    for (let r = 0; r < rows; r++) { dz.ctx = { labels, base: r * D.across }; const { prn } = layoutPRN(dzLayout(), lang, dpi);
+      if (chunks.length && chunks[chunks.length - 1].prn === prn) chunks[chunks.length - 1].n++; else chunks.push({ prn, n: 1 }); }
+  } finally { dz.ctx = null; dz.gfx = null; }
+  let all = "", unmerged = 0;
+  for (const c of chunks) { const q = ldWithQty(c.prn, lang, c.n); if (q.done) all += q.prn; else { all += c.prn.repeat(c.n); unmerged++; } }
+  return { prn: all, rows, jobs: chunks.length };
 }
 </script>
 
