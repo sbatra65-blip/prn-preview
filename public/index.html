@@ -236,6 +236,8 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 .dz-o.edge .h { background: #d97706; } .dz-o.edge .rh { border-color: #d97706; } .dz-o.edge .rh::after { background: #d97706; }
 .dz-label.multi .dz-o.sel .h, .dz-label.multi .dz-o.sel .rh { display: none; }
 .dz-label.multi .dz-o.sel { outline: 1.5px solid var(--accent); }
+.dz-label.multi .dz-o.sel.anchor { outline: 2.5px solid var(--accent); box-shadow: 0 0 0 4px rgba(194, 65, 12, .18); }
+.dz-label.multi .dz-o.sel.anchor::before { content: "1st"; position: absolute; left: -2px; top: -16px; font: 700 10px var(--font); color: #fff; background: var(--accent); border-radius: 4px; padding: 1px 4px; z-index: 4; }
 .dz-marq { position: absolute; border: 1px dashed var(--accent); background: rgba(194, 65, 12, .08); pointer-events: none; z-index: 5; }
 .dz-mgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .dz-mgrid .rb { display: flex; flex-direction: column; align-items: center; gap: 2px; border: 1px solid #eef0f3; border-radius: 8px; background: #fff; padding: 6px 2px; font: 11.5px var(--font); color: #334155; cursor: pointer; }
@@ -3011,6 +3013,8 @@ function dzSelIds() { // every selected id; a lone dz.sel set elsewhere counts a
 function dzMarkSel() {
   const ids = new Set(dzSelIds()); for (const el of document.querySelectorAll("#dzLab .dz-o")) el.classList.toggle("sel", ids.has(+el.dataset.id));
   if ($("dzLab")) $("dzLab").classList.toggle("multi", ids.size > 1);
+  const an = (dz.alignTo || "first") === "first" ? dzAnchor() : null;
+  for (const el of document.querySelectorAll("#dzLab .dz-o")) el.classList.toggle("anchor", +el.dataset.id === an);
 }
 function dzSelect(id, add) {
   if (!dz.multi || !dz.multi.has(dz.sel)) dz.multi = new Set(dz.sel != null ? [dz.sel] : []);
@@ -3081,7 +3085,7 @@ function dzMarquee(e, lab) { // drag on empty label space to select everything t
   const up = ev => {
     removeEventListener("pointermove", move); removeEventListener("pointerup", up); m.remove();
     if (!moved) { if (!add) dzSelect(null); return; }
-    const [l, t, w, h] = box(ev).map(v => v / s), hit = dz.D.items.filter(it => { const b = dzBox(it); return it.x < l + w && it.x + b.w > l && it.y < t + h && it.y + b.h > t; }).map(i => i.id);
+    const [l, t, w, h] = box(ev).map(v => v / s), hit = dz.D.items.filter(it => { const b = dzBox(it); return it.x < l + w && it.x + b.w > l && it.y < t + h && it.y + b.h > t; }).sort((p, q) => (p.y - q.y) || (p.x - q.x)).map(i => i.id);
     dzSelectMany(add ? [...new Set([...dzSelIds(), ...hit])] : hit);
   };
   addEventListener("pointermove", move); addEventListener("pointerup", up);
@@ -3102,7 +3106,8 @@ function dzSpin(e, it) { // drag the round handle to turn; snaps to right angles
 function dzMultiPanel(ids) {
   const btn = (ic, label, fn) => `<button type="button" class="rb" data-m="${fn}" title="${label}">${dzIcon(ic)}<span>${label}</span></button>`;
   return `<p style="margin:0 0 10px;font-weight:600">${ids.length} objects selected</p>
-    <h3>Align with each other</h3><div class="dz-mgrid">${btn("al", "Left", "left")}${btn("ac", "Centre", "center")}${btn("ar", "Right", "right")}${btn("at", "Top", "top")}${btn("am", "Middle", "middle")}${btn("ab", "Bottom", "bottom")}</div>
+    <h3>Align with each other</h3>
+    <div class="dz-f" style="margin-bottom:6px"><label class="full">Line up to<select id="dzAlignTo"><option value="first"${(dz.alignTo || "first") === "first" ? " selected" : ""}>The first object picked (stays put)</option><option value="bounds"${dz.alignTo === "bounds" ? " selected" : ""}>The outer edges of the selection</option></select></label></div><div class="dz-mgrid">${btn("al", "Left", "left")}${btn("ac", "Centre", "center")}${btn("ar", "Right", "right")}${btn("at", "Top", "top")}${btn("am", "Middle", "middle")}${btn("ab", "Bottom", "bottom")}</div>
     <h3>Space evenly</h3><div class="dz-mgrid">${btn("dh", "Across", "dx")}${btn("dv", "Down", "dy")}</div>
     <h3>Turn together</h3><div class="dz-mgrid">${btn("rotr", "90° right", "tr")}${btn("rotl", "90° left", "tl")}${btn("straight", "180°", "t2")}</div>
     <h3>Align on the label</h3><div class="dz-mgrid">${btn("ac", "Centre across", "lcenter")}${btn("am", "Middle", "lmiddle")}</div>
@@ -3120,7 +3125,8 @@ function dzProps() {
     if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
     const box = $("dzProps"); box.innerHTML = dzMultiPanel(ids) + dzObjList(); dzObjWire(); dzWarnCount();
     for (const b of box.querySelectorAll("[data-m]")) b.onclick = () => { const m = b.dataset.m; if (m === "tr") dzTurnGroup(90); else if (m === "tl") dzTurnGroup(-90); else if (m === "t2") dzTurnGroup(180); else if (m === "dx") dzDistribute("x"); else if (m === "dy") dzDistribute("y"); else if (m[0] === "l" && m !== "left") dzGroupToLabel(m); else dzAlignMany(m, ids); };
-    $("dzMDup").onclick = dzDuplicate; $("dzMDel").onclick = dzDelete; return;
+    $("dzMDup").onclick = dzDuplicate; $("dzMDel").onclick = dzDelete; $("dzAlignTo").onchange = e => { dz.alignTo = e.target.value; dzMarkSel(); };
+    return;
   } }
   if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
   const box = $("dzProps"), it = dz.D.items.find(i => i.id === dz.sel);
@@ -3404,14 +3410,17 @@ function dzObjName(it) {
 }
 function dzObjList() {
   const items = dz.D.items.slice().reverse(); // top of the stack first
-  return `<div class="dz-objs"><h3>Objects (${items.length}) · top first</h3>${items.map(it => `<button type="button" data-obj="${it.id}" aria-current="${dzSelIds().includes(it.id)}"><i>${DZ_ICON[it.type] || "•"}</i><span>${it.link ? "🔗 " : ""}${dzObjName(it).replace(/</g, "&lt;")}</span></button>`).join("") || '<p class="dz-empty">No objects yet.</p>'}</div>`;
+  return `<div class="dz-objs"><h3>Objects (${items.length}) · top first</h3>${items.map(it => `<button type="button" data-obj="${it.id}" aria-current="${dzSelIds().includes(it.id)}"><i>${DZ_ICON[it.type] || "•"}</i><span>${(dz.alignTo || "first") === "first" && it.id === dzAnchor() ? "<b style=\"color:var(--accent)\">1st · </b>" : ""}${it.link ? "🔗 " : ""}${dzObjName(it).replace(/</g, "&lt;")}</span></button>`).join("") || '<p class="dz-empty">No objects yet.</p>'}</div>`;
 }
 function dzObjWire() { for (const b of $("dzProps").querySelectorAll("[data-obj]")) b.onclick = e => dzSelect(+b.dataset.obj, e.shiftKey || e.ctrlKey || e.metaKey); }
 
 /* arrange and editing helpers */
-function dzAlignMany(where, ids) { // line objects up with each other: edges or centres of the selection
+function dzAnchor() { const ids = dzSelIds(); return ids.length > 1 && dz.multi ? [...dz.multi].find(id => ids.includes(id)) : null; } // first object picked
+function dzAlignMany(where, ids) { // line objects up: to the first object picked (it stays put), or to the selection's outer edges
   const its = ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), bs = its.map(dzBox);
-  const L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
+  let L = Math.min(...its.map(i => i.x)), R = Math.max(...its.map((i, k) => i.x + bs[k].w)), T = Math.min(...its.map(i => i.y)), B = Math.max(...its.map((i, k) => i.y + bs[k].h));
+  const a = (dz.alignTo || "first") === "first" ? its.find(i => i.id === dzAnchor()) : null;
+  if (a) { const ab = dzBox(a); L = a.x; R = a.x + ab.w; T = a.y; B = a.y + ab.h; }
   its.forEach((it, k) => { const b = bs[k];
     if (where === "left") it.x = r1(L); if (where === "right") it.x = r1(R - b.w); if (where === "center") it.x = r1((L + R) / 2 - b.w / 2);
     if (where === "top") it.y = r1(T); if (where === "bottom") it.y = r1(B - b.h); if (where === "middle") it.y = r1((T + B) / 2 - b.h / 2); });
