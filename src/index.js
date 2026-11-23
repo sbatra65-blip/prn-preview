@@ -1,3 +1,4 @@
+import { accounts, scope, aiGate, CAN_EDIT } from "./auth.js";
 // prn-preview Worker: serves LabelDesk (labeldesk.app) from ./public, plus the AI, leads and design endpoints.
 // Providers tried in order: Claude (ANTHROPIC_API_KEY), Gemini (GEMINI_API_KEY), then Workers AI as last resort.
 const CLAUDE_MODEL = "claude-sonnet-5-5";
@@ -43,7 +44,7 @@ function extractJSON(v) {
   try { return JSON.parse(v.slice(a, z + 1)); } catch { return null; }
 }
 
-async function pic2label(request, env) {
+async function pic2labelRun(request, env) {
   if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (request.method !== "POST") return json({ error: "Use POST" }, 405);
   if (env.LIMITER) {
@@ -200,13 +201,36 @@ async function designs(request, env, url) {
   if (!env.LEADS) return json({ error: "Cloud storage is not set up" }, 503);
   const key = await designKey(env);
   if (!key) return json({ error: "Cloud saving is not switched on yet (the DESIGN_KEY secret is missing)." }, 503);
-  const tok = request.headers.get("x-owner") || "";
-  if (!/^[A-Za-z0-9_-]{32,128}$/.test(tok)) return json({ error: "Missing workspace key" }, 401);
-  if (env.DESIGN_LIMITER) { const { success } = await env.DESIGN_LIMITER.limit({ key: tok }); if (!success) return json({ error: "Too many saves; wait a minute." }, 429); }
-  const owner = await sha256hex("owner:" + tok), id = url.pathname.split("/")[3] || "", m = request.method;
+  // Signed in: designs belong to the open company. Otherwise the older per-browser workspace key.
+  let sc = null; try { sc = await scope(env, request); } catch (e) {}
+  const tok = request.headers.get("x-owner") || "", id = url.pathname.split("/")[3] || "", m = request.method;
+  if (!sc && !/^[A-Za-z0-9_-]{32,128}$/.test(tok)) return json({ error: "Please sign in." , signin: true }, 401);
+  const owner = sc ? sc.owner : await sha256hex("owner:" + tok);
+  if (env.DESIGN_LIMITER) { const { success } = await env.DESIGN_LIMITER.limit({ key: owner }); if (!success) return json({ error: "Too many saves; wait a minute." }, 429); }
+  if (sc && m !== "GET" && !sc.csrf) return json({ error: "Bad request" }, 400);
+  if (sc && m !== "GET" && !(id === "backup" && m === "GET") && !CAN_EDIT.includes(sc.role)) return json({ error: "Your role can open and print designs but not change them." }, 403);
+  const roomFor = async extra => {
+    if (!sc || !sc.plan.designs) return true;
+    const r = await env.LEADS.prepare("SELECT COUNT(*) AS n FROM designs WHERE owner = ?1").bind(owner).first();
+    return r.n + extra <= sc.plan.designs;
+  };
+  const full = () => json({ error: `The ${sc.plan.name} plan keeps ${sc.plan.designs} designs. Add a licence for unlimited designs, or delete one first.`, quota: true }, 402);
+  // Move this browser's older workspace designs into the signed-in company (re-sealed for the company)
+  if (id === "adopt" && m === "POST") {
+    if (!sc) return json({ error: "Please sign in." }, 401);
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(tok)) return json({ moved: 0 });
+    const old = await sha256hex("owner:" + tok), { results } = await env.LEADS.prepare("SELECT * FROM designs WHERE owner = ?1").bind(old).all();
+    let moved = 0, skipped = 0;
+    for (const row of results) {
+      if (!await roomFor(1)) { skipped++; continue; }
+      try { const d = await unseal(key, row), sl = await seal(key, row.id, owner, d);
+        await env.LEADS.prepare("UPDATE designs SET owner = ?1, iv = ?2, data = ?3 WHERE id = ?4 AND owner = ?5").bind(owner, sl.iv, sl.data, row.id, old).run(); moved++; } catch (e) { skipped++; }
+    }
+    return json({ moved, skipped });
+  }
   // Backup: every design of this workspace in one file, encrypted and sealed by the server (any edit makes it refuse to restore)
   if (id === "backup" && m === "GET") {
-    const { results } = await env.LEADS.prepare("SELECT * FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 500").bind(owner).all();
+    const { results } = await env.LEADS.prepare("SELECT * FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 2000").bind(owner).all();
     const list = [];
     for (const row of results) { try { list.push({ id: row.id, name: row.name, updated: row.updated, design: await unseal(key, row) }); } catch (e) {} }
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -219,20 +243,21 @@ async function designs(request, env, url) {
     if (b.kind !== "design-backup" || !b.iv || !b.data) return json({ error: "That is not a backup file" }, 400);
     try { inner = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(b.iv), additionalData: new TextEncoder().encode("p2l-backup-v1") }, key, b64d(b.data)))); }
     catch (e) { return json({ error: "This backup was changed or made for another site, so it was not restored." }, 409); }
-    let added = 0, replaced = 0;
+    let added = 0, replaced = 0, skipped = 0;
     for (const d of inner.designs || []) {
       if (!d.design || !Array.isArray(d.design.items)) continue;
+      if (!await roomFor(1) && !(/^[A-Za-z0-9]{12}$/.test(d.id || "") && await env.LEADS.prepare("SELECT 1 FROM designs WHERE id = ?1 AND owner = ?2").bind(d.id, owner).first())) { skipped++; continue; }
       const mine = /^[A-Za-z0-9]{12}$/.test(d.id || "") && await env.LEADS.prepare("SELECT id FROM designs WHERE id = ?1 AND owner = ?2").bind(d.id, owner).first();
       const did = mine ? d.id : [...crypto.getRandomValues(new Uint8Array(12))].map(x => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"[x % 56]).join("");
       const sl = await seal(key, did, owner, d.design), size = JSON.stringify(d.design).length, name = String(d.name || "Restored label").slice(0, 80);
       if (mine) { await env.LEADS.prepare("UPDATE designs SET name = ?1, iv = ?2, data = ?3, size = ?4, updated = datetime('now') WHERE id = ?5 AND owner = ?6").bind(name, sl.iv, sl.data, size, did, owner).run(); replaced++; }
       else { await env.LEADS.prepare("INSERT INTO designs (id, owner, name, iv, data, size) VALUES (?1,?2,?3,?4,?5,?6)").bind(did, owner, name, sl.iv, sl.data, size).run(); added++; }
     }
-    return json({ ok: true, added, replaced });
+    return json({ ok: true, added, replaced, skipped });
   }
-  if (id && id !== "backup" && !/^[A-Za-z0-9]{12}$/.test(id)) return json({ error: "Bad design id" }, 400);
+  if (id && id !== "backup" && id !== "adopt" && !/^[A-Za-z0-9]{12}$/.test(id)) return json({ error: "Bad design id" }, 400);
   if (!id && m === "GET") {
-    const { results } = await env.LEADS.prepare("SELECT id, name, size, updated FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 200").bind(owner).all();
+    const { results } = await env.LEADS.prepare("SELECT id, name, size, updated FROM designs WHERE owner = ?1 ORDER BY updated DESC LIMIT 2000").bind(owner).all();
     return json({ designs: results });
   }
   if (m === "GET" || m === "DELETE") {
@@ -255,6 +280,7 @@ async function designs(request, env, url) {
       await env.LEADS.prepare("UPDATE designs SET name = ?1, iv = ?2, data = ?3, size = ?4, updated = datetime('now') WHERE id = ?5 AND owner = ?6").bind(name, sl.iv, sl.data, text.length, id, owner).run();
       return json({ id, name });
     }
+    if (!await roomFor(1)) return full();
     const nid = [...crypto.getRandomValues(new Uint8Array(12))].map(b => "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"[b % 56]).join("");
     const sl = await seal(key, nid, owner, b.design);
     await env.LEADS.prepare("INSERT INTO designs (id, owner, name, iv, data, size) VALUES (?1,?2,?3,?4,?5,?6)").bind(nid, owner, name, sl.iv, sl.data, text.length).run();
@@ -295,7 +321,7 @@ async function geminiText(env, model, system, prompt) {
   const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
   return parts.filter(p => p.text && !p.thought).map(p => p.text).join("");
 }
-async function designAI(request, env) {
+async function designAIRun(request, env) {
   if (request.method !== "POST") return json({ error: "Use POST" }, 405);
   if (!env.GEMINI_API_KEY) return json({ error: "AI is not set up on this site" }, 503);
   if (env.LIMITER) { const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") || "anon" }); if (!success) return json({ error: "Too many requests; wait a minute." }, 429); }
@@ -314,6 +340,21 @@ async function designAI(request, env) {
   return json({ error: "AI could not design that just now: " + lastErr.slice(0, 160) }, 502);
 }
 
+// AI is counted per company: sign-in required, monthly allowance by plan (see auth.js PLANS).
+async function aiCounted(request, env, run) {
+  if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
+  if (!env.DESIGN_KEY) return run(request, env); // sign-in not switched on yet: AI stays open, limited per IP as before
+  let g; try { g = await aiGate(env, request); } catch (e) { g = { error: "Sign-in is being set up; AI is not available yet.", status: 503 }; }
+  if (!g.ok) return json({ error: g.error, signin: g.status === 401, quota: g.status === 402 }, g.status);
+  const r = await run(request, env);
+  if (r.status !== 200) return r;
+  await g.count();
+  const h = new Headers(r.headers); h.set("x-ai-left", String(g.left));
+  return new Response(r.body, { status: 200, headers: h });
+}
+const pic2label = (r, e) => aiCounted(r, e, pic2labelRun);
+const designAI = (r, e) => aiCounted(r, e, designAIRun);
+
 const APP_HOST = "labeldesk.app", OLD_HOST = "labels.infinitesolutions.co.in";
 
 export default {
@@ -329,6 +370,7 @@ export default {
     if (url.pathname === "/api/leads") return listLeads(request, env);
     if (url.pathname === "/api/design-ai") return designAI(request, env);
     if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
+    if (url.pathname.startsWith("/api/auth/") || url.pathname.startsWith("/api/company") || url.pathname.startsWith("/api/admin/")) return accounts(request, env, url);
     if (url.pathname.startsWith("/api/")) return json({ error: "Not found" }, 404);
     return env.ASSETS.fetch(request);
   },

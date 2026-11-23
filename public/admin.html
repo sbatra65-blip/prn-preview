@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<title>LabelDesk admin: companies and licences</title>
+<style>
+:root { --bg: #f5f6f8; --s: #fff; --ink: #101828; --mu: #5b6475; --line: #e3e6ec; --ac: #c2410c; --acs: #fff1e8; }
+* { box-sizing: border-box; } body { margin: 0; font: 14px/1.5 Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+header { display: flex; align-items: center; gap: 10px; padding: 14px 24px; background: var(--s); border-bottom: 1px solid var(--line); }
+.mark { width: 30px; height: 30px; border-radius: 8px; background: var(--ac); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+main { max-width: 1200px; margin: 0 auto; padding: 20px 24px 60px; display: grid; gap: 18px; }
+section { background: var(--s); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+h1 { font-size: 17px; margin: 0; } h2 { font-size: 15px; margin: 0 0 12px; }
+input, select, button { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--s); color: var(--ink); }
+button { cursor: pointer; font-weight: 600; } button.p { background: var(--ac); border-color: var(--ac); color: #fff; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; } label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--mu); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; } th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); } th { color: var(--mu); font-size: 12px; }
+.keys { font: 600 14px ui-monospace, monospace; background: var(--acs); border-radius: 8px; padding: 12px; white-space: pre; overflow: auto; }
+.msg { color: var(--mu); } .pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--bg); border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header><span class="mark">LD</span><h1>LabelDesk admin</h1><span class="msg" id="msg" style="margin-left:auto">Enter the admin key (Worker secret ADMIN_KEY).</span></header>
+<main>
+<section><div class="row"><label>Admin key<input id="key" type="password" size="34" autocomplete="off"></label><button class="p" id="go">Open</button></div></section>
+<section><h2>Make licence keys</h2>
+  <div class="row">
+    <label>Plan<select id="plan"><option value="starter">Starter (2 users, 1 printer, 100 AI/month)</option><option value="business" selected>Business (10 users, 5 printers, 500 AI/month)</option><option value="automation">Automation (25 users, 15 printers, 2,000 AI/month)</option><option value="enterprise">Enterprise</option></select></label>
+    <label>Months<input id="months" type="number" value="12" min="1" max="60" style="width:80px"></label>
+    <label>Users (optional)<input id="users" type="number" min="1" style="width:100px" placeholder="plan"></label>
+    <label>Printers (optional)<input id="printers" type="number" min="1" style="width:110px" placeholder="plan"></label>
+    <label>How many<input id="count" type="number" value="1" min="1" max="50" style="width:80px"></label>
+    <label>Note (customer, invoice…)<input id="note" size="28"></label>
+    <button class="p" id="make">Make keys</button>
+  </div>
+  <p class="msg">Keys are shown only once. Give one to the customer; they apply it under Account → Add a licence.</p>
+  <div id="keys"></div>
+</section>
+<section><h2>Companies</h2><div id="cos" class="msg">—</div></section>
+<section><h2>Licence keys issued</h2><div id="lics" class="msg">—</div></section>
+</main>
+<script>
+const $ = id => document.getElementById(id), esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let key = ""; try { key = sessionStorage.getItem("ld-admin") || ""; } catch (e) {} $("key").value = key;
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "x-admin-key": key, "x-ld": "1", "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Error " + r.status); return j;
+}
+async function load() {
+  key = $("key").value.trim(); try { sessionStorage.setItem("ld-admin", key); } catch (e) {}
+  try {
+    const [c, l] = await Promise.all([api("/api/admin/companies"), api("/api/admin/licences")]);
+    $("msg").textContent = `${c.companies.length} companies · ${l.licences.length} licence keys`;
+    $("cos").innerHTML = c.companies.length ? `<table><thead><tr><th>Code</th><th>Name</th><th>Owner</th><th>Plan now</th><th>Valid until</th><th>Users</th><th>Designs</th><th>Created</th><th>Set plan</th></tr></thead><tbody>${c.companies.map(x => `<tr><td><b>${esc(x.code)}</b></td><td>${esc(x.name)}${x.gstin ? `<br><span class="msg">${esc(x.gstin)}</span>` : ""}</td><td>${esc(x.owner_email)}</td><td>${esc(x.effective.name)}${x.effective.lapsed ? ' <span class="pill">lapsed</span>' : ""}</td><td>${esc(x.valid_until || "")}</td><td>${x.users}</td><td>${x.designs}</td><td>${esc((x.created || "").slice(0, 10))}</td>
+      <td><div class="row"><select data-p="${esc(x.id)}">${["free", "starter", "business", "automation", "enterprise"].map(p => `<option${p === x.plan ? " selected" : ""}>${p}</option>`).join("")}</select><input type="date" data-d="${esc(x.id)}" value="${esc(x.valid_until || "")}"><button data-s="${esc(x.id)}">Save</button></div></td></tr>`).join("")}</tbody></table>` : "No companies yet.";
+    $("lics").innerHTML = l.licences.length ? `<table><thead><tr><th>Ends with</th><th>Plan</th><th>Months</th><th>Users / printers</th><th>Note</th><th>Made</th><th>Used by</th></tr></thead><tbody>${l.licences.map(x => `<tr><td>…${esc(x.hint)}</td><td>${esc(x.plan)}</td><td>${x.months}</td><td>${x.users_max || "plan"} / ${x.printers_max || "plan"}</td><td>${esc(x.note)}</td><td>${esc((x.created || "").slice(0, 10))}</td><td>${x.company_code ? `${esc(x.company_code)} · ${esc(x.company_name)} (${esc((x.redeemed_at || "").slice(0, 10))})` : '<span class="pill">unused</span>'}</td></tr>`).join("")}</tbody></table>` : "None yet.";
+  } catch (e) { $("msg").textContent = e.message; }
+}
+$("go").onclick = load; $("key").onkeydown = e => { if (e.key === "Enter") load(); };
+$("make").onclick = async () => {
+  try { const j = await api("/api/admin/licences", { plan: $("plan").value, months: +$("months").value, users_max: +$("users").value || null, printers_max: +$("printers").value || null, count: +$("count").value, note: $("note").value });
+    $("keys").innerHTML = `<div class="keys">${j.keys.map(esc).join("\n")}</div><button id="cp" style="margin-top:8px">Copy keys</button>`;
+    $("cp").onclick = () => navigator.clipboard.writeText(j.keys.join("\n")); load();
+  } catch (e) { $("msg").textContent = e.message; }
+};
+$("cos").onclick = async e => { const id = e.target.dataset.s; if (!id) return;
+  try { await api("/api/admin/company", { id, plan: document.querySelector(`[data-p="${id}"]`).value, valid_until: document.querySelector(`[data-d="${id}"]`).value || null }); load(); } catch (x) { $("msg").textContent = x.message; } };
+if (key) load();
+</script>
+</body>
+</html>
