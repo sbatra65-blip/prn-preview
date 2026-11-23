@@ -228,7 +228,23 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
 .dz-label.grid { background-image: linear-gradient(#eef1f5 1px, transparent 1px), linear-gradient(90deg, #eef1f5 1px, transparent 1px); }
 .dz-o { position: absolute; cursor: move; user-select: none; touch-action: none; color: #000; }
 .dz-o.sel { outline: 1.5px dashed var(--accent); outline-offset: 1px; z-index: 2; }
-.dz-o.over { outline: 1.5px solid var(--bad); }
+.dz-o.over { outline: 2px solid #dc2626; outline-offset: 1px; }
+.dz-o.head { outline: 2px solid #7c3aed; outline-offset: 1px; }
+.dz-o.edge { outline: 1.5px dashed #d97706; outline-offset: 1px; }
+.dz-o.over .h { background: #dc2626; } .dz-o.over .rh { border-color: #dc2626; } .dz-o.over .rh::after { background: #dc2626; }
+.dz-o.head .h { background: #7c3aed; } .dz-o.head .rh { border-color: #7c3aed; } .dz-o.head .rh::after { background: #7c3aed; }
+.dz-o.edge .h { background: #d97706; } .dz-o.edge .rh { border-color: #d97706; } .dz-o.edge .rh::after { background: #d97706; }
+.dz-o .em { position: absolute; pointer-events: none; z-index: 3; }
+.dz-o.over .em { background: #dc2626; } .dz-o.head .em { background: #7c3aed; } .dz-o.edge .em { background: #d97706; }
+.dz-o .em-l { left: -6px; top: 0; bottom: 0; width: 4px; border-radius: 2px; }
+.dz-o .em-r { right: -6px; top: 0; bottom: 0; width: 4px; border-radius: 2px; }
+.dz-o .em-t { top: -6px; left: 0; right: 0; height: 4px; border-radius: 2px; }
+.dz-o .em-b { bottom: -6px; left: 0; right: 0; height: 4px; border-radius: 2px; }
+.dz-label.ghost .dz-o.over, .dz-label.ghost .dz-o.head { opacity: 1; }
+#dzWarn .wk { font-size: 15px; line-height: 1; } #dzWarn .off { color: #dc2626; } #dzWarn .head { color: #7c3aed; } #dzWarn .edge { color: #d97706; }
+.dz-objs button[data-st="off"] { color: #b91c1c; } .dz-objs button[data-st="off"] i { color: #dc2626; }
+.dz-objs button[data-st="head"] { color: #6d28d9; } .dz-objs button[data-st="head"] i { color: #7c3aed; }
+.dz-objs button[data-st="edge"] i { color: #d97706; }
 .dz-o .t { white-space: pre; font-family: "Roboto Condensed", "Arial Narrow", sans-serif; font-weight: 700; transform-origin: 0 0; display: block; }
 .dz-o canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 .dz-o .h { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; background: var(--accent); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; display: none; }
@@ -570,6 +586,7 @@ dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; ma
     <div class="dz-main">
       <div class="dz-bar">
         <span id="dzInfo" style="font-size:13px;color:var(--muted)"></span>
+        <span id="dzWarn" style="font-size:13px;color:var(--ink)"></span>
         <span class="sp"></span>
         <label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="dzGrid" checked> Grid</label>
         <select id="dzSnap" aria-label="Snap"><option value="0">No snap</option><option value="0.5" selected>Snap 0.5 mm</option><option value="1">Snap 1 mm</option></select>
@@ -2481,14 +2498,34 @@ function dzDraw() {
     const lab = document.createElement("div");
     lab.className = "dz-label" + (c ? " ghost" : " edit") + ($("dzGrid").checked ? " grid" : "");
     Object.assign(lab.style, { left: (D.edge + c * (lw + D.hgap)) * s + "px", top: D.vgap * s + "px", width: lw * s + "px", height: D.h * s + "px", backgroundSize: `${s * 5}px ${s * 5}px` });
-    for (const it of D.items) lab.append(dzEl(it, s, !c));
+    for (const it of D.items) lab.append(dzEl(it, s, !c, c));
     if (!c) { lab.id = "dzLab"; lab.addEventListener("pointerdown", e => { if (e.target === lab) dzSelect(null); }); }
     paper.append(lab);
   }
   $("dzInfo").textContent = `${D.across} × ${r1(lw)} × ${D.h} mm on ${D.paper} mm liner · ${DZ_LANG_NAME[D.lang].split(" · ")[0]} ${D.dpi} dpi`;
 }
-function dzEl(it, s, live) {
-  const el = document.createElement("div"); el.className = "dz-o" + (live && dz.sel === it.id ? " sel" : ""); el.dataset.id = it.id;
+// "off": past the label edge (red) · "head": beyond the printhead width (purple) · "edge": within 1 mm of the edge (amber)
+function dzFit2Label(it, col = 0) {
+  const D = dz.D, lw = dzLW(), b = dzBox(it), e = 0.05, sides = [];
+  if (it.x < -e) sides.push("l"); if (it.y < -e) sides.push("t"); if (it.x + b.w > lw + e) sides.push("r"); if (it.y + b.h > D.h + e) sides.push("b");
+  if (sides.length) return { state: "off", sides };
+  const absR = D.edge + col * (lw + D.hgap) + it.x + b.w;
+  if (absR > D.pw + e) return { state: "head", sides: ["r"] };
+  const m = 1, near = [];
+  if (it.x < m) near.push("l"); if (it.y < m) near.push("t"); if (it.x + b.w > lw - m) near.push("r"); if (it.y + b.h > D.h - m) near.push("b");
+  return near.length && it.type !== "line" && it.type !== "box" ? { state: "edge", sides: near } : { state: "ok", sides: [] };
+}
+function dzMark(el, it) {
+  const f = dzFit2Label(it, +el.dataset.col || 0);
+  el.classList.remove("over", "head", "edge"); for (const m of el.querySelectorAll(".em")) m.remove();
+  if (f.state === "ok") return f;
+  el.classList.add(f.state === "off" ? "over" : f.state);
+  el.title = f.state === "off" ? "Runs off the label: it will be cut off" : f.state === "head" ? "Beyond the printhead width: this part will not print" : "Closer than 1 mm to the label edge: it may be cut when the label shifts";
+  for (const sd of f.sides) { const m = document.createElement("span"); m.className = "em em-" + sd; el.append(m); }
+  return f;
+}
+function dzEl(it, s, live, col = 0) {
+  const el = document.createElement("div"); el.className = "dz-o" + (live && dz.sel === it.id ? " sel" : ""); el.dataset.id = it.id; el.dataset.col = col;
   dzPaint(el, it, s);
   if (live) {
     const h = document.createElement("span"); h.className = "h"; el.append(h);
@@ -2501,7 +2538,7 @@ function dzPaint(el, it, s) {
   const lw = dzLW(), D = dz.D;
   const dm = dzDims(it), bx = dzBox(it);
   Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: Math.max(1, bx.w * s) + "px", height: Math.max(1, bx.h * s) + "px", border: "", background: "" });
-  el.classList.toggle("over", it.x < -0.01 || it.y < -0.01 || it.x + bx.w > lw + 0.05 || it.y + bx.h > D.h + 0.05);
+
   const keep = el.querySelector(".h"), keepR = el.querySelector(".rh");
   if (it.type === "shape") {
     dzEnsureFont(it); const pr = Math.min(3, (window.devicePixelRatio || 1) * 1.5), c = dzRenderItem(it, s * pr, "all", true); c.style.cssText = "width:100%;height:100%;image-rendering:auto"; el.replaceChildren(c);
@@ -2546,6 +2583,16 @@ function dzPaint(el, it, s) {
   }
   if (keep) el.append(keep);
   if (keepR) el.append(keepR);
+  dzMark(el, it); dzWarnCount();
+}
+function dzWarnCount() { // summary in the canvas bar
+  clearTimeout(dzWarnCount.t); dzWarnCount.t = setTimeout(() => {
+    if (!dz.D || !$("dzWarn")) return; const n = { off: 0, head: 0, edge: 0 };
+    for (const it of dz.D.items) for (let c = 0; c < dz.D.across; c++) { const st = dzFit2Label(it, c).state; if (st !== "ok") { n[st]++; break; } }
+    const parts = []; if (n.off) parts.push(`<span class="wk off">●</span> ${n.off} off the label`); if (n.head) parts.push(`<span class="wk head">●</span> ${n.head} beyond printhead`); if (n.edge) parts.push(`<span class="wk edge">●</span> ${n.edge} within 1 mm of edge`);
+    $("dzWarn").innerHTML = parts.join(" · ");
+    for (const b of document.querySelectorAll("#dzProps [data-obj]")) { const it = dz.D.items.find(i => i.id === +b.dataset.obj); if (!it) continue; let st = "ok"; for (let c = 0; c < dz.D.across && st === "ok"; c++) st = dzFit2Label(it, c).state; b.dataset.st = st; }
+  }, 30);
 }
 const DZ_FONT = k => `700 ${k}px "Roboto Condensed", "Arial Narrow", sans-serif`;
 function dzRot(it) { return it.type === "line" || it.type === "box" ? 0 : (((+it.rot || 0) % 360) + 360) % 360; }
@@ -2730,7 +2777,7 @@ function dzGrab(e, it, resize) {
     else { it.w = Math.max(2, sn(o.w + dx)); it.h = Math.max(2, sn(o.h + dy)); }
     for (const el of document.querySelectorAll(`#dzPaperEl .dz-o[data-id="${it.id}"]`)) {
       if (resize && it.type !== "line" && it.type !== "box" && it.type !== "image") dzPaint(el, it, s);
-      else { const b = dzBox(it); Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: b.w * s + "px", height: b.h * s + "px" }); }
+      else { const b = dzBox(it); Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: b.w * s + "px", height: b.h * s + "px" }); dzMark(el, it); dzWarnCount(); }
     }
   };
   const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); dzRefresh(it); dzProps(); dzSave(); };
@@ -2751,7 +2798,7 @@ function dzSpin(e, it) { // drag the round handle to turn; snaps to right angles
 /* properties */
 function dzProps() {
   const box = $("dzProps"), it = dz.D.items.find(i => i.id === dz.sel);
-  if (!it) { box.innerHTML = '<p class="dz-empty">Select an object on the label, or add one from the left.</p>' + dzObjList(); dzObjWire(); return; }
+  if (!it) { box.innerHTML = '<p class="dz-empty">Select an object on the label, or add one from the left.</p>' + dzObjList(); dzObjWire(); dzWarnCount(); return; }
   const f = [], num = (k, label, step = 0.5, min = 0) => f.push(`<label>${label}<input data-k="${k}" type="number" step="${step}" min="${min}" value="${r1(it[k] ?? 0)}"></label>`);
   num("x", "X, mm", 0.5, -50); num("y", "Y, mm", 0.5, -50);
   if (it.type === "text" || it.type === "shape") {
@@ -2844,7 +2891,7 @@ function dzProps() {
   });
   for (const inp of box.querySelectorAll("[data-c]")) inp.addEventListener("input", () => { it.contact = Object.assign({}, it.contact, { [inp.dataset.c]: inp.value }); it.data = dzContact(it); dzRefresh(it); dzSave(); });
   $("dzDel").onclick = () => dzDelete(); $("dzDup").onclick = () => dzDuplicate();
-  box.insertAdjacentHTML("beforeend", dzObjList()); dzObjWire();
+  box.insertAdjacentHTML("beforeend", dzObjList()); dzObjWire(); dzWarnCount();
   $("dzCenter").onclick = () => { it.x = r1((dzLW() - dzBox(it).w) / 2); dzRefresh(it); dzProps(); dzSave(); };
   if ($("dzRot")) for (const b of $("dzRot").querySelectorAll("button")) b.onclick = () => { const want = +b.dataset.r; dzTurn(it, want - dzRot(it)); dzRefresh(it); dzProps(); dzSave(); };
   const setAng = (v, done) => { v = +v || 0; dzTurn(it, v - dzRot(it)); dzRefresh(it); dzSave(); if (done) dzProps(); else { $("dzAngle").value = dzRot(it); $("dzAngleR").value = Math.round(dzRot(it)); for (const b of $("dzRot").querySelectorAll("button")) b.setAttribute("aria-pressed", +b.dataset.r === dzRot(it)); } };
