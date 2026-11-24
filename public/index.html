@@ -3251,7 +3251,7 @@ function dzRenderItem(it, k, part, guide) {
         const by = hri === "above" ? H - bh : 0, off = Math.max(0, Math.round((W - bw) / 2));
         x.drawImage(b, off, by, bw, bh);
         if (live && ink.toLowerCase() !== "#000000") { x.save(); x.globalCompositeOperation = "source-in"; x.fillStyle = ink; x.fillRect(0, by, W, bh); x.restore(); }
-        if (hri !== "none") { x.fillStyle = ink; x.font = dzFontCss({ font: it.hriFont, bold: it.hriBold }, Math.max(4, th)); x.textAlign = "center"; x.textBaseline = hri === "above" ? "top" : "top"; x.fillText(dzHriText(it), W / 2, hri === "above" ? 0 : bh + th * 0.08); }
+        if (hri !== "none") { x.fillStyle = ink; x.font = dzFontCss({ font: it.hriFont, bold: it.hriBold }, Math.max(4, th)); { const tw = x.measureText(dzHriText(it)).width; if (tw > W * 0.98) x.font = dzFontCss({ font: it.hriFont, bold: it.hriBold }, Math.max(4, th * W * 0.98 / tw)); } x.textAlign = "center"; x.textBaseline = hri === "above" ? "top" : "top"; x.fillText(dzHriText(it), W / 2, hri === "above" ? 0 : bh + th * 0.08); }
       }
     }
   }
