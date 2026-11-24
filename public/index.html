@@ -2980,18 +2980,40 @@ function dzZoomAt(z, cx, cy) {
    double-tap empty canvas = zoom 2x / fit · double-tap an object = edit its text or data · long-press an object = actions menu
    two-finger tap = undo · three-finger tap = redo · three-finger swipe up = print · swipe left/right with 2 fingers on a label with data = next/previous record */
 /* Actual size: 1 mm on screen = 1 mm on the label. Screens differ, so the user can calibrate once with a bank card (85.6 mm). */
-function dzPxPerMm() { const v = +store.get("ld-pxmm"); if (v > 1 && v < 30) return v;
-  const touch = matchMedia("(pointer: coarse)").matches, w = Math.min(screen.width, screen.height); return touch ? (w < 500 ? 6.2 : 5.1) : 96 / 25.4; } // guesses until calibrated
+/* What this screen really is. Browsers do not report physical size, so: Apple devices are recognised from their screen
+   in points and pixel ratio (exact ppi), computers use the resolution plus the diagonal the user picks, and anything
+   else uses a typical value until calibrated. */
+const LD_APPLE = [ // [css width, css height, pixel ratio, CSS px per inch, name]
+  [320, 568, 2, 163, "iPhone SE (1st gen)"], [375, 667, 2, 163, "iPhone SE / 8"], [414, 736, 3, 153.7, "iPhone 8 Plus"], [375, 812, 3, 159, "iPhone X / XS / 11 Pro / 12 mini"],
+  [414, 896, 2, 163, "iPhone XR / 11"], [414, 896, 3, 152.7, "iPhone XS Max / 11 Pro Max"], [390, 844, 3, 153.3, "iPhone 12 / 13 / 14"], [428, 926, 3, 152.7, "iPhone 12/13 Pro Max, 14 Plus"],
+  [393, 852, 3, 153.3, "iPhone 14 Pro / 15 / 16"], [430, 932, 3, 153.3, "iPhone 14 Pro Max / 15 Plus / 16 Plus"], [402, 874, 3, 153.3, "iPhone 16 Pro / 17"], [440, 956, 3, 153.3, "iPhone 16 Pro Max / 17 Pro Max"],
+  [744, 1133, 2, 163, "iPad mini (6th gen)"], [768, 1024, 2, 132, "iPad 9.7-inch"], [810, 1080, 2, 132, "iPad 10.2-inch"], [820, 1180, 2, 132, "iPad 10.9-inch / Air"], [834, 1112, 2, 132, "iPad Pro 10.5-inch"],
+  [834, 1194, 2, 132, "iPad Pro 11-inch"], [834, 1210, 2, 132, "iPad Pro 11-inch (M4)"], [1024, 1366, 2, 132, "iPad Pro 12.9-inch"], [1032, 1376, 2, 132, "iPad Pro 13-inch"]];
+function dzScreenInfo() {
+  const w = Math.min(screen.width, screen.height), h = Math.max(screen.width, screen.height), dpr = devicePixelRatio || 1, touch = matchMedia("(pointer: coarse)").matches;
+  const apple = /iPhone|iPad|Macintosh/.test(navigator.userAgent) && touch ? LD_APPLE.find(a => a[0] === w && a[1] === h && Math.abs(a[2] - dpr) < 0.6) : null;
+  return { w, h, dpr, touch, physW: Math.round(screen.width * dpr), physH: Math.round(screen.height * dpr), apple };
+}
+function dzScreenGuess() { // { pxmm, how, exact }
+  const si = dzScreenInfo(), inch = +store.get("ld-screen-in");
+  if (si.apple) return { pxmm: si.apple[3] / 25.4, how: si.apple[4], exact: true };
+  if (inch > 3 && inch < 100) { const diagPx = Math.hypot(si.physW, si.physH), ppi = diagPx / inch; return { pxmm: ppi / si.dpr / 25.4, how: `${inch}-inch screen at ${si.physW} × ${si.physH}`, exact: true }; }
+  if (si.touch) return { pxmm: si.w < 500 ? 160 / 25.4 : 135 / 25.4, how: si.w < 500 ? "typical phone" : "typical tablet", exact: false };
+  return { pxmm: 96 / 25.4, how: "standard 96 dpi screen", exact: false };
+}
+function dzPxPerMm() { const v = +store.get("ld-pxmm"); if (v > 1 && v < 30) return v; return dzScreenGuess().pxmm; }
 function dzActual() {
-  if (!store.get("ld-pxmm") && matchMedia("(pointer: coarse)").matches) return dzCalibrate(true);
+  const g = dzScreenGuess();
+  if (!store.get("ld-pxmm") && !g.exact) return dzCalibrate(true);
   const base = dzScale() / dz.zoom; dzZoomAt(dzPxPerMm() / base); dz.actual = true;
-  toast(`Actual size: 1 mm on screen = 1 mm on the label${store.get("ld-pxmm") ? "" : " (approximate: View → Calibrate screen for exact size)"}`);
+  toast(`Actual size · ${store.get("ld-pxmm") ? "calibrated screen" : g.how}`);
 }
 function dzCalibrate(thenActual) {
   let d = $("dzCalDlg"); if (!d) { d = document.createElement("dialog"); d.id = "dzCalDlg"; d.style.cssText = "width:min(560px,96vw);max-height:92dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
   let v = dzPxPerMm();
   d.innerHTML = `<div class="dlg-head"><div><h2>Calibrate screen size</h2><div class="sub">So “Actual size” shows labels at their real size on this screen.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
-    <div style="padding:16px 20px"><p style="margin:0 0 12px" id="dzCalTip"></p>
+    <div style="padding:16px 20px"><div id="dzCalScr" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:14px"></div>
+    <b style="font-size:14px">Fine-tune with a card</b><p style="margin:4px 0 12px" id="dzCalTip"></p>
     <div style="overflow:hidden;padding:4px 0"><div id="dzCalCard" style="border:2px solid #c2410c;border-radius:3.2mm;background:repeating-linear-gradient(45deg,#fff7ed 0 8px,#ffedd5 8px 16px);display:grid;place-items:center;font:600 14px Inter,system-ui,sans-serif;color:#9a3412">85.6 × 54 mm</div></div>
     <input type="range" id="dzCalR" min="2" max="12" step="0.01" style="width:100%;margin:14px 0 6px">
     <div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn sm" id="dzCalM">−</button><button type="button" class="btn sm" id="dzCalP">+</button><span class="dz-cap" id="dzCalV" style="flex:1;margin:0"></span>
@@ -3003,10 +3025,18 @@ function dzCalibrate(thenActual) {
       : "Hold a ruler against the screen, then move the slider until the bar is exactly 50 mm long.";
     r.value = v; d.querySelector("#dzCalV").textContent = `${v.toFixed(2)} px per mm`; };
   r.oninput = () => { v = +r.value; show(); }; d.querySelector("#dzCalM").onclick = () => { v = Math.max(2, v - 0.02); show(); }; d.querySelector("#dzCalP").onclick = () => { v = Math.min(12, v + 0.02); show(); };
-  d.querySelector("#dzCalReset").onclick = () => { store.set("ld-pxmm", ""); v = dzPxPerMm(); show(); };
+  d.querySelector("#dzCalReset").onclick = () => { store.set("ld-pxmm", ""); store.set("ld-screen-in", ""); v = dzPxPerMm(); show(); scr(); };
   d.querySelector("#dzCalOk").onclick = () => { store.set("ld-pxmm", String(v.toFixed(3))); d.close(); toast("Screen calibrated"); if (thenActual) dzActual(); };
   d.querySelector(".x").onclick = () => { d.close(); if (thenActual) { store.set("ld-pxmm", store.get("ld-pxmm") || ""); const base = dzScale() / dz.zoom; dzZoomAt(dzPxPerMm() / base); toast("Actual size (approximate)"); } };
-  show(); d.showModal();
+  const scr = () => { const si = dzScreenInfo(), g = dzScreenGuess(), box = d.querySelector("#dzCalScr"), sizes = [10.1, 11.6, 12.5, 13.3, 14, 15.6, 16, 17.3, 18.5, 19.5, 21.5, 23.8, 24, 27, 32, 34, 43];
+    box.innerHTML = `<div><b>This screen:</b> ${si.physW} × ${si.physH} pixels${si.dpr !== 1 ? ` · ${Math.round(si.dpr * 100)}% scaling` : ""}</div>
+      ${si.apple ? `<div style="margin-top:4px;color:#15803d">Recognised as <b>${si.apple[4]}</b>: actual size is exact, no card needed.</div>`
+      : si.touch ? `<div style="margin-top:4px;color:var(--muted)">Phones and tablets other than iPhone/iPad do not report their screen size: use the card below once.</div>`
+      : `<label style="display:flex;gap:8px;align-items:center;margin-top:6px">Screen size (diagonal)<select id="dzCalIn" style="font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:8px"><option value="">Choose…</option>${sizes.map(n => `<option value="${n}"${+store.get("ld-screen-in") === n ? " selected" : ""}>${n} inch</option>`).join("")}<option value="other">Other…</option></select></label>
+         <div class="dz-cap" style="margin:4px 0 0">Laptops: usually 13.3, 14 or 15.6 inch. Monitors: printed on the box or in the model name (e.g. “24” in E2422H).</div>`}`;
+    const sel = box.querySelector("#dzCalIn"); if (sel) sel.onchange = () => { let n = sel.value; if (n === "other") n = prompt("Screen diagonal in inches, e.g. 15.6") || ""; if (!(+n > 3)) return; store.set("ld-screen-in", String(+n)); v = dzScreenGuess().pxmm; show(); scr(); };
+  };
+  scr(); show(); d.showModal();
 }
 addEventListener("keydown", e => { // Del / Backspace deletes the selection even when focus is outside the designer box
   if (e.key !== "Delete" && e.key !== "Backspace") return; if (!$("dzDlg").open || dz.sel == null || e.defaultPrevented) return;
