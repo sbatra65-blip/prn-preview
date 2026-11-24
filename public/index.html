@@ -241,7 +241,7 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-label.edit { outline: 2px solid var(--accent); outline-offset: 0; overflow: visible; }
 .dz-label.grid { background-image: linear-gradient(#eef1f5 1px, transparent 1px), linear-gradient(90deg, #eef1f5 1px, transparent 1px); }
 .dz-o { position: absolute; cursor: move; user-select: none; touch-action: none; color: #000; }
-.dz-o.sel { outline: 1.5px dashed var(--accent); outline-offset: 1px; z-index: 2; }
+.dz-o.sel { outline: 1px solid var(--accent); outline-offset: 0; z-index: 2; border: 0; border-radius: 0; padding: 0; background: none; font-size: inherit; color: #000; box-shadow: none; } /* .sel is also the site-wide select style: undo it here */
 .dz-o.over { outline: 2px solid #dc2626; outline-offset: 1px; }
 .dz-o.cd-bad { animation: dzCdBlink 0.9s steps(2, start) infinite; outline: 2.5px solid #dc2626; outline-offset: 2px; }
 .dz-o.cd-bad::after { content: "Check digit"; position: absolute; left: 0; top: -18px; font: 600 11px var(--font); color: #fff; background: #dc2626; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
@@ -278,7 +278,7 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-o.np.sel, .dz-o.parked.sel { opacity: .75; }
 .dz-o .t { white-space: pre; font-family: "Roboto Condensed", "Arial Narrow", sans-serif; font-weight: 700; transform-origin: 0 0; display: block; }
 .dz-o canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-.dz-o .h { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; background: var(--accent); border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; display: none; }
+.dz-o .h { position: absolute; right: -5px; bottom: -5px; width: 9px; height: 9px; background: var(--accent); border: 1.5px solid #fff; border-radius: 0; cursor: nwse-resize; display: none; }
 .dz-o.sel .h { display: block; }
 body.appmode > .topbar, body.appmode > .wrap { display: none !important; }
 body.appmode dialog.dz[open] { position: fixed; inset: 0; z-index: 40; border: 0; }
