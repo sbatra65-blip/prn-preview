@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LabelDesk: cloud label designer, PRN viewer and printer file converter</title>
 <meta name="description" content="Preview TSPL, ZPL, EPL2, PGL, DPL, Fingerprint, SBPL and CPCL label files at 203, 300 or 600 dpi. Turn pictures into PRN with AI. By Infinite Solutions.">
 <link rel="canonical" href="https://labeldesk.app/">
@@ -199,7 +199,7 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
   .vbar .tools { width: 100%; }
 }
 /* ---------------- designer ---------------- */
-dialog.dz { width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0; border-radius: 0; border: 0; }
+dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-height: 100vh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; }
 .dz-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .dz-head h2 { font: 600 18px var(--font-head); margin: 0 auto 0 0; }
 .dz-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr 280px; }
@@ -374,7 +374,40 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
   .dz-head h2 { flex-basis: 100%; }
 }
 /* ---------- app shell: modern software look ---------- */
-body.appmode { background: #eef0f4; }
+body.appmode { background: #eef0f4; overflow: hidden; overscroll-behavior: none; }
+/* ---------- phones: compact ribbon, one-line AI bar, big canvas, properties as a bottom sheet ---------- */
+.dz-sheet-h { display: none; }
+@media (max-width: 760px) {
+  dialog.dz input, dialog.dz select, dialog.dz textarea, dialog input, dialog select, dialog textarea { font-size: 16px !important; } /* iPhone zooms into anything smaller */
+  .dz-ribbon .rt { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; padding: 4px 8px 0 !important; -webkit-overflow-scrolling: touch; }
+  .dz-ribbon .rt::-webkit-scrollbar, .dz-ribbon .rbody::-webkit-scrollbar, .dz-bar::-webkit-scrollbar { display: none; }
+  .dz-ribbon .rt button { padding: 6px 10px !important; font-size: 13px !important; flex: none; }
+  .dz-ribbon .rt .rprint { padding: 5px 10px !important; margin-left: 6px !important; }
+  .dz-ribbon .rbody, .dz-setup { min-height: 0 !important; padding: 2px 4px !important; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .dz-ribbon .rl { display: none; }
+  .dz-ribbon .rg { padding: 0 4px !important; }
+  .dz-ribbon .rb { min-width: 46px !important; padding: 4px 3px !important; font-size: 10.5px !important; gap: 1px !important; }
+  .dz-ribbon .rb svg { width: 18px; height: 18px; }
+  .dz-ribbon .rfont { font-size: 14px !important; max-width: 160px; }
+  .dz-ribbon .rsym { flex-direction: row !important; } .dz-ribbon .rsym small { display: none; }
+  .dz-ask { flex-wrap: nowrap; padding: 6px 8px !important; gap: 4px !important; }
+  .dz-ask .ai, .dz-ask select, .dz-ask .ed { display: none; }
+  .dz-ask input#dzAskIn { flex: 1 1 auto; padding: 7px 9px; }
+  .dz-ask .msg { display: none; }
+  .dz-bar { flex-wrap: nowrap !important; overflow-x: auto; padding: 5px 8px !important; gap: 4px !important; scrollbar-width: none; }
+  .dz-bar > * { flex: none; }
+  .dz-stage { padding: 14px !important; touch-action: pan-x pan-y; }
+  .dz-body { display: flex !important; flex-direction: column; overflow: hidden !important; }
+  .dz-main { flex: 1 1 auto; min-height: 0; }
+  .dz-props { flex: none; max-height: 42dvh; overflow: auto !important; border-top: 1px solid var(--line) !important; box-shadow: 0 -6px 18px rgba(15, 23, 42, .08); padding: 0 14px 12px !important; transition: max-height .2s; }
+  .dz-props.collapsed { max-height: 44px; overflow: hidden !important; }
+  .dz-sheet-h { display: flex; position: sticky; top: 0; z-index: 2; width: calc(100% + 28px); margin: 0 -14px 8px; justify-content: center; align-items: center; gap: 8px; padding: 10px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); font: 600 13px var(--font); color: var(--ink); }
+  .dz-sheet-h::before { content: ""; width: 36px; height: 4px; border-radius: 2px; background: #cbd5e1; position: absolute; top: 4px; }
+  .dz-welcome { padding: 14px !important; place-content: start center !important; }
+  .dz-welcome h2 { font-size: 18px !important; margin-bottom: 10px !important; }
+  .dz-welcome .wg { grid-template-columns: 1fr !important; width: calc(100vw - 28px) !important; gap: 8px !important; }
+  .dz-foot { display: none; }
+}
 body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter, system-ui, sans-serif; }
 .dz-ribbon { box-shadow: 0 1px 0 #e5e7eb, 0 4px 14px rgba(15, 23, 42, .05); }
 .dz-ribbon .rt { background: #fff; border-bottom: 1px solid #eceef2; padding: 6px 14px 0; gap: 4px; align-items: flex-end; }
@@ -742,6 +775,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
     </div>
 
     <aside class="dz-side dz-props" aria-label="Object properties">
+      <button type="button" class="dz-sheet-h" id="dzSheetH" aria-expanded="true">Properties</button>
       <h3>Properties</h3>
       <div id="dzProps"><p class="dz-empty">Select an object on the label, or add one from the left.</p></div>
     </aside>
@@ -2791,7 +2825,8 @@ function dzOpen() {
   dz.seq = Math.max(1, ...dz.D.items.map(i => i.id)) + 1;
   for (const d of document.querySelectorAll("dialog[open]")) if (d.id !== "dzDlg") d.close();
   if (!$("dzDlg").open) { if (APP) $("dzDlg").show(); else $("dzDlg").showModal(); }
-  dzShowDesigner(); if (typeof dzDbRestore === "function") dzDbRestore(); for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
+  dzShowDesigner(); if (typeof dzDbRestore === "function") dzDbRestore();
+  /* phones: start with the properties sheet folded */ if (dzPhone()) { dz.lastSelN = -1; setTimeout(() => dzProps(), 0); } for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
 }
 
 /* setup panel */
@@ -3180,6 +3215,9 @@ function dzSelect(id, add) {
   else { dz.multi = new Set([id]); dz.sel = id; }
   dzMarkSel(); dzProps();
 }
+const dzPhone = () => matchMedia("(max-width: 760px)").matches;
+document.addEventListener("click", e => { if (e.target.id !== "dzSheetH") return; const a = e.target.closest(".dz-props"), c = a.classList.toggle("collapsed"); e.target.setAttribute("aria-expanded", String(!c)); });
+function dzSheet(open) { const a = document.querySelector(".dz-props"); if (!a || !dzPhone()) return; a.classList.toggle("collapsed", !open); const h = $("dzSheetH"); if (h) h.setAttribute("aria-expanded", String(open)); }
 function dzSelectMany(ids) { dz.multi = new Set(ids); dz.sel = ids.length ? ids[ids.length - 1] : null; dzMarkSel(); dzProps(); }
 // EAN / UPC / ITF-14 check digits: what the barcode encodes, shown live in the properties panel
 function dzUpceToA(d7) { const ns = d7[0], d = d7.slice(1, 7), l = d[5];
@@ -3270,6 +3308,7 @@ function dzGrab(e, it, resize) {
   addEventListener("pointermove", move); addEventListener("pointerup", up);
 }
 function dzMarquee(e, lab) { // drag on empty label space to select everything the box touches
+  if (e.pointerType === "touch") { dzSelectMany([]); return; } // phones: a finger on empty space scrolls instead
   e.preventDefault(); const add = e.shiftKey || e.ctrlKey || e.metaKey, r0 = lab.getBoundingClientRect(), s = dz.s, v = dzView();
   const loc = ev => v === 90 ? [ev.clientY - r0.top, r0.right - ev.clientX] : v === -90 ? [r0.bottom - ev.clientY, ev.clientX - r0.left] : [ev.clientX - r0.left, ev.clientY - r0.top], [x0, y0] = loc(e);
   const m = document.createElement("div"); m.className = "dz-marq"; lab.append(m); let moved = false;
@@ -3327,6 +3366,7 @@ function dzGroupToLabel(where) {
   its.forEach(it => { it.x = r1(it.x + dx); it.y = r1(it.y + dy); dzRefresh(it); }); dzProps(); dzSave();
 }
 function dzProps() {
+  if (dzPhone() && dz.D) { const n = dzSelIds().length; if (n !== dz.lastSelN) { dzSheet(n > 0); dz.lastSelN = n; } const h = $("dzSheetH"); if (h) h.textContent = n > 1 ? `${n} objects selected` : n ? "Properties: " + dzObjName(dz.D.items.find(i => i.id === dz.sel) || {}).slice(0, 28) : `Objects (${dz.D.items.length}) and properties`; }
   { const ids = dz.D ? dzSelIds() : []; if (ids.length > 1) {
     if ($("dzRibbonBody") && dz.tab && dz.tab !== "Label") dzRibbonShow();
     const box = $("dzProps"); box.innerHTML = dzMultiPanel(ids) + dzObjList(); dzObjWire(); dzWarnCount();
@@ -3849,7 +3889,7 @@ function dzRibbonShow(tab) {
       if (b.dbinfo) { dzDbRibbon(row); continue; }
       if (b.dbfields) { dzDbFields(row); continue; }
       if (b.symsel) { // pick any barcode type and insert it; with a barcode selected, change its type
-        const w = document.createElement("div"); w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center";
+        const w = document.createElement("div"); w.className = "rsym"; w.style.cssText = "display:flex;flex-direction:column;gap:4px;align-self:center";
         const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Barcode type"); s.style.maxWidth = "230px";
         const cur = dz.D && dz.D.items.find(i => i.id === dz.sel && i.type === "barcode");
         const gs = document.createElement("select"); gs.className = "rfont"; gs.setAttribute("aria-label", "Barcode group"); gs.style.maxWidth = "230px";
