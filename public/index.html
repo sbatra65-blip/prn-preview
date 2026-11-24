@@ -342,6 +342,13 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-ribbon .rsize { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); margin-right: 6px; }
 .dz-ribbon .rsize input { width: 64px; font: 13px var(--font); padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 8px; }
 .dz-ribbon .rfont { font: 13px var(--font); padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; max-width: 220px; margin-right: 4px; }
+.dz-ribbon .rfontbtn { display: inline-flex; align-items: center; gap: 8px; min-width: 170px; background: #fff; color: var(--ink); cursor: pointer; text-align: left; }
+.dz-ribbon .rfontbtn span { flex: 1; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .dz-ribbon .rfontbtn b { font-size: 10px; color: var(--muted); } .dz-ribbon .rfontbtn:disabled { opacity: .5; cursor: default; }
+.dz-fontpick { position: fixed; z-index: 95; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 12px 34px rgba(15,23,42,.25); display: flex; flex-direction: column; overflow: hidden; }
+.dz-fontpick input { margin: 8px; padding: 9px 10px; border: 1px solid #d5dae2; border-radius: 8px; font: 15px Inter, system-ui, sans-serif; }
+.dz-fontpick .fl { overflow: auto; padding: 0 4px 6px; } .dz-fontpick .fg { font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #64748b; padding: 10px 10px 4px; }
+.dz-fontpick button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; font-size: 19px; line-height: 1.25; color: #0f172a; border-radius: 8px; cursor: pointer; }
+.dz-fontpick button:hover, .dz-fontpick button:focus-visible { background: #f1f5f9; } .dz-fontpick button[aria-selected="true"] { background: #fff7ed; box-shadow: inset 3px 0 0 var(--accent); }
 .dz-setup { display: flex; align-items: stretch; overflow-x: auto; padding: 6px 8px 2px; min-height: 84px; }
 .dz-setup[hidden] { display: none; }
 .dz-setup .sf { gap: 8px; align-items: end; padding-top: 2px; }
@@ -401,7 +408,7 @@ body.appmode { background: #eef0f4; overflow: hidden; overscroll-behavior: none;
   .dz-ribbon .rg { padding: 0 4px !important; }
   .dz-ribbon .rb { min-width: 46px !important; padding: 4px 3px !important; font-size: 10.5px !important; gap: 1px !important; }
   .dz-ribbon .rb svg { width: 18px; height: 18px; }
-  .dz-ribbon .rfont { font-size: 14px !important; max-width: 160px; }
+  .dz-ribbon .rfont { font-size: 14px !important; max-width: 160px; } .dz-ribbon .rfontbtn { min-width: 140px; }
   .dz-ribbon .rsym { flex-direction: row !important; } .dz-ribbon .rsym small { display: none; }
   .dz-ask { flex-wrap: nowrap; padding: 6px 8px !important; gap: 4px !important; }
   .dz-ask .ai, .dz-ask select, .dz-ask .ed { display: none; }
@@ -2792,10 +2799,16 @@ const dzLW = (D = dz.D) => (D.paper - 2 * D.edge - (D.across - 1) * D.hgap) / D.
 const dzIs2D = it => it.type === "barcode" && dzSymKind(it) === "sq";
 const dzIsBars = it => it.type === "barcode" && dzSymKind(it) === "1d"; // bars with human-readable digits
 // Fonts: "" = the printer's own scalable font (sharp, fast); any other family prints as a graphic
-const DZ_FONTS = [["", "Printer font (sharpest)"], "#Latin", ["Roboto", "Roboto"], ["Roboto Condensed", "Roboto Condensed"], ["Open Sans", "Open Sans"], ["Lato", "Lato"], ["Oswald", "Oswald"], ["Merriweather", "Merriweather (serif)"], ["Courier Prime", "Courier Prime (mono)"],
+const DZ_FONTS = [["", "Printer font (sharpest)"],
+  "#Sans serif", ["Roboto", "Roboto"], ["Open Sans", "Open Sans"], ["Lato", "Lato"], ["Inter", "Inter"], ["Montserrat", "Montserrat"], ["Poppins", "Poppins"], ["Nunito", "Nunito"], ["Source Sans 3", "Source Sans 3"], ["Work Sans", "Work Sans"], ["Noto Sans", "Noto Sans"], ["PT Sans", "PT Sans"], ["Ubuntu", "Ubuntu"], ["Mukta", "Mukta"], ["Hind", "Hind"],
+  "#Condensed (fits more on a label)", ["Roboto Condensed", "Roboto Condensed"], ["Oswald", "Oswald"], ["Barlow Condensed", "Barlow Condensed"], ["Archivo Narrow", "Archivo Narrow"], ["PT Sans Narrow", "PT Sans Narrow"], ["Fira Sans Condensed", "Fira Sans Condensed"], ["IBM Plex Sans Condensed", "IBM Plex Sans Condensed"], ["Saira Condensed", "Saira Condensed"], ["Bebas Neue", "Bebas Neue (capitals)"], ["Anton", "Anton"],
+  "#Serif", ["Merriweather", "Merriweather"], ["Playfair Display", "Playfair Display"], ["Lora", "Lora"], ["Roboto Slab", "Roboto Slab"], ["PT Serif", "PT Serif"], ["Noto Serif", "Noto Serif"], ["Libre Baskerville", "Libre Baskerville"], ["Zilla Slab", "Zilla Slab"],
+  "#Monospace (codes, serials)", ["Courier Prime", "Courier Prime"], ["Roboto Mono", "Roboto Mono"], ["Source Code Pro", "Source Code Pro"], ["IBM Plex Mono", "IBM Plex Mono"], ["JetBrains Mono", "JetBrains Mono"], ["Space Mono", "Space Mono"], ["Inconsolata", "Inconsolata"],
+  "#Display and script", ["Alfa Slab One", "Alfa Slab One"], ["Black Ops One", "Black Ops One"], ["Righteous", "Righteous"], ["Orbitron", "Orbitron"], ["Lobster", "Lobster"], ["Pacifico", "Pacifico"], ["Dancing Script", "Dancing Script"], ["Caveat", "Caveat"], ["Kalam", "Kalam"], ["Satisfy", "Satisfy"], ["Great Vibes", "Great Vibes"], ["Permanent Marker", "Permanent Marker"],
   "#Indian languages", ["Noto Sans Devanagari", "Hindi, Marathi, Nepali · देवनागरी"], ["Noto Sans Bengali", "Bengali, Assamese · বাংলা"], ["Noto Sans Gurmukhi", "Punjabi · ਗੁਰਮੁਖੀ"], ["Noto Sans Gujarati", "Gujarati · ગુજરાતી"], ["Noto Sans Oriya", "Odia · ଓଡ଼ିଆ"], ["Noto Sans Tamil", "Tamil · தமிழ்"], ["Noto Sans Telugu", "Telugu · తెలుగు"], ["Noto Sans Kannada", "Kannada · ಕನ್ನಡ"], ["Noto Sans Malayalam", "Malayalam · മലയാളം"], ["Noto Nastaliq Urdu", "Urdu · اردو"],
   "#Other scripts", ["Noto Naskh Arabic", "Arabic · العربية"], ["Noto Sans Thai", "Thai · ไทย"], ["Noto Sans SC", "Chinese (simplified) · 中文"], ["Noto Sans JP", "Japanese · 日本語"], ["Noto Sans KR", "Korean · 한국어"],
   "#On this computer", ["Arial", "Arial"], ["Times New Roman", "Times New Roman"], ["__local", "Any font installed on this computer…"]];
+const DZ_ONEWEIGHT = new Set(["Bebas Neue", "Anton", "Alfa Slab One", "Black Ops One", "Righteous", "Lobster", "Pacifico", "Satisfy", "Great Vibes", "Permanent Marker"]);
 const DZ_GFONTS = new Set(DZ_FONTS.filter(f => Array.isArray(f) && f[0] && !["Arial", "Times New Roman", "__local"].includes(f[0])).map(f => f[0]));
 const dzFontOptions = cur => { let h = "", open = false; for (const f of DZ_FONTS) { if (typeof f === "string") { h += (open ? "</optgroup>" : "") + `<optgroup label="${f.slice(1)}">`; open = true; } else h += `<option value="${f[0]}"${(cur || "") === f[0] ? " selected" : ""}>${f[1]}</option>`; } if (cur && !DZ_FONTS.some(f => Array.isArray(f) && f[0] === cur)) h += `<option value="${cur.replace(/"/g, "&quot;")}" selected>${cur.replace(/</g, "&lt;")} (installed)</option>`; return h + (open ? "</optgroup>" : ""); };
 function dzFontCss(it, px) { return it.font ? `${it.italic ? "italic " : ""}${it.bold ? 700 : 400} ${px}px "${it.font}", sans-serif` : `700 ${px}px "Roboto Condensed", "Arial Narrow", sans-serif`; }
@@ -2804,12 +2817,15 @@ function dzLoadFonts() {}
 function dzLoadFont(fam) { // fetch a Google font the first time a design uses it
   dzLoadFont.done = dzLoadFont.done || new Set(); if (!fam || !DZ_GFONTS.has(fam) || dzLoadFont.done.has(fam)) return; dzLoadFont.done.add(fam);
   const l = document.createElement("link"); l.rel = "stylesheet";
-  l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fam).replace(/%20/g, "+")}:wght@400;700&display=swap`; document.head.append(l);
+  dzLoadFont.wait = dzLoadFont.wait || {}; dzLoadFont.wait[fam] = new Promise(ok => { l.onload = l.onerror = ok; setTimeout(ok, 8000); });
+  l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fam).replace(/%20/g, "+")}${DZ_ONEWEIGHT.has(fam) ? "" : ":wght@400;700"}&display=swap`; document.head.append(l);
 }
 function dzEnsureFont(it) { // canvas draws need the font file: load it, then repaint once
   if (!it.font || !document.fonts) return; dzLoadFont(it.font); const css = dzFontCss(it, 20);
-  if (document.fonts.check(css, it.text || "A")) return;
-  document.fonts.load(css, it.text || "A").then(() => { if (it._fit) it._fit = null; if ($("dzDlg").open) { dzRefresh(it); dzSave(); } }).catch(() => {});
+  const w = dzLoadFont.wait && dzLoadFont.wait[it.font]; // until its stylesheet arrives, "check" wrongly says the font is ready
+  if (!w && document.fonts.check(css, it.text || "A")) return;
+  dzEnsureFont.busy = dzEnsureFont.busy || new Set(); const key = css + "|" + it.id; if (dzEnsureFont.busy.has(key)) return; dzEnsureFont.busy.add(key);
+  Promise.resolve(w).then(() => document.fonts.load(css, it.text || "A")).finally(() => { dzEnsureFont.busy.delete(key); if (dzLoadFont.wait) delete dzLoadFont.wait[it.font]; }).then(() => { if (it._fit) it._fit = null; if ($("dzDlg").open) { dzRefresh(it); dzSave(); } }).catch(() => {});
 }
 const dzCol = (it, which) => which === "fill" ? (it.fillColor || (dz.D && dz.D.ink) || "#000000") : (it.color || (dz.D && dz.D.ink) || "#000000");
 const dzLum = hex => { const n = parseInt(String(hex || "#000").slice(1), 16); return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255; };
@@ -3968,6 +3984,33 @@ function dzPaste() {
 function dzSelNext(back) { const a = dz.D.items; if (!a.length) return; const i = a.findIndex(x => x.id === dz.sel); const n = (i + (back ? -1 : 1) + a.length) % a.length; dzSelect(a[i < 0 ? 0 : n].id); }
 function dzSelTextLike() { const it = dz.D.items.find(i => i.id === dz.sel); return it && (it.type === "text" || it.type === "shape") ? it : null; }
 function dzSelTextAll() { return dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && (o.type === "text" || o.type === "shape")); }
+const dzFontName = f => { const e = DZ_FONTS.find(x => Array.isArray(x) && x[0] === (f || "")); return e ? e[1].replace(/ \(.*\)$/, "") : f; };
+// Font picker with every font shown in its own face (only the name's letters are fetched, so the list opens fast)
+function dzFontPicker(anchor, cur) {
+  let p = $("dzFontPick"); if (p) { p.remove(); return; }
+  p = document.createElement("div"); p.id = "dzFontPick"; p.className = "dz-fontpick";
+  p.innerHTML = '<input type="search" placeholder="Search fonts…" aria-label="Search fonts" autocomplete="off"><div class="fl" role="listbox"></div>';
+  const list = p.querySelector(".fl"), q = p.querySelector("input"), want = [];
+  let h = "";
+  for (const f of DZ_FONTS) {
+    if (typeof f === "string") { h += `<div class="fg">${f.slice(1)}</div>`; continue; }
+    const [v, name] = f, g = DZ_GFONTS.has(v), fam = v === "" ? '"Roboto Condensed", "Arial Narrow", sans-serif' : v === "__local" ? "inherit" : `"${v}", sans-serif`;
+    if (g) want.push(v);
+    h += `<button type="button" role="option" data-v="${v.replace(/"/g, "&quot;")}" aria-selected="${(cur || "") === v}" style="font-family:${fam.replace(/"/g, "&quot;")}${v === "" ? ";font-weight:700" : ""}">${name}</button>`;
+  }
+  list.innerHTML = h;
+  // preview faces: one stylesheet, only the letters of the names
+  if (!dzFontPicker.css) { const fams = want.map(v => "family=" + encodeURIComponent(v).replace(/%20/g, "+")).join("&"), txt = encodeURIComponent([...new Set(DZ_FONTS.filter(Array.isArray).map(f => f[1]).join("") + "Mixedfonts")].join(""));
+    const l = document.createElement("link"); l.rel = "stylesheet"; l.href = `https://fonts.googleapis.com/css2?${fams}&text=${txt}&display=swap`; document.head.append(l); dzFontPicker.css = true; }
+  q.oninput = () => { const t = q.value.trim().toLowerCase(); for (const b of list.querySelectorAll("button")) b.hidden = !!t && !b.textContent.toLowerCase().includes(t); for (const g of list.querySelectorAll(".fg")) { let n = g.nextElementSibling, any = false; while (n && n.tagName === "BUTTON") { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; } };
+  list.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; p.remove(); const v = b.dataset.v; if (v === "__local") dzPickLocalFont().then(x => x && dzSetFont(x)); else dzSetFont(v); };
+  document.body.append(p); const r = anchor.getBoundingClientRect(), W = Math.min(320, innerWidth - 16);
+  p.style.width = W + "px"; p.style.left = Math.max(8, Math.min(innerWidth - W - 8, r.left)) + "px"; p.style.top = Math.min(r.bottom + 4, innerHeight - 200) + "px"; p.style.maxHeight = Math.max(200, innerHeight - Math.min(r.bottom + 4, innerHeight - 200) - 12) + "px";
+  const sel = list.querySelector('[aria-selected="true"]'); if (sel) sel.scrollIntoView({ block: "center" });
+  if (!matchMedia("(pointer: coarse)").matches) q.focus();
+  setTimeout(() => addEventListener("pointerdown", function off(e) { if (!p.contains(e.target) && e.target !== anchor && !anchor.contains(e.target)) { p.remove(); removeEventListener("pointerdown", off, true); } }, true), 0);
+  p.addEventListener("keydown", e => { if (e.key === "Escape") { p.remove(); anchor.focus(); } });
+}
 function dzSetFont(v) {
   const list = dzSelTextAll(); if (!list.length) return;
   for (const it of list) { it.font = v || undefined; if (!v) { delete it.bold; delete it.italic; } if (it._fit) it._fit = null; dzEnsureFont(it); dzRefresh(it); }
@@ -4002,7 +4045,7 @@ function dzMenus() {
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
-    Text: ["#Font / language", ...DZ_FONTS.map(f => typeof f === "string" ? f : [f[1], () => f[0] === "__local" ? dzPickLocalFont().then(v => v && dzSetFont(v)) : dzSetFont(f[0]), "", txt, () => { const it = dzSelTextLike(); return !!it && (it.font || "") === f[0]; }]), "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
+    Text: [["Choose font…", () => { dzRibbonShow("Text"); setTimeout(() => { const b = document.querySelector(".rfontbtn"); if (b && !b.disabled) b.click(); }, 60); }, "", txt], ["Printer font (sharpest)", () => dzSetFont(""), "", txt, () => { const it = dzSelTextLike(); return !!it && !it.font; }], "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
     View: [["Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, "", null, () => $("dzGrid").checked], "#Snap", ...[["0", "No snap"], ["0.5", "0.5 mm"], ["1", "1 mm"]].map(([v, n]) => [n, () => { $("dzSnap").value = v; }, "", null, () => $("dzSnap").value === v]), "#Zoom", ["Zoom in", click("dzZoomIn"), "Ctrl+="], ["Zoom out", click("dzZoomOut"), "Ctrl+-"], ["Fit to window", click("dzZoomFit"), "Ctrl+0"], ["Actual size", dzActual, "Ctrl+1"], ["Calibrate screen…", () => dzCalibrate()]],
   };
 }
@@ -4049,6 +4092,7 @@ function dzRibbonDef() {
     Home: [["Clipboard", [B("paste", "Paste", dzPaste, () => !!dz.clip, null, "Paste (Ctrl+V)"), B("copy", "Copy", dzCopy, has, null, "Copy (Ctrl+C)"), B("dup", "Duplicate", dzDuplicate, has, null, "Duplicate (Ctrl+D)"), B("del", "Delete", dzDelete, has, null, "Delete (Del)")]],
       ["History", [B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
       ["Insert", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("qr", "QR code", () => dzAdd("qrcode")), B("image", "Image", () => $("dzImgFile").click())]],
+      ["Font", [{ font: true }, B("bigger", "Bigger", () => dzSize(0.5), () => dzSelTextAll().length > 0), B("smaller", "Smaller", () => dzSize(-0.5), () => dzSelTextAll().length > 0)]],
       ["Picture", [B("photo", "Picture to label", () => dzPicOpen(), null, null, "Upload a photo or image of a label: AI turns it into an editable design"), B("printer", "Picture to PRN", () => dzPicOpen(true), null, null, "Upload a photo or image of a label and get a printer file (PRN)")]],
       ["Arrange", [B("ac", "Centre", () => dzAlign("center"), has), B("front", "To front", () => dzOrder("front"), has), B("rotr", "Turn 90°", turn(90), turnable)]],
       ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("download", "Save .ldl", () => ldlSaveDialog(), null, null, "Download the label as a LabelDesk file (.ldl): design, printer and settings in one file (Ctrl+Shift+S)"), B("openf", "Open .ldl", () => ldlPick(), null, null, "Open a LabelDesk file (.ldl) (Ctrl+O)"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
@@ -4086,7 +4130,11 @@ function dzRibbonShow(tab) {
   for (const [gname, btns] of dzRibbonDef()[dz.tab]) {
     const g = document.createElement("div"); g.className = "rg"; const row = document.createElement("div"); row.className = "rr";
     for (const b of btns) {
-      if (b.font) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Font"); { const l = dzSelTextAll(), same = l.length && l.every(o => (o.font || "") === (l[0].font || "")); s.innerHTML = dzFontOptions(same ? l[0].font : null) + (l.length > 1 && !same ? '<option value="" disabled selected>Mixed fonts</option>' : ""); s.disabled = !l.length; } s.onchange = () => { if (s.value === "__local") dzPickLocalFont().then(v => v && dzSetFont(v)); else dzSetFont(s.value); }; row.append(s); continue; }
+      if (b.font) { const l = dzSelTextAll(), same = l.length && l.every(o => (o.font || "") === (l[0].font || "")), cur = same ? l[0].font || "" : null;
+        const bt = document.createElement("button"); bt.type = "button"; bt.className = "rfont rfontbtn"; bt.setAttribute("aria-label", "Font"); bt.disabled = !l.length;
+        const nm = cur == null ? (l.length ? "Mixed fonts" : "Font") : dzFontName(cur); bt.innerHTML = `<span></span><b aria-hidden="true">▾</b>`; bt.firstChild.textContent = nm;
+        if (cur) { dzLoadFont(cur); bt.firstChild.style.fontFamily = `"${cur}", sans-serif`; } bt.title = l.length ? "Choose a font for the selected text" : "Select a text object first";
+        bt.onclick = () => dzFontPicker(bt, cur); row.append(bt); continue; }
       if (b.size) { const w = document.createElement("label"); w.className = "rsize"; w.title = "Font size of the selected text, in points";
         const one = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && o.type === "text").map(o => dzToPt(o.h));
         w.innerHTML = `<input type="number" min="3" max="400" step="0.5" list="dzPtList" aria-label="Font size in points" value="${one.length && one.every(v => v === one[0]) ? one[0] : ""}" placeholder="pt"${dzSelIds().length ? "" : " disabled"}><span>pt</span>`;
