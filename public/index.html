@@ -236,7 +236,7 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2), .dz-zf button:nth-child(4), .dz-zf button:nth-child(5) { font-size: 14px; }
 @media (pointer: coarse) { .dz-zf { display: flex; } .dz-stage { touch-action: pan-x pan-y; } }
 .dz-objmenu { position: fixed; z-index: 90; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.25); padding: 4px; display: grid; min-width: 190px; }
-.dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; } .dz-objmenu kbd { float: right; font: 12px Inter, system-ui, sans-serif; color: #94a3b8; margin-left: 18px; } .dz-objmenu.mouse button { padding: 7px 12px; font-size: 14px; } .dz-objmenu.mouse { min-width: 200px; } .dz-objmenu { max-height: calc(100dvh - 16px); overflow: auto; } .dz-objmenu .grp { font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #64748b; padding: 8px 12px 2px; }
+.dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; } .dz-objmenu kbd { float: right; font: 12px Inter, system-ui, sans-serif; color: #94a3b8; margin-left: 18px; } .dz-objmenu.mouse button { padding: 7px 12px; font-size: 14px; } .dz-objmenu.mouse { min-width: 200px; } #ldPkBody tr { cursor: pointer; } #ldPkBody tr.cur td { background: var(--accent-soft, #fff7ed); } .dz-objmenu { max-height: calc(100dvh - 16px); overflow: auto; } .dz-objmenu .grp { font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #64748b; padding: 8px 12px 2px; }
 .dz-paper { position: relative; background: #d9d4c7; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 11px var(--font-mono); }
 .dz-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
@@ -4363,7 +4363,7 @@ function dzRibbonDef() {
       ["", [{ font: true }, { size: true }, boldB, italB, curveDD]],
       ["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
     Insert: [["", [textDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD]]],
-    Data: [["", [connectDD, { dbinfo: true }, { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
+    Data: [["", [connectDD, { dbinfo: true }, B("lib", "Records", () => ldPickRecords(), () => !!(dz.db && dz.db.rows && dz.db.rows.length), null, "Browse the records, pick which to print: 1, 3, 5-9, 14-25(3)"), { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
     View: [["", [showDD, zoomDD]]],
     Tools: [["", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing")), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing")), filesDD, B("lib", "Templates", () => openLibrary()), checkDD, B("vcard", "Talk to us", () => openLead("talk"))]]],
   };
@@ -5596,9 +5596,9 @@ function ldVarPanel() {
   const need = dzVarNeeds(); if (!need.any) return "";
   return `<div class="ld-sec" style="margin-top:4px"><b style="font-size:14px">Data for this print</b>
     ${need.fields.length ? `<div class="ld-row" style="margin:8px 0">${dz.db ? `<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="db" checked> Database: ${ldEsc(dz.db.name)} (${dz.db.rows.length})</label>` : ""}<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed"${dz.db ? "" : " checked"}> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
-    ${dz.db ? `<div id="ldVarDb" class="ld-grid2"><label class="ld-f">From record<input id="ldDbFrom" type="number" min="1" max="${dz.db.rows.length}" value="1"></label><label class="ld-f">To record<input id="ldDbTo" type="number" min="1" max="${dz.db.rows.length}" value="${dz.db.rows.length}"></label></div>` : ""}
+    ${dz.db ? `<div id="ldVarDb"><label class="ld-f">Records <small>blank = all ${dz.db.rows.length} · e.g. 1, 3, 5-9, 14-25(3) · (3) = labels each</small><input id="ldRecSel" placeholder="All ${dz.db.rows.length} records" autocomplete="off" style="font:15px var(--font-mono, monospace)"></label><p class="ld-err" id="ldRecErr" style="margin:2px 0 0"></p></div>` : ""}
     <div id="ldVarTyped" class="ld-grid2"${dz.db ? " hidden" : ""}>${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
-    <div class="ld-row" id="ldPickRow" style="margin:6px 0"${dz.db ? "" : " hidden"}><button type="button" class="btn sm soft" id="ldPickGo">Choose records to print…</button><span class="dz-cap" id="ldPickInfo" style="margin:0"></span></div>
+    <div class="ld-row" id="ldPickRow" style="margin:6px 0"${dz.db ? "" : " hidden"}><button type="button" class="btn sm soft" id="ldPickGo">Browse and tick records…</button><span class="dz-cap" id="ldPickInfo" style="margin:0"></span></div>
     <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods,.json,.xml"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
     ${need.serial ? ldSerialPanel() : ""}</div>`;
 }
@@ -5608,7 +5608,10 @@ function ldVarWire(onChange) {
   const pickRow = () => { const s = src(), ok = s === "db" ? !!dz.db : s === "file" && !!(LDV.recs && LDV.recs.length); $("ldPickRow").hidden = !ok; ldPickInfo(); };
   for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; if ($("ldVarDb")) $("ldVarDb").hidden = src() !== "db"; pickRow(); onChange(); };
   $("ldPickGo").onclick = () => ldPickRecords(onChange); LDV.onPick = () => { pickRow(); onChange(); }; pickRow();
-  for (const id of ["ldDbFrom", "ldDbTo"]) if ($(id)) $(id).oninput = onChange;
+  if ($("ldRecSel")) { const syncText = () => { const p = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null; $("ldRecSel").value = p ? ldFormatRecSel(p.sel, Math.max(1, +$("ldPrQty").value || 1)) : ""; };
+    $("ldRecSel").oninput = () => { const rows = dz.db ? dz.db.rows : [], r = ldParseRecSel($("ldRecSel").value, rows.length, Math.max(1, +$("ldPrQty").value || 1)); $("ldRecErr").textContent = r.bad.length ? "Not understood: " + r.bad.join(", ") : "";
+      LDV.pick = r.sel && r.sel.size ? { src: ldSrcKey(), sel: new Map([...r.sel].sort((a, b) => a[0] - b[0])), text: true } : null; ldPickInfo(); onChange(); };
+    const op = LDV.onPick; LDV.onPick = () => { syncText(); op(); }; syncText(); }
   $("ldVarIn").onchange = async e => { const f = e.target.files[0]; if (!f) return;
     try { LDV.recs = await ldReadTable(f); LDV.file = f.name; const cols = Object.keys(LDV.recs[0] || {}), miss = need.fields.filter(x => !cols.includes(x.name)).map(x => x.name);
       LDV.pick = null; if (LDV.onPick) LDV.onPick();
@@ -5621,7 +5624,7 @@ function ldVarLabels(qty) {
   if (src === "file" || src === "db") {
     const all = src === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [], pick = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null;
     if (pick) { for (const [i, q] of pick.sel) for (let c = 0; c < q; c++) out.push({ rec: all[i], n: out.length }); if (!out.length) throw new Error("No records are ticked in Choose records."); return out; }
-    const recs = src === "db" ? all.slice(Math.max(0, (+$("ldDbFrom").value || 1) - 1), Math.max(1, +$("ldDbTo").value || all.length)) : all;
+    const recs = all;
     if (!recs || !recs.length) throw new Error(src === "db" ? "No records in that range." : "Choose a CSV or Excel file with the records first.");
     for (const r of recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: r, n: out.length }); }
     return out;
@@ -5630,7 +5633,8 @@ function ldVarLabels(qty) {
   for (let i = 0; i < qty; i++) out.push({ rec, n: i });
   return out;
 }
-const ldSrcKey = () => { const s = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value; return s === "db" ? "db:" + (dz.db ? dz.db.name : "") : s === "file" ? "file:" + LDV.file : s || ""; };
+const ldSrcKind = () => (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value || (dz.db ? "db" : "");
+const ldSrcKey = () => { const s = ldSrcKind(); return s === "db" ? "db:" + (dz.db ? dz.db.name : "") : s === "file" ? "file:" + LDV.file : s || ""; };
 const ldSkip = () => Math.max(0, Math.min(998, (+(document.getElementById("ldPrSkip") || {}).value || 1) - 1));
 // Everything to print, in order: blank positions to skip, then each label with its record and serial number
 function ldLabels(qty) {
@@ -5639,31 +5643,59 @@ function ldLabels(qty) {
 }
 function ldPickInfo() {
   const el = $("ldPickInfo"); if (!el) return; const p = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null;
-  el.textContent = p ? `${p.sel.size} record(s) chosen, ${[...p.sel.values()].reduce((a, b) => a + b, 0)} label(s)` : "All records in the range above are printed";
+  el.textContent = p ? `${p.sel.size} record(s) chosen, ${[...p.sel.values()].reduce((a, b) => a + b, 0)} label(s)` : "All records are printed";
+}
+/* Record selection written as text: "1, 3, 5-9, 14-25(3), 30(10)" = records 1, 3, 5 to 9, 14 to 25 three labels each, 30 ten labels.
+   Brackets (or x3) give the number of labels; a range takes them for every record in it; "all" = every record. */
+function ldParseRecSel(str, n, defq, qOf) {
+  const sel = new Map(), bad = []; str = String(str || "").trim().replace(/\s*([-–—])\s*/g, "$1").replace(/\s+(?=[(\[])/g, "").replace(/\s+to\s+/gi, "-"); if (!str) return { sel: null, bad };
+  for (let tok of str.split(/[,;\s]+(?![^(\[]*[)\]])/)) {
+    tok = tok.trim(); if (!tok) continue;
+    if (/^(all|\*)(?:\s*[([]\s*(\d+)\s*[)\]]|\s*[x×*]\s*(\d+))?$/i.test(tok)) { const m = tok.match(/(\d+)/); for (let i = 0; i < n; i++) sel.set(i, m ? +m[1] : qOf ? qOf(i) : defq); continue; }
+    const m = tok.match(/^(\d+)\s*(?:[-–—]|to|\.\.)\s*(\d+)?\s*(?:[([]\s*(\d+)\s*[)\]]|[x×*]\s*(\d+))?$|^(\d+)\s*(?:[([]\s*(\d+)\s*[)\]]|[x×*]\s*(\d+))?$/i);
+    if (!m) { bad.push(tok); continue; }
+    let a, b, q; if (m[1]) { a = +m[1]; b = m[2] ? +m[2] : n; q = m[3] || m[4]; } else { a = b = +m[5]; q = m[6] || m[7]; }
+    if (a > b) [a, b] = [b, a]; if (a < 1 || a > n) { bad.push(tok + " (only " + n + " records)"); continue; } b = Math.min(b, n);
+    for (let i = a - 1; i < b; i++) sel.set(i, q ? Math.max(1, Math.min(99999, +q)) : qOf ? qOf(i) : defq);
+  }
+  return { sel, bad };
+}
+function ldFormatRecSel(sel, defq) { // the shortest text for a selection: runs with the same quantity become ranges
+  const e = [...sel].sort((a, b) => a[0] - b[0]), out = []; let i = 0;
+  while (i < e.length) { let j = i; while (j + 1 < e.length && e[j + 1][0] === e[j][0] + 1 && e[j + 1][1] === e[i][1]) j++;
+    const q = e[i][1], r = j > i ? `${e[i][0] + 1}-${e[j][0] + 1}` : `${e[i][0] + 1}`; out.push(q !== defq ? `${r}(${q})` : r); i = j + 1; }
+  return out.join(", ");
 }
 // Pick records one by one, with a quantity for each (search, tick all shown, none)
 function ldPickRecords(done) {
-  const s = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value, rows = s === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [];
-  if (!rows.length) return toast("No records yet");
-  const key = ldSrcKey(), defq = Math.max(1, +document.getElementById("ldPrQty").value || 1);
+  const s = ldSrcKind(), rows = s === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [], inPrint = !!document.getElementById("ldPrQty") && document.getElementById("ldPrint").open;
+  if (!rows.length) return toast("No records yet: connect a database on the Data tab");
+  const key = ldSrcKey(), defq = inPrint ? Math.max(1, +document.getElementById("ldPrQty").value || 1) : 1;
   const sel = new Map(LDV.pick && LDV.pick.src === key ? LDV.pick.sel : []);
   const cols = Object.keys(rows[0]).slice(0, 6), qtyCol = Object.keys(rows[0]).find(c => /^(qty|quantity)$/i.test(c));
-  let d = $("ldPickDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldPickDlg"; d.style.cssText = "width:min(980px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)"; document.body.append(d); }
-  d.innerHTML = `<div class="dlg-head"><div><h2>Choose records to print</h2><div class="sub">Tick the records and set how many labels each one gets.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
-    <div class="ld-acct"><div class="ld-row" style="margin-bottom:8px"><input id="ldPkQ" placeholder="Search any field…" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+  let d = $("ldPickDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldPickDlg"; d.style.cssText = "width:min(980px,96vw);max-height:94dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)"; document.body.append(d); }
+  d.innerHTML = `<div class="dlg-head"><div><h2>Records</h2><div class="sub">${rows.length} records · tap a row to see it on the label · tick the ones to print</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div class="ld-acct"><label class="ld-f" style="margin-bottom:8px">Records to print <small>e.g. 1, 3, 5-9, 14-25(3) · (3) = 3 labels each · blank = none ticked</small><input id="ldPkSel" placeholder="1-${Math.min(rows.length, 10)}, 14-25(3), 30(10)" autocomplete="off" style="font:15px var(--font-mono, monospace)"></label><p class="ld-err" id="ldPkErr" style="margin:0 0 6px"></p>
+    <div class="ld-row" style="margin-bottom:8px"><input id="ldPkQ" placeholder="Search any field…" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <button type="button" class="btn sm" id="ldPkAll">Tick all shown</button><button type="button" class="btn sm" id="ldPkNone">Clear</button><span class="dz-cap" id="ldPkN" style="margin:0"></span></div>
-    <div style="max-height:56vh;overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="ld-tbl" style="margin:0"><thead style="position:sticky;top:0;background:var(--surface)"><tr><th style="width:30px"></th><th>#</th>${cols.map(c => `<th>${ldEsc(c)}</th>`).join("")}<th style="width:90px">Labels</th></tr></thead><tbody id="ldPkBody"></tbody></table></div>
+    <div style="max-height:min(46vh,420px);overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="ld-tbl" style="margin:0"><thead style="position:sticky;top:0;background:var(--surface)"><tr><th style="width:30px"></th><th>#</th>${cols.map(c => `<th>${ldEsc(c)}</th>`).join("")}<th style="width:90px">Labels</th></tr></thead><tbody id="ldPkBody"></tbody></table></div>
     <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldPkOk">Use these records</button><button type="button" class="btn" id="ldPkReset">Print all records instead</button></div></div>`;
   const qOf = i => sel.get(i) ?? (qtyCol ? parseInt(rows[i][qtyCol], 10) || defq : defq);
   const shown = () => { const q = $("ldPkQ").value.trim().toLowerCase(); const out = []; for (let i = 0; i < rows.length && out.length < 500; i++) if (!q || Object.values(rows[i]).some(v => String(v).toLowerCase().includes(q))) out.push(i); return out; };
-  const count = () => { $("ldPkN").textContent = `${sel.size} ticked · ${[...sel.values()].reduce((a, b) => a + b, 0)} label(s)${rows.length > 500 ? " · search to find records beyond the first 500" : ""}`; };
+  const count = (fromText) => { $("ldPkN").textContent = `${sel.size} ticked · ${[...sel.values()].reduce((a, b) => a + b, 0)} label(s)${rows.length > 500 ? " · search to find records beyond the first 500" : ""}`; if (!fromText) { $("ldPkSel").value = ldFormatRecSel(sel, defq); $("ldPkErr").textContent = ""; } };
   const draw = () => { $("ldPkBody").innerHTML = shown().map(i => `<tr><td><input type="checkbox" data-pk="${i}"${sel.has(i) ? " checked" : ""}></td><td>${i + 1}</td>${cols.map(c => `<td>${ldEsc(String(rows[i][c] ?? "").slice(0, 40))}</td>`).join("")}<td><input type="number" min="1" max="99999" data-pq="${i}" value="${qOf(i)}" style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join(""); count(); };
   d.onchange = d.oninput = e => { const t = e.target; if (t.id === "ldPkQ") return; if (t.dataset.pk != null) { const i = +t.dataset.pk; if (t.checked) sel.set(i, qOf(i)); else sel.delete(i); count(); } if (t.dataset.pq != null) { const i = +t.dataset.pq, v = Math.max(1, +t.value || 1); if (sel.has(i)) sel.set(i, v); else { sel.set(i, v); d.querySelector(`[data-pk="${i}"]`).checked = true; } count(); } };
   d.querySelector(".x").onclick = () => d.close(); $("ldPkQ").oninput = draw;
+  $("ldPkSel").oninput = () => { const r = ldParseRecSel($("ldPkSel").value, rows.length, defq, qOf); sel.clear(); if (r.sel) for (const [i, q] of r.sel) sel.set(i, q); $("ldPkErr").textContent = r.bad.length ? "Not understood: " + r.bad.join(", ") : "";
+    for (const el of d.querySelectorAll("[data-pk]")) el.checked = sel.has(+el.dataset.pk); for (const el of d.querySelectorAll("[data-pq]")) { const i = +el.dataset.pq; if (sel.has(i)) el.value = sel.get(i); } count(true); };
+  $("ldPkBody").onclick = e => { const tr = e.target.closest("tr"); if (!tr || e.target.closest("input")) return; const cb = tr.querySelector("[data-pk]"); if (!cb) return; const i = +cb.dataset.pk;
+    for (const x of d.querySelectorAll("tr.cur")) x.classList.remove("cur"); tr.classList.add("cur"); if (s === "db" && typeof dzDbShow === "function") { dzDbShow(i); } };
+  $("ldPkBody").ondblclick = e => { const cb = e.target.closest("tr") && e.target.closest("tr").querySelector("[data-pk]"); if (cb && !e.target.closest("input")) { cb.checked = !cb.checked; cb.dispatchEvent(new Event("change", { bubbles: true })); } };
   $("ldPkAll").onclick = () => { for (const i of shown()) sel.set(i, qOf(i)); draw(); }; $("ldPkNone").onclick = () => { sel.clear(); draw(); };
-  $("ldPkOk").onclick = () => { LDV.pick = sel.size ? { src: key, sel: new Map([...sel].sort((a, b) => a[0] - b[0])) } : null; d.close(); if (LDV.onPick) LDV.onPick(); else if (done) done(); };
+  if (!inPrint) { $("ldPkOk").textContent = "Print these…"; $("ldPkReset").textContent = "Clear selection"; }
+  $("ldPkOk").onclick = () => { LDV.pick = sel.size ? { src: key, sel: new Map([...sel].sort((a, b) => a[0] - b[0])) } : null; d.close(); if (!inPrint) { if (LDV.pick) ldPrintOpen(); return; } if (LDV.onPick) LDV.onPick(); else if (done) done(); };
   $("ldPkReset").onclick = () => { LDV.pick = null; d.close(); if (LDV.onPick) LDV.onPick(); };
-  draw(); d.showModal(); $("ldPkQ").focus();
+  draw(); count(); d.showModal(); if (!matchMedia("(pointer: coarse)").matches) $("ldPkSel").focus();
 }
 // Printer commands for every label; identical rows in a row are merged into one copy command
 function ldVarPRN(labels, lang, dpi) {
