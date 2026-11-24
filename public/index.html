@@ -335,6 +335,7 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-ribbon .rg { display: flex; flex-direction: column; padding: 0 8px; border-right: 1px solid var(--line); flex: none; }
 #dzSizeNote, #dzCaps { display: none !important; } /* details live in the drop-downs and tooltips now */
 .dz-ribbon .rdd span { white-space: nowrap; }
+.dz-label .dz-bg { border-radius: inherit; }
 .dz-ribbon .rr { display: flex; gap: 2px; align-items: center; flex: 1; }
 .dz-ribbon .rl { font: 11px var(--font); color: var(--muted); text-align: center; padding: 3px 0 2px; white-space: nowrap; }
 .dz-ribbon .rb { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 52px; padding: 5px 6px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--ink); font: 11.5px var(--font); cursor: pointer; white-space: nowrap; }
@@ -759,7 +760,8 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
       <div class="rg"><div class="rr sf">
         <label>Label colour<input id="dzStock" type="color" value="#ffffff"></label>
         <label>Print colour<input id="dzInk" type="color" value="#000000"></label>
-      </div><div class="rl">Colours (preview)</div></div>
+        <label>&nbsp;<button type="button" class="btn sm" id="dzBgBtn" title="Colour, gradient or picture behind the label (colour printers, PDF, laser and inkjet)">Background…</button></label>
+      </div><div class="rl">Colours</div></div>
     </div>
     <div class="dz-warn dz-mwarn" id="dzMediaWarn" hidden></div>
     <input type="file" id="dzImgFile" accept="image/*,.bmp,.jpg,.jpeg,.png" hidden>
@@ -3196,6 +3198,7 @@ function dzDraw() {
     lab.className = "dz-label" + (c ? " ghost" : " edit") + ($("dzGrid").checked ? " grid" : "");
     if (D.stock && D.stock !== "#ffffff") lab.style.backgroundColor = D.stock;
     Object.assign(lab.style, { left: (D.edge + c * (lw + D.hgap)) * s + "px", top: D.vgap * s + "px", width: lw * s + "px", height: D.h * s + "px", backgroundSize: `${s * 5}px ${s * 5}px` });
+    if (D.bg && D.bg.type && D.bg.type !== "none") { const bg = document.createElement("div"); bg.className = "dz-bg"; Object.assign(bg.style, dzBgCss(D.bg)); lab.append(bg); }
     for (const it of D.items) lab.append(dzEl(it, s, !c, c));
     if (!c) { lab.id = "dzLab"; lab.addEventListener("pointerdown", e => { if (e.target === lab) dzMarquee(e, lab); }); }
     paper.append(lab);
@@ -3951,13 +3954,63 @@ function dzToViewer() {
   $("dzDlg").close(); regenSource(D.lang, D.dpi, true);
   $("viewer").scrollIntoView({ block: "start" });
 }
+/* Label background: plain colour, two-colour gradient (linear at any angle, or radial) or a picture (cover / fit / stretch, with opacity).
+   Shown on screen and in colour output (colour label printers, PDF, laser and inkjet); thermal printer files leave it out. */
+function dzBgCss(b) {
+  const o = { position: "absolute", inset: "0", pointerEvents: "none", zIndex: "0", opacity: String(b.opacity ?? 1) };
+  if (b.type === "color") o.background = b.color || "#fff7ed";
+  if (b.type === "gradient") o.background = b.radial ? `radial-gradient(circle, ${b.c1 || "#ffffff"}, ${b.c2 || "#fdba74"})` : `linear-gradient(${b.angle ?? 135}deg, ${b.c1 || "#ffffff"}, ${b.c2 || "#fdba74"})`;
+  if (b.type === "image" && b.img) Object.assign(o, { backgroundImage: `url("${b.img}")`, backgroundSize: b.fit === "contain" ? "contain" : b.fit === "stretch" ? "100% 100%" : "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat" });
+  return o;
+}
+function dzBgImage(src) { dzBgImage.c = dzBgImage.c || {}; let im = dzBgImage.c[src]; if (!im) { im = dzBgImage.c[src] = new Image(); im.onload = () => { if ($("dzDlg").open) dzDraw(); }; im.src = src; } return im; }
+function dzPaintBg(x, ox, oy, w, h) {
+  const b = dz.D && dz.D.bg; if (!b || !b.type || b.type === "none") return;
+  x.save(); x.globalAlpha = Math.max(0, Math.min(1, b.opacity ?? 1));
+  if (b.type === "color") { x.fillStyle = b.color || "#fff7ed"; x.fillRect(ox, oy, w, h); }
+  if (b.type === "gradient") { let g;
+    if (b.radial) g = x.createRadialGradient(ox + w / 2, oy + h / 2, 0, ox + w / 2, oy + h / 2, Math.hypot(w, h) / 2);
+    else { const a = ((b.angle ?? 135) - 90) * Math.PI / 180, cx = ox + w / 2, cy = oy + h / 2, L = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2; g = x.createLinearGradient(cx - Math.cos(a) * L, cy - Math.sin(a) * L, cx + Math.cos(a) * L, cy + Math.sin(a) * L); }
+    g.addColorStop(0, b.c1 || "#ffffff"); g.addColorStop(1, b.c2 || "#fdba74"); x.fillStyle = g; x.fillRect(ox, oy, w, h); }
+  if (b.type === "image" && b.img) { const im = dzBgImage(b.img);
+    if (im.complete && im.naturalWidth) { let dw = w, dh = h; const r = im.naturalWidth / im.naturalHeight;
+      if (b.fit !== "stretch") { const cover = b.fit !== "contain"; if ((w / h > r) === cover) { dw = w; dh = w / r; } else { dh = h; dw = h * r; } }
+      x.beginPath(); x.rect(ox, oy, w, h); x.clip(); x.drawImage(im, ox + (w - dw) / 2, oy + (h - dh) / 2, dw, dh); } }
+  x.restore();
+}
+function dzBgDialog() {
+  const D = dz.D; D.bg = D.bg || { type: "none" }; const b = D.bg;
+  let d = $("dzBgDlg"); if (!d) { d = document.createElement("dialog"); d.id = "dzBgDlg"; d.style.cssText = "width:min(520px,96vw);max-height:94dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--ink)"; document.body.append(d); }
+  const draw = () => {
+    d.innerHTML = `<div class="dlg-head"><div><h2>Label background</h2><div class="sub">Prints on colour label printers, PDF, laser and inkjet. Thermal printer files leave it out.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div style="padding:14px 20px;display:grid;gap:12px">
+      <div class="ld-row" style="gap:6px">${[["none", "None"], ["color", "Colour"], ["gradient", "Gradient"], ["image", "Picture"]].map(([v, n]) => `<button type="button" class="btn sm${b.type === v ? " primary" : ""}" data-bt="${v}">${n}</button>`).join("")}</div>
+      ${b.type === "color" ? `<label class="ld-f">Colour<input type="color" data-k="color" value="${b.color || "#fff7ed"}"></label>` : ""}
+      ${b.type === "gradient" ? `<div class="ld-grid2"><label class="ld-f">From<input type="color" data-k="c1" value="${b.c1 || "#ffffff"}"></label><label class="ld-f">To<input type="color" data-k="c2" value="${b.c2 || "#fdba74"}"></label></div>
+        <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-k="radial"${b.radial ? " checked" : ""}> Radial (from the centre)</label>
+        ${b.radial ? "" : `<label class="ld-f">Direction ${b.angle ?? 135}°<input type="range" min="0" max="360" step="15" data-k="angle" value="${b.angle ?? 135}"></label>`}` : ""}
+      ${b.type === "image" ? `<div class="ld-row"><button type="button" class="btn" id="dzBgPick">${b.img ? "Change picture…" : "Choose picture…"}</button>${b.img ? `<img src="${b.img}" alt="" style="height:44px;border:1px solid var(--line);border-radius:6px">` : ""}</div>
+        <label class="ld-f">Fit<select data-k="fit">${[["cover", "Fill the label (crop)"], ["contain", "Whole picture (may leave edges)"], ["stretch", "Stretch to the label"]].map(([v, n]) => `<option value="${v}"${(b.fit || "cover") === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
+      ${b.type !== "none" ? `<label class="ld-f">Strength ${Math.round((b.opacity ?? 1) * 100)}% <small>lower it so text and barcodes stay easy to scan</small><input type="range" min="0.1" max="1" step="0.05" data-k="opacity" value="${b.opacity ?? 1}"></label>` : ""}
+      <div class="ld-row"><button type="button" class="btn primary" id="dzBgOk">Done</button></div></div>`;
+    d.querySelector(".x").onclick = d.querySelector("#dzBgOk").onclick = () => d.close();
+    for (const el of d.querySelectorAll("[data-bt]")) el.onclick = () => { b.type = el.dataset.bt; if (b.type !== "none" && b.opacity == null) b.opacity = b.type === "image" ? 0.35 : 1; if (b.type === "image" && !b.img) pick(); apply(); draw(); };
+    for (const el of d.querySelectorAll("[data-k]")) el.oninput = () => { const k = el.dataset.k; b[k] = el.type === "checkbox" ? el.checked : el.type === "range" ? +el.value : el.value; apply(); if (el.type !== "color" && el.tagName !== "SELECT" || k === "radial") draw(); };
+    const pk = d.querySelector("#dzBgPick"); if (pk) pk.onclick = pick;
+  };
+  const apply = () => { dzDraw(); dzSave(); };
+  const pick = () => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; i.onchange = async () => { const f = i.files[0]; if (!f) return;
+      const im = new Image(); im.src = URL.createObjectURL(f); await im.decode().catch(() => {}); const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(im, 0, 0, c.width, c.height); b.img = c.toDataURL("image/jpeg", 0.85); b.type = "image"; if (b.opacity == null) b.opacity = 0.35; apply(); draw(); }; i.click(); };
+  draw(); if (!d.open) d.showModal();
+}
 function dzColourPNG(ret, opt) {
   opt = opt || {}; const D = dz.D, k = opt.k || 12, lw = dzLW(), c = document.createElement("canvas"); c.width = Math.round(D.paper * k); c.height = Math.round((D.h + 2 * D.vgap) * k);
   const x = c.getContext("2d"); x.fillStyle = opt.plain ? "#ffffff" : "#e7e2d6"; x.fillRect(0, 0, c.width, c.height); dz.colourOut = !opt.mono;
   try {
     for (let col = 0; col < D.across; col++) {
       const ox = (D.edge + col * (lw + D.hgap)) * k, oy = D.vgap * k;
-      x.save(); x.beginPath(); x.rect(ox, oy, lw * k, D.h * k); x.clip(); x.fillStyle = D.stock || "#ffffff"; x.fillRect(ox, oy, lw * k, D.h * k);
+      x.save(); x.beginPath(); x.rect(ox, oy, lw * k, D.h * k); x.clip(); x.fillStyle = D.stock || "#ffffff"; x.fillRect(ox, oy, lw * k, D.h * k); if (!opt.noBg) dzPaintBg(x, ox, oy, lw * k, D.h * k);
       for (const it of dzResolveCol(col)) { if (!dzPrints(it)) continue;
         const b = dzBox(it), px = ox + it.x * k, py = oy + it.y * k;
         if (it.type === "line" || it.type === "box") { x.fillStyle = x.strokeStyle = dzCol(it); if (it.type === "line") x.fillRect(px, py, Math.max(1, it.w * k), Math.max(1, it.h * k)); else { const t = (it.thickness || 0.3) * k; x.lineWidth = t; x.strokeRect(px + t / 2, py + t / 2, it.w * k - t, it.h * k - t); } continue; }
@@ -4362,7 +4415,7 @@ function dzRibbonDef() {
     Home: [["", [editDD, B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
       ["", [{ font: true }, { size: true }, boldB, italB, curveDD]],
       ["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
-    Insert: [["", [textDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD]]],
+    Insert: [["", [textDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD, B("grid", "Background", dzBgDialog, null, () => !!(dz.D && dz.D.bg && dz.D.bg.type && dz.D.bg.type !== "none"), "Colour, gradient or picture behind the label")]]],
     Data: [["", [connectDD, { dbinfo: true }, B("lib", "Records", () => ldPickRecords(), () => !!(dz.db && dz.db.rows && dz.db.rows.length), null, "Browse the records, pick which to print: 1, 3, 5-9, 14-25(3) where (3) = copies of each"), { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
     View: [["", [showDD, zoomDD]]],
     Tools: [["", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing")), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing")), filesDD, B("lib", "Templates", () => openLibrary()), checkDD, B("vcard", "Talk to us", () => openLead("talk"))]]],
@@ -4515,6 +4568,7 @@ $("dzTurnLabel").onclick = () => { // the whole label turns clockwise: width and
   dzSetupForm(); dzProps(); dzSave();
   toast(`Label is now ${r1(H)} mm wide × ${r1(lw)} mm long; Ctrl+Z undoes it`);
 };
+$("dzBgBtn").onclick = dzBgDialog;
 $("dzStock").addEventListener("input", () => { dz.D.stock = $("dzStock").value; dzDraw(); dzSave(); });
 $("dzInk").addEventListener("input", () => { dz.D.ink = $("dzInk").value; dzDraw(); dzSave(); });
 $("dzZoomIn").onclick = () => { dz.zoom = Math.min(4, dz.zoom * 1.25); dzDraw(); };
