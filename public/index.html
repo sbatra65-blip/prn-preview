@@ -2058,10 +2058,33 @@ function layoutFromAI(ai, wmm, hmm) {
   return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10, items };
 }
 async function detectBarcodes(img) {
-  if (!("BarcodeDetector" in window)) return [];
+  if (!("BarcodeDetector" in window)) return detectBarcodesZX(img);
   try {
     const det = new BarcodeDetector(); const found = await det.detect(img);
     return found.map(b => ({ format: b.format, value: b.rawValue, box_pct: { x: +(b.boundingBox.x / img.naturalWidth * 100).toFixed(1), y: +(b.boundingBox.y / img.naturalHeight * 100).toFixed(1), w: +(b.boundingBox.width / img.naturalWidth * 100).toFixed(1), h: +(b.boundingBox.height / img.naturalHeight * 100).toFixed(1) } }));
+  } catch (e) { return []; }
+}
+// Browsers without BarcodeDetector (Safari, iPhone, desktop Firefox): ZXing reads one code at a time,
+// so each found code is blanked out and the picture read again, up to six codes
+async function detectBarcodesZX(img) {
+  try {
+    if (typeof qpLoadZX !== "function") return [];
+    const ZX = await qpLoadZX(), reader = new ZX.BrowserMultiFormatReader(), W = img.naturalWidth, H = img.naturalHeight, k = Math.min(1, 1600 / Math.max(W, H));
+    const c = document.createElement("canvas"); c.width = Math.round(W * k); c.height = Math.round(H * k);
+    const x = c.getContext("2d", { willReadFrequently: true }); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+    const out = [];
+    for (let i = 0; i < 6; i++) {
+      let r; try { r = reader.decodeFromCanvas(c); } catch (e) { break; }
+      const fmt = String(ZX.BarcodeFormat[r.getBarcodeFormat()] || "").toLowerCase(), pts = (r.getResultPoints() || []).map(p => [p.getX(), p.getY()]);
+      if (!pts.length) break;
+      let x0 = Math.min(...pts.map(p => p[0])), x1 = Math.max(...pts.map(p => p[0])), y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
+      const twoD = /qr|matrix|aztec|pdf/.test(fmt), pad = twoD ? (x1 - x0) * 0.18 + 6 : 8;
+      if (!twoD) { y0 -= c.height * 0.2; y1 += c.height * 0.2; } // 1D codes report points on one scan line only
+      x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(c.width, x1 + pad); y1 = Math.min(c.height, y1 + pad);
+      out.push({ format: fmt, value: r.getText(), box_pct: { x: +(x0 / c.width * 100).toFixed(1), y: +(y0 / c.height * 100).toFixed(1), w: +((x1 - x0) / c.width * 100).toFixed(1), h: +((y1 - y0) / c.height * 100).toFixed(1) } });
+      x.fillStyle = "#fff"; x.fillRect(x0, y0, x1 - x0, y1 - y0);
+    }
+    return out.sort((a, b) => a.box_pct.y - b.box_pct.y || a.box_pct.x - b.box_pct.x);
   } catch (e) { return []; }
 }
 function downscale(img, max = 1600) {
@@ -2179,7 +2202,13 @@ async function runAI() {
     const L = layoutFromAI(j.layout, wmm, hmm);
     // trust the browser's barcode decoder over the model for barcode data
     const bcs = L.items.filter(e => e.type === "barcode");
-    barcodes.forEach((b, i) => { const t = bcs[i]; if (t) { t.data = b.value; t.symbology = b.format.replace("_", ""); } });
+    { // match each decoded code to the nearest AI barcode of the same kind (2D with 2D), else by order
+      const is2D = f => /qr|matrix|aztec|pdf/i.test(f || ""), left = new Set(bcs);
+      const cen = t => [((t.x || 0) + (t.w || 0) / 2) / (L.w || 1) * 100, ((t.y || 0) + (t.h || 0) / 2) / (L.h || 1) * 100];
+      barcodes.forEach((b, i) => { const bx = b.box_pct ? [b.box_pct.x + b.box_pct.w / 2, b.box_pct.y + b.box_pct.h / 2] : null;
+        let t = null, best = 1e9; for (const c of left) { if (is2D(c.symbology) !== is2D(b.format)) continue; const [cx, cy] = cen(c), d = bx ? Math.hypot(cx - bx[0], cy - bx[1]) : 0; if (d < best) { best = d; t = c; } }
+        if (!t) t = [...left][0]; if (!t) return; left.delete(t); t.data = b.value; t.symbology = b.format.replace("_", ""); });
+    }
     p2l.lastW = L.w; p2l.lastH = L.h; p2l.layout = L; p2l.provider = j.provider;
     const who = { claude: "Claude", gemini: "Gemini", "workers-ai": "Cloudflare Llama (backup)" }[j.provider] || j.provider || "AI";
     $("bmStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
