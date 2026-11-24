@@ -2168,8 +2168,8 @@ async function dzPicPrn() {
     await Promise.all(dz.D.items.filter(i => i.type === "image").map(i => { const im = dzImg(i); return im && !im.complete ? new Promise(ok => { im.onload = im.onerror = ok; setTimeout(ok, 4000); }) : null; }));
     const lang = o.lang, dpi = lang === "EPL2" ? 203 : o.dpi, { prn } = layoutPRN(dzLayout(), lang, dpi);
     const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `${(p2l.name || "picture").replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_")}_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast(`PRN downloaded: ${DZ_LANG_NAME[lang] || lang} ${dpi} dpi`);
-  } catch (e) { toast("Could not make the PRN: " + e.message); }
+    toast(`PRN downloaded: ${DZ_LANG_NAME[lang] || lang} ${dpi} dpi`); ldBeep("done");
+  } catch (e) { toast("Could not make the PRN: " + e.message); ldBeep("err"); }
 }
 $("bmGo").onclick = () => { p2l.thenPrn = null; if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : (typeof APP !== "undefined" && APP ? dzImageDesign() : genBitmap()); };
 // Without AI, in the app: the picture becomes an image object on a new design, sized from the dialog
@@ -2183,7 +2183,7 @@ function dzImageDesign() {
   dz.D = Object.assign(dzDefault(), { printer: D0.printer, lang: D0.lang, dpi: D0.dpi, pw: D0.pw, mw: D0.mw, paper: lw, across: 1, edge: 0, h: lh, items: [{ id: 1, type: "image", x: r1(center ? (lw - iw) / 2 : 2), y: r1(center ? (lh - ih) / 2 : 2), w: r1(iw), h: r1(ih), src: c.toDataURL("image/png"), ratio, name: p2l.name, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked }] });
   dz.sel = 1; dz.seq = 2; $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
   $("dzStatus").textContent = "Picture placed as an image object: add text, barcodes or shapes around it.";
-  dzPicPrn();
+  if (!p2l.thenPrn) ldBeep("done"); dzPicPrn();
 }
 for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen && !$("useAI").checked) genBitmap(true); });
 for (const id of ["bmW", "bmH", "bmIW", "bmThr"]) $(id).addEventListener("input", () => { clearTimeout(genBitmap.t); genBitmap.t = setTimeout(() => { if (p2l.gen && !$("useAI").checked) genBitmap(true); }, 350); });
@@ -2216,10 +2216,10 @@ async function runAI() {
       const notes = dzFromModel({ items: [], dpi: d }, lang, d, L); const split = dzSplitColons(); if (split) notes.push(`${split} “label : value” line(s) split into label, colon and value`);
       $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
       $("dzStatus").textContent = `Photo read into ${dz.D.items.length} objects${notes.length ? " · " + notes.join(" · ") : ""}. Check every text and barcode value against the label before printing.`;
-      toast(`Design made: ${dz.D.items.length} objects`); dzPicPrn(); return;
+      toast(`Design made: ${dz.D.items.length} objects`); if (!p2l.thenPrn) ldBeep("done"); dzPicPrn(); return;
     }
     state.source = { kind: "ai" }; regenSource(lang, dpi, true);
-  } catch (err) { p2l.thenPrn = null; $("bmStatus").textContent = "AI conversion failed: " + err.message; }
+  } catch (err) { p2l.thenPrn = null; $("bmStatus").textContent = "AI conversion failed: " + err.message; ldBeep("err"); }
   finally { $("bmGo").disabled = false; }
 }
 
@@ -3860,7 +3860,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")], ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -4220,6 +4220,26 @@ $("dzImgFile").addEventListener("change", async e => {
 
 /* code -> designer */
 const DZ_SYM_IN = { code128: "code128", "gs1-128": "gs1-128", ean13: "ean13", upca: "upca", code39: "code39", qrcode: "qrcode", datamatrix: "datamatrix", gs1datamatrix: "datamatrix", "gs1-128composite": "gs1-128" };
+/* LabelDesk completion sound: a short rising three-note chime when a job finishes, a low two-note tone when it fails.
+   Made with Web Audio (no sound files). Muted from File → Completion sounds. */
+const LDB = { ctx: null };
+function ldBeepCtx() { if (!LDB.ctx) { const A = window.AudioContext || window.webkitAudioContext; if (!A) return null; LDB.ctx = new A(); } if (LDB.ctx.state === "suspended") LDB.ctx.resume().catch(() => {}); return LDB.ctx; }
+["pointerdown", "keydown", "touchend"].forEach(ev => addEventListener(ev, () => { try { ldBeepCtx(); } catch (e) {} }, { capture: true, passive: true })); // phones only allow sound after a tap
+function ldBeep(kind) {
+  try {
+    if (store.get("ld-beep-off")) return; const c = ldBeepCtx(); if (!c) return;
+    const notes = kind === "err" ? [[392, 0, .16], [262, .17, .30]] : kind === "small" ? [[1319, 0, .07], [1760, .075, .16]] : [[1047, 0, .08], [1397, .085, .08], [2093, .17, .26]];
+    const t0 = c.currentTime + .02, out = c.createGain(); out.gain.value = .22; out.connect(c.destination);
+    for (const [f, at, len] of notes) {
+      for (const [type, mul, vol] of [["sine", 1, 1], ["triangle", 2, .18]]) { // a soft overtone gives it a bell-like "LabelDesk" sound
+        const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = f * mul; o.connect(g); g.connect(out);
+        g.gain.setValueAtTime(0, t0 + at); g.gain.linearRampToValueAtTime(vol, t0 + at + .008); g.gain.exponentialRampToValueAtTime(.0005, t0 + at + len);
+        o.start(t0 + at); o.stop(t0 + at + len + .02);
+      }
+    }
+    if (kind !== "err") try { navigator.vibrate && navigator.vibrate(kind === "small" ? 30 : [40, 40, 60]); } catch (e) {}
+  } catch (e) {}
+}
 // "Label : value" lines from a photo become three objects (label, colon, value), with the colons and
 // values of each block lined up in columns, so values can later be linked to database fields
 function dzSplitColons() {
@@ -4309,7 +4329,7 @@ function dzImportText(text, dpi) {
 $("dzPasteBtn").onclick = () => { $("dzPasteDpi").value = String(dz.D?.dpi || state.dpi || 203); $("dzPasteDlg").showModal(); $("dzPasteText").focus(); };
 for (const id of ["dzPasteClose", "dzPasteCancel"]) $(id).onclick = () => $("dzPasteDlg").close();
 $("dzPasteText").addEventListener("input", () => { const l = detect($("dzPasteText").value); $("dzPasteLang").value = l === "UNKNOWN" ? "—" : (DZ_LANG_NAME[l] || l); });
-$("dzPasteGo").onclick = () => { if (dzImportText($("dzPasteText").value, +$("dzPasteDpi").value)) $("dzPasteDlg").close(); };
+$("dzPasteGo").onclick = () => { if (dzImportText($("dzPasteText").value, +$("dzPasteDpi").value)) { $("dzPasteDlg").close(); ldBeep("done"); } else ldBeep("err"); };
 if ($("dzBack")) $("dzBack").onclick = () => {
   if (state.source && state.source.design) return dzOpen();
   const m = state.lastModel; if (!m || !m.items.length) return toast("Open a label first");
@@ -4698,7 +4718,7 @@ async function ldPrintPDF() {
       }
       if (r % 20 === 19) await new Promise(ok => setTimeout(ok, 0)); // keep the page responsive on long runs
     }
-    doc.save(`labels_${labels.length}_${mode === "a4" ? "A4" : mode === "label" ? "single" : "roll"}.pdf`); ldSerialSave(labels);
+    doc.save(`labels_${labels.length}_${mode === "a4" ? "A4" : mode === "label" ? "single" : "roll"}.pdf`); ldSerialSave(labels); ldBeep("done");
     toast(`PDF with ${labels.length} label(s)${mode === "a4" ? `, ${perRow * perCol} per A4 page` : ""}`);
   } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); }
   finally { dz.ctx = null; dz.gfx = null; dz.serialStart = null; btn.disabled = false; btn.textContent = "Download PDF"; }
@@ -4805,9 +4825,9 @@ async function ldPrintRun(test, to) {
       await qz.print(qz.configs.create(name, { size: { width: D.paper, height: D.h }, units: "mm", margins: 0, scaleContent: false, copies: rows, colorType: dzPrinter().colour ? "color" : "blackwhite" }),
         [{ type: "pixel", format: "image", flavor: "base64", data: px }]);
     }
-    toast(test ? `Test label sent to ${name}` : `${rows * D.across} label(s) sent to ${name}`);
+    toast(test ? `Test label sent to ${name}` : `${rows * D.across} label(s) sent to ${name}`); ldBeep(test ? "small" : "done");
     if (!test) document.getElementById("ldPrint").close();
-  } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); }
+  } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); ldBeep("err"); }
   finally { btns.forEach(b => b.disabled = false); dz.serialStart = null; }
 }
 document.getElementById("ldPrintX").onclick = () => document.getElementById("ldPrint").close();
@@ -5249,7 +5269,7 @@ function dzDbUse(rows, name, kind) {
     const f = dzFields(); for (const c of columns) if (!f.some(x => x.name === c)) f.push({ name: c, sample: "" });
     try { const js = JSON.stringify(dz.db); if (js.length < 3e6) localStorage.setItem("ld-db-rows", js); else localStorage.removeItem("ld-db-rows"); } catch (e) {}
     dzDbShow(0); dzSave(); dzRibbonShow("Data"); dzProps();
-    toast(`${rows.length} records, ${columns.length} fields from ${name}`);
+    toast(`${rows.length} records, ${columns.length} fields from ${name}`); ldBeep("done");
   }
 }
 function dzDbOff() { if (!dz.D.db) return; if (!confirm(`Disconnect ${dz.D.db.name}? Objects keep their field links and show the sample values.`)) return; delete dz.D.db; dz.db = null; try { localStorage.removeItem("ld-db-rows"); } catch (e) {} dzSave(); dzRibbonShow("Data"); dzProps(); }
@@ -5500,7 +5520,7 @@ async function ldlOpen(file) {
     for (const [k, v] of Object.entries(pl.serial || {})) { const [id, pk] = k.split(":"), it = dz.D.items.find(i => i.id === +id); if (it) store.set(ldSerKey(it, +pk), v); }
     if (pl.data && pl.data.rows) { dz.db = pl.data; dz.recIdx = 0; try { const js = JSON.stringify(dz.db); if (js.length < 3e6) localStorage.setItem("ld-db-rows", js); } catch (e) {} } else dz.db = null;
     dzOpen(); if (dz.db) dzDbShow(0);
-    const pr = f.h.printer || {}; toast(`Opened ${f.h.name} · ${pr.brand && pr.brand !== "Any" ? pr.brand + " " : ""}${pr.model || ""} · ${f.h.lang} ${f.h.dpi} dpi${f.h.modified ? " · saved " + new Date(f.h.modified).toLocaleDateString("en-IN") : ""}`);
+    const pr = f.h.printer || {}; ldBeep("done"); toast(`Opened ${f.h.name} · ${pr.brand && pr.brand !== "Any" ? pr.brand + " " : ""}${pr.model || ""} · ${f.h.lang} ${f.h.dpi} dpi${f.h.modified ? " · saved " + new Date(f.h.modified).toLocaleDateString("en-IN") : ""}`);
   } catch (e) { toast(e.message); }
 }
 function ldlPick() { const i = document.createElement("input"); i.type = "file"; i.accept = ".ldl,application/x-labeldesk"; i.onchange = () => { if (i.files[0]) ldlOpen(i.files[0]); }; i.click(); }
@@ -5669,8 +5689,8 @@ async function qpWatch(id) { // follow one job until the station reports back
   for (let i = 0; i < 40; i++) {
     await new Promise(ok => setTimeout(ok, 3000)); if (qp$("ldQP").hidden) return;
     try { const r = await fetch("/api/queue/info?job=" + id, { headers: { "x-station": qpStation() } }); const j = await r.json(); qpStationShow(j);
-      if (j.job && j.job.status === "printed") return qpMsg("Printed ✓", "ok");
-      if (j.job && j.job.status === "failed") return qpMsg("The PC could not print: " + (j.job.note || "unknown error"), "err"); } catch (e) {}
+      if (j.job && j.job.status === "printed") { ldBeep("done"); return qpMsg("Printed ✓", "ok"); }
+      if (j.job && j.job.status === "failed") return ldBeep("err"), qpMsg("The PC could not print: " + (j.job.note || "unknown error"), "err"); } catch (e) {}
   }
 }
 async function qpFile(kind) {
@@ -5683,7 +5703,7 @@ async function qpFile(kind) {
       try { for (let r = 0; r < Math.ceil(qty / D.across); r++) { dz.ctx = { labels, base: r * D.across }; const full = dzColourPNG(true, { plain: true, k: 12 }); const row = document.createElement("canvas"); row.width = full.width; row.height = Math.round(D.h * 12); row.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * 12));
           if (!doc) doc = new jsPDF({ unit: "mm", format: [D.paper, D.h], orientation: D.paper > D.h ? "l" : "p", compress: true }); else doc.addPage([D.paper, D.h], D.paper > D.h ? "l" : "p");
           doc.addImage(row.toDataURL("image/png"), "PNG", 0, 0, D.paper, D.h, undefined, "FAST"); } } finally { dz.serialStart = null; } return doc; });
-    await qpShare(doc.output("blob"), `${QP.name}_${qty}.pdf`, "application/pdf"); qpSaveSerial(labels); qpMsg(`PDF with ${qty} label(s)`, "ok");
+    await qpShare(doc.output("blob"), `${QP.name}_${qty}.pdf`, "application/pdf"); qpSaveSerial(labels); qpMsg(`PDF with ${qty} label(s)`, "ok"); ldBeep("done");
   } catch (e) { qpMsg(e.message, "err"); }
 }
 async function qpShare(blob, name, type) { // phones: the share sheet (AirPrint, Files, WhatsApp…); otherwise a download
@@ -5790,8 +5810,8 @@ async function lsPoll() {
   try {
     const { jobs } = await lsFetch("pull"), name = store.get("ld-station-printer");
     for (const j of jobs) {
-      try { await ldQzConnect(); await qz.print(qz.configs.create(name, { copies: 1 }), [{ type: "raw", format: "command", flavor: "base64", data: j.prn }]); await lsFetch("done", { id: j.id, ok: true }); lsAdd(`Printed ${j.title}`); toast(`Printed ${j.title}`); }
-      catch (e) { const m = e && e.message || String(e); await lsFetch("done", { id: j.id, ok: false, note: m }).catch(() => {}); lsAdd(`Failed ${j.title}: ${m}`); }
+      try { await ldQzConnect(); await qz.print(qz.configs.create(name, { copies: 1 }), [{ type: "raw", format: "command", flavor: "base64", data: j.prn }]); await lsFetch("done", { id: j.id, ok: true }); lsAdd(`Printed ${j.title}`); toast(`Printed ${j.title}`); ldBeep("done"); }
+      catch (e) { const m = e && e.message || String(e); await lsFetch("done", { id: j.id, ok: false, note: m }).catch(() => {}); lsAdd(`Failed ${j.title}: ${m}`); ldBeep("err"); }
     }
   } catch (e) { lsAdd("Error: " + e.message); }
   LS.t = setTimeout(lsPoll, document.hidden ? 8000 : 4000);
