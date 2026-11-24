@@ -175,6 +175,8 @@ dialog::backdrop { background: rgba(16, 24, 40, .55); }
 .checklist { list-style: none; margin: 0; padding: 0; }
 .checklist li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; line-height: 1.4; }
 .mark { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.dz-ribbon .rt .rbrand:focus, .brand:focus:not(:focus-visible) { outline: none; }
+img.mark.logo { background: none !important; padding: 0; object-fit: contain; border-radius: 22%; display: block; flex: none; }
 .mark.ok { background: var(--good-soft); color: var(--good); }
 .mark.bad { background: var(--bad-soft); color: var(--bad); }
 .mark.warn { background: var(--warn-soft); color: var(--warn); }
@@ -458,7 +460,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="./"><span class="mark" aria-hidden="true">LD</span><b>Label<span>Desk</span></b></a>
+  <a class="brand" href="./"><img class="mark logo" src="/icons/icon.svg" alt="" aria-hidden="true"><b>Label<span>Desk</span></b></a>
   <nav class="topnav" aria-label="Main">
     <a href="#viewer" class="on">Viewer</a>
     <button type="button" data-open="dz">Designer</button>
@@ -703,7 +705,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 <datalist id="dzPtList"><option value="5"><option value="6"><option value="7"><option value="8"><option value="9"><option value="10"><option value="11"><option value="12"><option value="14"><option value="16"><option value="18"><option value="20"><option value="24"><option value="28"><option value="32"><option value="36"><option value="42"><option value="48"><option value="60"><option value="72"></datalist>
 <dialog id="dzDlg" class="dz" aria-labelledby="dzTitle">
   <div class="dz-head">
-    <h2 id="dzTitle" class="dz-brand"><span class="mark" aria-hidden="true">LD</span><b>Label<span>Desk</span></b></h2>
+    <h2 id="dzTitle" class="dz-brand"><img class="mark logo" src="/icons/icon.svg" alt="" aria-hidden="true"><b>Label<span>Desk</span></b></h2>
     <button type="button" class="btn dark dz-apponly" data-lead="talk">Talk to Infinite Solutions</button>
     <button type="button" class="btn" id="dzNew">New</button>
     <button type="button" class="btn" id="dzPasteBtn">Paste code</button>
@@ -3920,7 +3922,7 @@ function dzRibbonShow(tab) {
 }
 (function dzBuildRibbon() {
   const r = $("dzRibbon"), tabs = r.querySelector(".rt");
-  tabs.insertAdjacentHTML("afterbegin", '<a class="rbrand" href="./?about" title="About LabelDesk"><span class="mark" aria-hidden="true">LD</span><b>Label<span>Desk</span></b></a>');
+  tabs.insertAdjacentHTML("afterbegin", '<a class="rbrand" href="./?about" title="About LabelDesk"><img class="mark logo" src="/icons/icon.svg" alt="" aria-hidden="true"><b>Label<span>Desk</span></b></a>');
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
@@ -4288,7 +4290,7 @@ if (!APP && new URLSearchParams(location.search).has("design")) setTimeout(dzOpe
   <div class="ld-wrap">
     <div class="ld-card" id="ldCard"></div>
     <div class="ld-side">
-      <span class="mark" aria-hidden="true">LD</span>
+      <img class="mark logo" src="/icons/icon.svg" alt="" aria-hidden="true">
       <h2>Design, check and print labels from any browser.</h2>
       <ul>
         <li>Every printer language: TSPL, ZPL, EPL2, PGL, DPL and more</li>
@@ -4327,7 +4329,7 @@ async function ldApi(path, body, method) {
   return j;
 }
 const ldCard = () => document.getElementById("ldCard");
-const LD_HEAD = '<div class="ld-brand"><span class="mark" aria-hidden="true">LD</span><b>Label<span>Desk</span></b></div>';
+const LD_HEAD = '<div class="ld-brand"><img class="mark logo" src="/icons/icon.svg" alt="" aria-hidden="true"><b>Label<span>Desk</span></b></div>';
 function ldShow(html, focus) {
   document.getElementById("ldAuth").hidden = false; ldCard().innerHTML = LD_HEAD + html;
   const f = ldCard().querySelector(focus || "input"); if (f) setTimeout(() => f.focus(), 30);
