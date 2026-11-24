@@ -36,7 +36,9 @@ Each element has "type" ("text", "barcode", "line" or "box") and a tight "box_2d
 - box: a printed rectangular frame, with "thickness_mm".
 ${size}
 ${hints}
-List every printed line of text, top to bottom. Never invent text that is not printed.`;
+List every printed line of text, top to bottom. Never invent text that is not printed.
+When a line is laid out in columns (a caption, a ":" separator, then a value), give the caption, the ":" and the value as separate text elements, each with its own box_2d.
+Copy e-mail addresses, web addresses and codes exactly: never add or remove spaces inside them.`;
 }
 
 function extractJSON(v) {

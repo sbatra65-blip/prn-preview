@@ -2213,7 +2213,7 @@ async function runAI() {
     $("bmStatus").textContent = `Read by ${who}: ${L.items.length} elements on a ${L.w} × ${L.h} mm label${barcodes.length ? `, ${barcodes.length} barcode(s) decoded in the browser` : ""}.`;
     if (typeof APP !== "undefined" && APP) { // in the app the photo becomes a design: every text, barcode and line is an object
       const d = lang === "EPL2" ? 203 : dpi; clearTimeout(dzSave.t); if (dz.D) dzHist();
-      const notes = dzFromModel({ items: [], dpi: d }, lang, d, L);
+      const notes = dzFromModel({ items: [], dpi: d }, lang, d, L); const split = dzSplitColons(); if (split) notes.push(`${split} “label : value” line(s) split into label, colon and value`);
       $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
       $("dzStatus").textContent = `Photo read into ${dz.D.items.length} objects${notes.length ? " · " + notes.join(" · ") : ""}. Check every text and barcode value against the label before printing.`;
       toast(`Design made: ${dz.D.items.length} objects`); dzPicPrn(); return;
@@ -4220,6 +4220,50 @@ $("dzImgFile").addEventListener("change", async e => {
 
 /* code -> designer */
 const DZ_SYM_IN = { code128: "code128", "gs1-128": "gs1-128", ean13: "ean13", upca: "upca", code39: "code39", qrcode: "qrcode", datamatrix: "datamatrix", gs1datamatrix: "datamatrix", "gs1-128composite": "gs1-128" };
+// "Label : value" lines from a photo become three objects (label, colon, value), with the colons and
+// values of each block lined up in columns, so values can later be linked to database fields
+function dzSplitColons() {
+  const D = dz.D, W = t => dzTextW(t), its = D.items.filter(i => i.type === "text" && !i.para && !(i.parts && i.parts.length) && !dzRot(i) && typeof i.text === "string");
+  let id = Math.max(0, ...D.items.map(i => i.id || 0)) + 1, n = 0;
+  const rows = [];
+  for (const it of its) {
+    const t = it.text, a = t.match(/^\s*:\s*(\S.*)$/), b = !a && t.match(/^\s*([^:]{1,60}?[A-Za-z)\].][^:]{0,60}?)\s*:\s+(\S.*)$/);
+    if (b && /https?$|^\s*(www|mailto)/i.test(b[1])) continue;
+    if (!a && !b) continue;
+    const mk = (txt, x) => Object.assign({}, it, { id: id++, text: txt, x: r1(x) });
+    if (a) { const colon = mk(":", it.x), val = mk(a[1], it.x + W(Object.assign({}, it, { text: ": " }))); rows.push({ it, colon, val, lead: true }); }
+    else { const lab = Object.assign(it, { text: b[1].trim() }), colon = mk(":", it.x + W(lab) + 1.5), val = mk(b[2], colon.x + W(colon) + 1.5); rows.push({ it: lab, colon, val, labelRight: it.x + W(lab) }); }
+    n++;
+  }
+  if (!n) return 0;
+  // blocks: rows in reading order whose labels start in the same place and follow each other closely
+  rows.sort((p, q) => p.colon.y - q.colon.y);
+  const blocks = []; let cur = null;
+  for (const r of rows) {
+    const h = dzBox(r.colon).h, prev = cur && cur[cur.length - 1];
+    if (cur && !r.lead && !prev.lead && Math.abs(r.it.x - prev.it.x) < 3 && r.colon.y - prev.colon.y < h * 4) cur.push(r);
+    else if (cur && r.lead && prev.lead && Math.abs(r.colon.x - prev.colon.x) < 6 && r.colon.y - prev.colon.y < h * 4) cur.push(r);
+    else blocks.push(cur = [r]);
+  }
+  for (const bl of blocks) {
+    if (bl[0].lead) { const cx = Math.min(...bl.map(r => r.colon.x)), vx = Math.min(...bl.map(r => r.val.x)); for (const r of bl) { r.colon.x = r1(cx); r.val.x = r1(Math.max(vx, cx + 1)); } continue; }
+    const cx = Math.max(...bl.map(r => r.labelRight)) + 2, vx = cx + W(bl[0].colon) + 1.5;
+    for (const r of bl) { r.oldVal = r.val.x; r.colon.x = r1(cx); r.val.x = r1(vx); }
+  }
+  // wrapped value lines (no colon, indented, just under a split row) follow their value column
+  const placed = rows.map(r => r.val);
+  for (const it of its) {
+    if (rows.some(r => r.it === it)) continue;
+    const above = placed.filter(v => v.y < it.y && it.y - v.y < dzBox(v).h * 3.5).sort((p, q) => q.y - p.y)[0];
+    const own = above && rows.find(r => r.val === above), lx = own ? (own.wrapOf != null ? own.wrapOf : own.lead ? own.colon.x - 12 : own.it.x) : 0;
+    if (own && it.x > lx + 10) { it.x = r1(above.x); placed.push(it); rows.push({ it: {}, val: it, wrapOf: lx }); }
+  }
+  for (const r of rows) if (r.colon) D.items.push(r.colon, r.val);
+  for (const r of rows) if (r.lead && r.colon) { const i = D.items.indexOf(r.it); if (i >= 0) D.items.splice(i, 1); }
+  // nothing may run past the label's right edge: shrink a value that would
+  const lw = dzLW(); for (const r of rows) if (r.val && r.val.x + W(r.val) > lw - 0.5 && r.val.h) { const k = (lw - 0.5 - r.val.x) / W(r.val); if (k > 0.5) r.val.h = Math.round(r.val.h * k * 100) / 100; }
+  dz.seq = id; return n;
+}
 function dzFromModel(model, lang, dpi, Lpre) {
   const L = Lpre || modelToLayout(model), items = [];
   let id = 1, odd = 0;
