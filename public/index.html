@@ -501,18 +501,18 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 .dz-setupdlg .sb { padding: 0 16px; }
 .dz-setupdlg .dz-setup { display: block !important; overflow: visible; min-height: 0 !important; padding: 0 !important; background: none; }
 .dz-setupdlg .dz-setup .rg { padding: 16px 0; border-bottom: 1px solid var(--line); }
-.dz-setupdlg .dz-setup .rg:last-child { border-bottom: 0; }
+.dz-setupdlg .dz-setup .rg:last-of-type { border-bottom: 0; }
 .dz-setupdlg .dz-setup .rg::before { display: block; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-.dz-setupdlg .dz-setup .rg:nth-child(1)::before { content: "Printer"; }
-.dz-setupdlg .dz-setup .rg:nth-child(2)::before { content: "Label and media"; }
-.dz-setupdlg .dz-setup .rg:nth-child(3)::before { content: "Colours"; }
+.dz-setupdlg .dz-setup .rg:nth-of-type(1)::before { content: "Printer"; }
+.dz-setupdlg .dz-setup .rg:nth-of-type(2)::before { content: "Label and media"; }
+.dz-setupdlg .dz-setup .rg:nth-of-type(3)::before { content: "Colours"; }
 .dz-setupdlg .dz-setup .rr.sf { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px 16px; align-items: end; }
 .dz-setupdlg .dz-setup label { font-size: 13px; gap: 4px; }
 .dz-setupdlg .dz-setup input, .dz-setupdlg .dz-setup select { width: 100%; min-height: 36px; font-size: 14px; }
 .dz-setupdlg .dz-setup input[type=color] { height: 36px; }
 .dz-setupdlg .dz-setup .w2 { grid-column: span 2; }
 .dz-setupdlg .dz-setup .rl { font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 8px; max-width: 65ch; white-space: normal; }
-.dz-setupdlg .dz-setup .rg:nth-child(3) .rl { display: none; }
+.dz-setupdlg .dz-setup .rg:nth-of-type(3) .rl { display: none; }
 .dz-setupdlg #dzSizeNote, .dz-setupdlg #dzCaps { display: block !important; }
 .dz-setupdlg .sf2 { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); position: sticky; bottom: 0; background: #fff; }
 @media (max-width: 600px) {
@@ -555,7 +555,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
   background: rgba(15, 23, 42, .78); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; padding: 4px 12px; font-size: 12px; }
 #dzInfo:hover, #dzInfo:focus-visible { background: #0f172a; color: #fff; border-color: rgba(255, 255, 255, .3); }
 .dz-zf .zask { display: none; }
-@media (min-width: 1360px) {
+@media (min-width: 1420px) {
   .dz-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto; }
   .dz-main > .dz-ask { grid-column: 1; grid-row: 1; border-bottom: 1px solid #eceef2; }
   .dz-main > .dz-ask input#dzAskIn { flex: 1 1 160px; }
@@ -579,6 +579,10 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
   .dz-zf .zask { display: block; }
   .dz-zf .zask[aria-expanded="true"] { background: #f1f5f9; }
 }
+
+.dz-clampnote { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 13px; }
+.dz-clampnote[hidden] { display: none; }
+.dz-ask .msg .ld-link { margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -1939,7 +1943,7 @@ $("fileIn").onchange = async e => { const f = e.target.files[0]; if (!f) return;
   try { txt = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { txt = new TextDecoder("latin1").decode(buf); }
   state.genNotes = []; state.source = null; state.sizeHint = null; $("srcBadge").hidden = true; $("prn").value = showCtl(extractBinaries(txt)); state.edited = true; clearOv(); $("fileName").textContent = f.name;
   const d = f.name.match(/(203|300)/); if (d) { state.dpi = +d[1]; syncButtons(); } draw(); };
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1600); }
+function toast(msg, ms) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), ms || 1600); }
 window.addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(draw, 120); });
 
 /* ---------------- Pic2Label: picture -> PRN ---------------- */
@@ -3219,7 +3223,7 @@ addEventListener("keydown", e => { // Del / Backspace deletes the selection even
   const [bk, bo, bf, bi, ba, bh] = f.children;
   bk.onclick = () => { const m = st.parentElement, on = !m.classList.contains("ask-open"); m.classList.toggle("ask-open", on); bk.setAttribute("aria-expanded", on); if (on) setTimeout(() => $("dzAskIn").focus(), 30); }; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); ba.onclick = dzActual; bh.onclick = dzGestureHelp;
   st.parentElement.style.position = st.parentElement.style.position || "relative"; st.parentElement.append(f);
-  if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(function tip() { const su = document.getElementById("dzSetupDlg"); if (su && su.open) return setTimeout(tip, 3000); if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); dzGestureHelp(); } }, 4000);
+  if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(function tip() { const su = document.getElementById("dzSetupDlg"); if (su && su.open) return setTimeout(tip, 3000); if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); toast("Tip: pinch to zoom, double-tap to edit, long-press for the menu. Tap ? for all gestures.", 6000); } }, 4000);
 })();
 $("dzStage").addEventListener("dblclick", e => { if (matchMedia("(pointer: coarse)").matches) return; const o = e.target.closest("#dzPaperEl .dz-o"); if (o) { const it = dz.D.items.find(i => i.id === +o.dataset.id); if (it) { dzSelect(it.id); dzEditObj(it); } return; } dzInsertMenu(e.clientX, e.clientY); });
 // Insert menu at a point on the canvas: the new object lands where you clicked
@@ -4583,7 +4587,8 @@ function dzForAI() { // the design as the AI sees it: no image data, rounded num
   return { label: { w: r1(dzLW()), h: D.h, across: D.across }, items: D.items.map(it => Object.fromEntries(Object.entries(it).filter(([k]) => keep.includes(k)).map(([k, v]) => [k, typeof v === "number" ? r1(v) : v]))) };
 }
 async function dzAsk(text) {
-  text = String(text || "").trim(); if (!text) return;
+  text = String(text || "").trim();
+  if (!text) { $("dzAskMsg").textContent = "Type what the label should show, e.g. 100×50 mm rice label with MRP and EAN-13."; $("dzAskIn").focus(); return; }
   const D = dz.D, edit = $("dzAskEdit").checked && D.items.length, msg = $("dzAskMsg"), go = $("dzAskGo");
   go.disabled = true; msg.textContent = "Designing…";
   try {
@@ -4612,7 +4617,10 @@ async function dzAsk(text) {
     dz.seq = id; dz.sel = null; dzSetupForm(); dzProps(); dzSave(); for (const it of D.items) dzEnsureFont(it);
     msg.textContent = (j.reply || "Done.") + " · Undo (Ctrl+Z) to go back"; $("dzAskEdit").checked = true; $("dzAskIn").value = "";
     if (D.paper > D.mw) msg.textContent += ` · Note: ${D.paper} mm liner is wider than this printer takes.`;
-  } catch (e) { msg.textContent = e.message; }
+  } catch (e) {
+    msg.textContent = ldNetMsg(e) + " ";
+    const again = document.createElement("button"); again.type = "button"; again.className = "ld-link"; again.textContent = "Try again"; again.onclick = () => dzAsk(text); msg.append(again);
+  }
   finally { go.disabled = false; }
 }
 $("dzAsk").addEventListener("submit", e => { e.preventDefault(); dzAsk($("dzAskIn").value); });
@@ -4690,10 +4698,10 @@ function dzOwner() {
 }
 async function dzApi(path, opts = {}) {
   const who = typeof LD !== "undefined" && LD.company ? { "x-ld": "1" } : { "x-owner": dzOwner() };
-  const r = await fetch("/api/designs" + path, Object.assign({}, opts, { headers: Object.assign(who, { "content-type": "application/json" }, opts.headers || {}) }));
+  let r; try { r = await fetch("/api/designs" + path, Object.assign({}, opts, { headers: Object.assign(who, { "content-type": "application/json" }, opts.headers || {}) })); } catch (e) { throw new Error(ldNetMsg(e)); }
   let j = {}; try { j = await r.json(); } catch (e) {}
   if (r.status === 401 && j.signin && typeof ldSignin === "function" && !LD.off) { ldSignin("Please sign in to use your saved designs."); }
-  if (!r.ok) throw new Error(j.error || `Cloud error ${r.status}`);
+  if (!r.ok) throw new Error(j.error || ldHttpMsg(r.status));
   return j;
 }
 async function dzCloudSave() {
@@ -6391,7 +6399,7 @@ document.addEventListener("drop", e => { const f = [...(e.dataTransfer.files || 
 /* ---------- Quick print for phones ---------- */
 const QP = { D: null, name: "", rec: {}, cloud: [], recs: null, ser: {} };
 const qp$ = id => document.getElementById(id);
-const qpPhone = () => matchMedia("(max-width: 760px)").matches;
+const qpPhone = () => matchMedia("(max-width: 760px) and (pointer: coarse)").matches;
 const qpStation = () => store.get("ld-qp-station") || "";
 const qpEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function qpWith(fn) { const keep = dz.D; dz.D = QP.D; try { return fn(); } finally { dz.D = keep; dz.ctx = null; dz.gfx = null; } }
@@ -6683,6 +6691,50 @@ function dzSetupOpen() {
   const first = document.getElementById("dzPrinter"); if (first) first.focus();
 }
 document.getElementById("dzInfo").addEventListener("click", dzSetupOpen);
+</script>
+
+<script>
+/* Plain-language network and server messages */
+function ldNetMsg(e) {
+  if (!navigator.onLine) return "You are offline. Designing and printing still work; AI and the cloud need the internet.";
+  if (e && (e.name === "TypeError" || /fetch|network|load failed/i.test(e.message || ""))) return "Could not reach LabelDesk. Check the internet connection and try again.";
+  return (e && e.message) || "Something went wrong. Try again.";
+}
+function ldHttpMsg(st) {
+  if (st === 404 || st === 501 || st === 503) return "Cloud storage is not switched on here yet. Your design is kept in this browser; File → Save → Save as .ldl file keeps a copy.";
+  if (st === 401 || st === 403) return "Sign in to use designs saved in the cloud.";
+  if (st === 413) return "This design is too large to save to the cloud. Remove big pictures and try again.";
+  if (st === 429) return "Too many requests in a short time. Wait a minute and try again.";
+  if (st >= 500) return "LabelDesk's cloud did not answer. Try again in a minute.";
+  return "The cloud refused the request (" + st + "). Try again.";
+}
+addEventListener("offline", () => toast("You are offline. Designing and printing still work; AI and the cloud need the internet.", 5000));
+addEventListener("online", () => toast("Back online.", 2000));
+/* Label setup: keep numbers inside their limits and show the value actually used */
+(function () {
+  const box = document.getElementById("dzSetup"); if (!box) return;
+  let note;
+  const say = t => {
+    if (!note) { note = document.createElement("p"); note.className = "dz-clampnote"; note.setAttribute("role", "status"); box.prepend(note); }
+    note.textContent = t; note.hidden = !t;
+  };
+  box.addEventListener("focusin", e => { if (e.target.matches("input[type=number]")) e.target.dataset.prev = e.target.value; });
+  box.addEventListener("change", e => {
+    const el = e.target; if (!el.matches("input[type=number]")) return;
+    const lab = (el.closest("label") ? el.closest("label").firstChild.textContent : "Value").trim().replace(/,\s*mm$/, "");
+    const unit = /mm/.test(el.closest("label") ? el.closest("label").textContent : "") ? " mm" : "";
+    const fire = () => el.dispatchEvent(new Event("input", { bubbles: true }));
+    if (el.value.trim() === "" || isNaN(+el.value)) { el.value = el.dataset.prev || el.defaultValue || el.min || 0; fire(); say(`${lab} cannot be empty; kept ${el.value}${unit}.`); return; }
+    const v = +el.value, lo = el.min !== "" ? +el.min : -Infinity, hi = el.max !== "" ? +el.max : Infinity;
+    if (v < lo) { el.value = lo; fire(); say(`${lab} set to ${lo}${unit}, the smallest allowed.`); }
+    else if (v > hi) { el.value = hi; fire(); say(`${lab} set to ${hi}${unit}, the largest allowed.`); }
+    else say("");
+  }, true);
+  box.addEventListener("change", () => setTimeout(() => {
+    const w = +document.getElementById("dzW").value;
+    if (w && w < 5 && note) { note.textContent = `Each label is only ${w} mm wide. Reduce labels across or widen the liner.`; note.hidden = false; }
+  }, 0));
+})();
 </script>
 </body>
 </html>
