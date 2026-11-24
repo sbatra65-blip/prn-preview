@@ -2948,7 +2948,7 @@ function dzPrinterChanged(keep) {
 }
 function dzCaps() {
   const D = dz.D, p = dzPrinter();
-  $("dzCaps").textContent = p.driver ? `Colour inkjet · prints ${D.pw} mm wide · media up to ${D.mw} mm · no printer language: print File → Export colour image through its Windows driver`
+  $("dzCaps").textContent = p.driver ? `Colour inkjet · prints ${D.pw} mm wide · media up to ${D.mw} mm · no printer language: print File → Export colour image through its driver`
     : p.colour ? `Colour inkjet · prints ${D.pw} mm wide · media up to ${D.mw} mm · ZPL II prints black only; for colour use File → Export colour image with its driver`
     : `${p.kind} · prints ${D.pw} mm wide · media up to ${D.mw} mm · ${p.langs.map(l => DZ_LANG_NAME[l].split(" · ")[0]).join(", ")} · ${p.dpis.join("/")} dpi`;
   dzSizes();
@@ -3976,7 +3976,7 @@ function dzColourPNG(ret, opt) {
   const a = document.createElement("a"); a.href = c.toDataURL("image/png"); a.download = `label-design-colour-${D.across}up.png`; a.click();
 }
 function dzDownload() {
-  if (dzPrinter().driver) { toast("This colour printer has no printer language: use File → Export colour image and print it through its Windows driver."); return; }
+  if (dzPrinter().driver) { toast("This colour printer has no printer language: use File → Export colour image and print it through its driver."); return; }
   if (!dzCheck()) return;
   const D = dz.D, d = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayout(), D.lang, d);
   const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `design_${D.across}up_${D.lang}_${d}dpi.prn`; a.click();
@@ -5190,7 +5190,8 @@ async function ldPrintOpen() {
     <div class="ld-grid2">
       <label class="ld-f">Send as<select id="ldPrMode">
         ${colourOnly ? "" : `<option value="raw" selected>Printer commands (sharpest, fastest)</option>`}
-        <option value="image"${colourOnly ? " selected" : ""}>Image via driver${p.colour ? " (colour)" : ""}</option></select></label>
+        <option value="image"${colourOnly ? " selected" : ""}>Image via driver${p.colour ? " (colour)" : ""}</option>
+        <option value="pdf">PDF to the printer (printers with PDF printing, Mac drivers)</option></select></label>
       <div class="ld-f">Label<small id="ldPrInfo"></small></div>
     </div>
     <p class="ld-err" id="ldPrErr" role="alert"></p>
@@ -5198,7 +5199,9 @@ async function ldPrintOpen() {
       <span style="flex:1"></span>
       <select id="ldPdfMode" aria-label="PDF pages" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><option value="row">PDF: labels as on the roll</option><option value="label">PDF: one label per page</option><option value="a4">PDF: A4 sheet of labels</option></select>
       <button type="button" class="btn" id="ldPdfGo">Download PDF</button><button type="button" class="btn" id="ldPrnGo">Download .prn</button></div>
-    <p class="dz-cap" style="margin-top:12px">Printer language mode needs the Windows printer set to a “Generic / Text Only” or the maker's driver with raw pass-through, which is the normal set-up for thermal printers. Image mode works with any driver; set the driver's label size to ${r1(D.paper)} × ${r1(D.h)} mm.</p>`;
+    <p class="dz-cap" style="margin-top:12px">${(/Mac/.test(navigator.platform || "") || /Macintosh/.test(navigator.userAgent)) && !/iPhone|iPad/.test(navigator.userAgent) && !matchMedia("(pointer: coarse)").matches
+      ? `On a Mac: add the printer in System Settings → Printers &amp; Scanners with the maker's macOS driver (TSC, Zebra, Honeywell, SATO and Printronix provide them). Printer language mode sends the commands straight through; Image and PDF modes use the driver, so set its label size to ${r1(D.paper)} × ${r1(D.h)} mm.`
+      : `Printer language mode needs the printer set to a “Generic / Text Only” driver or the maker's driver with raw pass-through, which is the normal set-up for thermal printers. Image and PDF modes work with any driver; set the driver's label size to ${r1(D.paper)} × ${r1(D.h)} mm.`}</p>`;
   const info = () => { const q0 = Math.max(1, +document.getElementById("ldPrQty").value || 1); let q = q0; if (dzVarNeeds().any) { try { q = ldVarLabels(q0).length || q0; } catch (e) {} } const sk = ldSkip(), rows = Math.ceil((q + sk) / per);
     const si = document.getElementById("ldPrSkipInfo"); if (si) si.textContent = sk ? `${sk} label position(s) left blank first` : per > 1 ? `Positions 1–${per} across each row` : "";
     document.getElementById("ldPrInfo").textContent = `${r1(dzLW())} × ${r1(D.h)} mm · ${q} label(s)${per > 1 ? ` on ${rows} row(s), ${per} across` : ""} · ${p.brand === "Any" ? "" : p.brand + " "}${p.model}`; };
@@ -5248,8 +5251,17 @@ async function ldPrintRun(test, to) {
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
       if (printed) ldSerialSave(printed);
+    } else if (mode === "pdf") { // one PDF page per label row, sent to the printer as PDF: works with fields, serials and records
+      let labels = ldLabels(test ? 1 : qty); if (test) labels = labels.filter(l => !l.blank).slice(0, D.across); if (!labels.length) throw new Error("Nothing to print.");
+      const jsPDF = await loadJsPDF(), k = 12, rowsN = Math.ceil(labels.length / D.across); let doc = null;
+      try { for (let r = 0; r < rowsN; r++) { dz.ctx = { labels, base: r * D.across }; const full = dzColourPNG(true, { plain: true, k, mono: !dzPrinter().colour }); const row = document.createElement("canvas"); row.width = full.width; row.height = Math.round(D.h * k); row.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * k));
+          const o = D.paper > D.h ? "l" : "p"; if (!doc) doc = new jsPDF({ unit: "mm", format: [D.paper, D.h], orientation: o, compress: true }); else doc.addPage([D.paper, D.h], o); doc.addImage(row.toDataURL("image/png"), "PNG", 0, 0, D.paper, D.h, undefined, "FAST"); } }
+      finally { dz.ctx = null; dz.gfx = null; }
+      const b64 = doc.output("datauristring").split(",")[1];
+      await qz.print(qz.configs.create(name, { size: { width: D.paper, height: D.h }, units: "mm", margins: 0, scaleContent: false, colorType: dzPrinter().colour ? "color" : "blackwhite" }), [{ type: "pixel", format: "pdf", flavor: "base64", data: b64 }]);
+      if (!test) printed = labels.filter(l => !l.blank); if (printed) ldSerialSave(printed);
     } else {
-      if (dzVarNeeds().any) throw new Error("Fields and serial numbers print in printer-language mode. Choose “Printer commands”, or remove the parts.");
+      if (dzVarNeeds().any) throw new Error("Fields and serial numbers print in printer-language or PDF mode. Choose “Printer commands” or “PDF to the printer”.");
       const full = dzColourPNG(true), k = full.width / D.paper, c = document.createElement("canvas"); // just the label row, without the gaps
       c.width = full.width; c.height = Math.round(D.h * k); c.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * k));
       const px = c.toDataURL("image/png").split(",")[1];
@@ -5905,7 +5917,7 @@ function dzSrcWire(it) {
 }
 $("dzDbFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) dzDbConnect(f); });
 function dzDbLiveInfo() {
-  alert("Live databases (SQL Server, MySQL, PostgreSQL, Oracle, Access, Tally and any ODBC source) connect through the LabelDesk agent: a small Windows program on a PC in your network. It reads the database locally and prints, so the data never has to leave your network.\n\nUntil the agent is ready: export the table or query to CSV/Excel (or schedule your ERP to save one) and use Connect file. The field links you make now keep working when you switch to the live database.");
+  alert("Live databases (SQL Server, MySQL, PostgreSQL, Oracle, Access, Tally and any ODBC source) connect through the LabelDesk agent: a small program for Windows or Mac on a computer in your network. It reads the database locally and prints, so the data never has to leave your network.\n\nUntil the agent is ready: export the table or query to CSV/Excel (or schedule your ERP to save one) and use Connect file. The field links you make now keep working when you switch to the live database.");
 }
 // Ribbon: database status and record browser
 function dzDbRibbon(row) {
@@ -5973,7 +5985,7 @@ async function ldConnOpen() {
     const kind = $("ldConnKind").value, box = $("ldConnForm");
     if (kind === "zoho") { box.innerHTML = L.zoho ? `<p class="dz-cap">You sign in to Zoho and allow LabelDesk to <b>read items</b>. Nothing in Zoho is changed.</p><div class="ld-row"><label class="ld-f" style="margin:0">Zoho data centre<select id="ldZdc"><option value="in" selected>India (zoho.in)</option><option value="com">US (zoho.com)</option><option value="eu">Europe (zoho.eu)</option><option value="com.au">Australia</option><option value="jp">Japan</option><option value="ca">Canada</option><option value="sa">Saudi Arabia</option></select></label><button type="button" class="btn primary" id="ldZgo" style="align-self:end">Connect Zoho Inventory</button></div>` : `<p class="dz-warn">Zoho is not set up on this server yet: the owner needs to register LabelDesk in the Zoho API console and add ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET. Meanwhile, export Items from Zoho Inventory (Items → ⋯ → Export) and use Connect file.</p>`;
       if ($("ldZgo")) $("ldZgo").onclick = () => { location.href = "/api/zoho/connect?dc=" + encodeURIComponent($("ldZdc").value); }; return; }
-    if (kind === "onprem") { box.innerHTML = `<p>Systems inside your office network (SAP ECC / S/4HANA on-premise, SAP Business One on-premise, Oracle E-Business Suite, JD Edwards, live TallyPrime, Busy, Marg, Microsoft SQL Server, MySQL, PostgreSQL, Oracle Database, Access and any ODBC source) connect through the <b>LabelDesk agent</b>: a small Windows program on one PC in that network. It reads the item master locally and prints, so the database is never opened to the internet.</p><p class="dz-cap">Until the agent is available: export the items as CSV, Excel, XML or JSON (most ERPs can do this on a schedule) and use Connect file. Field links made now keep working with the live connection later.</p>`; return; }
+    if (kind === "onprem") { box.innerHTML = `<p>Systems inside your office network (SAP ECC / S/4HANA on-premise, SAP Business One on-premise, Oracle E-Business Suite, JD Edwards, live TallyPrime, Busy, Marg, Microsoft SQL Server, MySQL, PostgreSQL, Oracle Database, Access and any ODBC source) connect through the <b>LabelDesk agent</b>: a small program for Windows or Mac on one computer in that network. It reads the item master locally and prints, so the database is never opened to the internet.</p><p class="dz-cap">Until the agent is available: export the items as CSV, Excel, XML or JSON (most ERPs can do this on a schedule) and use Connect file. Field links made now keep working with the live connection later.</p>`; return; }
     const F = LD_CONN_FORMS[kind], v = (edit && edit.pub) || {};
     box.innerHTML = `<p class="dz-cap">${F.note}</p><div class="ld-grid2"><label class="ld-f">Name for this connection<input id="ldCnName" value="${ldEsc(edit ? edit.name : F.name)}"></label>${F.f.map(([k, lab, ph, t]) => t && t.startsWith("select:") ? `<label class="ld-f">${lab}<select data-cf="${k}">${t.slice(7).split(",").map(o => { const [val, n] = o.split("="); return `<option value="${val}"${(v[k] || ph) === val ? " selected" : ""}>${n}</option>`; }).join("")}</select></label>` : `<label class="ld-f">${lab}<input data-cf="${k}" ${t === "password" ? 'type="password" autocomplete="new-password"' : ""} value="${ldEsc(v[k] || (t === "password" ? "" : ""))}" placeholder="${ldEsc(edit && t === "password" ? "(unchanged)" : ph || "")}"></label>`).join("")}</div>
       <p class="ld-err" id="ldCnErr"></p><div class="ld-row"><button type="button" class="btn primary" id="ldCnSave">Test and save</button></div><div id="ldCnOut"></div>`;
