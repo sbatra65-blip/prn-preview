@@ -542,6 +542,43 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 #dzAngleR { display: none; }
 .dz-setupdlg .sf2 { justify-content: space-between; align-items: center; }
 .dz-setupdlg .sf2 .nt { color: var(--muted); font-size: 12px; }
+
+/* Layout pass: 4/8 spacing, size chip on the canvas, one toolbar row on wide screens, describe bar behind ✨ on phones */
+.dz-main { position: relative; }
+.dz-ask { padding: 8px 16px; gap: 8px; }
+.dz-bar { padding: 8px 16px; gap: 8px; }
+.dz-side { padding: 16px; }
+.dz-welcome { padding: 32px; }
+.dz-welcome .wg { gap: 12px; }
+.dz-welcome .wg button[data-w="draft"] { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: 12px; }
+#dzInfo { position: absolute; left: 12px; bottom: 12px; z-index: 4; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(15, 23, 42, .78); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; padding: 4px 12px; font-size: 12px; }
+#dzInfo:hover, #dzInfo:focus-visible { background: #0f172a; color: #fff; border-color: rgba(255, 255, 255, .3); }
+.dz-zf .zask { display: none; }
+@media (min-width: 1360px) {
+  .dz-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .dz-main > .dz-ask { grid-column: 1; grid-row: 1; border-bottom: 1px solid #eceef2; }
+  .dz-main > .dz-ask input#dzAskIn { flex: 1 1 160px; }
+  .dz-main > .dz-ask, .dz-main > .dz-bar { align-self: stretch; align-content: center; }
+  .dz-main > .dz-bar { grid-column: 2; grid-row: 1; flex-wrap: nowrap; border-left: 1px solid #eceef2; }
+  .dz-main > .dz-bar .sp { display: none; }
+  .dz-main > .dz-stage { grid-column: 1 / -1; grid-row: 2; }
+  .dz-main > .dz-viewhost { grid-column: 1 / -1; grid-row: 3; }
+  #dzDlg.viewing .dz-main > .dz-viewhost { grid-row: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .dz-main > .dz-bar { position: static; height: 0; min-height: 0; padding: 0 !important; border: 0 !important; overflow: visible; }
+  .dz-main > .dz-bar > :not(#dzInfo):not(#dzWarn) { display: none !important; }
+  #dzInfo { top: 8px; bottom: auto; left: 8px; min-height: 32px !important; }
+  #dzWarn { position: absolute; top: 48px; left: 8px; right: 8px; z-index: 4; font-size: 12px !important; color: #fde68a !important; }
+  #dzWarn:empty { display: none; }
+  .dz-main > .dz-stage { padding-top: 64px !important; }
+  .dz-main.ask-open > .dz-stage { padding-top: 32px !important; }
+  .dz-main:not(.ask-open) > .dz-ask { display: none !important; }
+  .dz-main.ask-open #dzInfo, .dz-main.ask-open #dzWarn { display: none; }
+  .dz-zf .zask { display: block; }
+  .dz-zf .zask[aria-expanded="true"] { background: #f1f5f9; }
+}
 </style>
 </head>
 <body>
@@ -861,13 +898,13 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <div class="dz-welcome" id="dzWelcome" hidden>
           <h2>What would you like to do?</h2>
           <div class="wg">
+            <button type="button" data-w="draft"><b>Continue my last design</b><span>Pick up where you left off</span></button>
             <button type="button" data-w="ai"><b>Describe it, get a design</b><span>Type or speak: “100×50 mm label for 1 kg rice with MRP and EAN-13”</span></button>
             <button type="button" data-w="new"><b>Design a new label</b><span>Pick the printer and label size, then add text, barcodes and shapes</span></button>
             <button type="button" data-w="open"><b>Open a PRN file</b><span>See how a printer file will print, in any of 8 printer languages</span></button>
             <button type="button" data-w="paste"><b>Paste printer code</b><span>Paste TSPL, ZPL, EPL or other code to preview or edit it</span></button>
             <button type="button" data-w="pic"><b>Turn a picture into PRN</b><span>A logo becomes a printer graphic; a label photo becomes editable code with AI</span></button>
             <button type="button" data-w="lib"><b>Start from the library</b><span>LMPC, GS1, courier, pharma, jewellery, asset and bin labels</span></button>
-            <button type="button" data-w="draft"><b>Continue my last design</b><span>Pick up where you left off</span></button>
           </div>
         </div>
       </div>
@@ -3178,8 +3215,9 @@ addEventListener("keydown", e => { // Del / Backspace deletes the selection even
     const it = dz.D.items.find(i => i.id === +o.dataset.id); if (!it) return; if (!dzSelIds().includes(it.id)) dzSelect(it.id); dzObjMenu(it, e.clientX, e.clientY + 20, true);
   });
   // floating zoom buttons for touch screens
-  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Actual size" title="Actual size">1:1</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
-  const [bo, bf, bi, ba, bh] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); ba.onclick = dzActual; bh.onclick = dzGestureHelp;
+  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" class="zask" aria-label="Describe a label" aria-expanded="false" title="Describe a label">✨</button><button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Actual size" title="Actual size">1:1</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
+  const [bk, bo, bf, bi, ba, bh] = f.children;
+  bk.onclick = () => { const m = st.parentElement, on = !m.classList.contains("ask-open"); m.classList.toggle("ask-open", on); bk.setAttribute("aria-expanded", on); if (on) setTimeout(() => $("dzAskIn").focus(), 30); }; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); ba.onclick = dzActual; bh.onclick = dzGestureHelp;
   st.parentElement.style.position = st.parentElement.style.position || "relative"; st.parentElement.append(f);
   if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(function tip() { const su = document.getElementById("dzSetupDlg"); if (su && su.open) return setTimeout(tip, 3000); if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); dzGestureHelp(); } }, 4000);
 })();
