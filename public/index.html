@@ -3124,8 +3124,7 @@ function dzInsertMenu(x, y) {
   const barcodes = DZ_SYM_GROUPS.map(g => [g[0], (g[1] || []).filter(k => DZ_SYM[k]).map(k => [DZ_SYM[k].name, put("barcode", k)])]).filter(g => g[1].length);
   ldMenu([
     ["Text", [["Text", put("text")], ["Paragraph", put("para")]]],
-    ["Barcode", [["Barcode (Code 128)", put("barcode")], ["GS1-128", put("gs1")], "-", ...barcodes]],
-    ["2D code", [["QR code", put("qrcode")], ["Contact QR (vCard)", put("vcard")], ["DataMatrix", put("datamatrix")]]],
+    ["Barcode", [...barcodes, "-", ["Contact QR (vCard)", put("vcard")], ["GS1-128 with AI builder", put("gs1")]]],
     ["Line or box", [["Line", put("line")], ["Box", put("box")], "-", ["Guide line (not printed)", put("guide")], ["Vertical guide (not printed)", put("vguide")]]],
     ["Shape", [...Object.keys(DZ_SHAPES).map(k => [DZ_SHAPES[k], put("shape:" + k)]), "-", ["Text in a shape", ["rect", "ellipse", "star", "hexagon"].map(k => [DZ_SHAPES[k], put("tshape:" + k)])]]],
     ["Picture", [["Image…", () => { dz.imgAt = at; $("dzImgFile").click(); }], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)]]],
@@ -4339,7 +4338,7 @@ function dzRibbonDef() {
   const add = k => () => dzAdd(k), view = m => () => { dz.D.viewMode = m; dzDraw(); dzSave(); };
   const noPrint = () => { const its = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), off = !its.every(i => i.noprint); for (const it of its) { if (off) it.noprint = true; else delete it.noprint; dzRefresh(it); } dzSave(); dzProps(); toast(off ? `${its.length} object(s) will not print` : `${its.length} object(s) will print`); };
   const isNoPrint = () => { const ids = dzSelIds(); return ids.length > 0 && ids.every(id => (dz.D.items.find(i => i.id === id) || {}).noprint); };
-  const insertDD = D_("text", "Add", [M("Text", [M("Text", add("text")), M("Paragraph", add("para"))]), M("Barcode", [M("Barcode (Code 128)", add("barcode")), M("GS1-128", add("gs1"))]), M("2D code", [M("QR code", add("qrcode")), M("Contact QR (vCard)", add("vcard")), M("DataMatrix", add("datamatrix"))]), M("Line or box", [M("Line", add("line")), M("Box", add("box")), "-", M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]), "-", M("Image…", () => $("dzImgFile").click())]);
+  const insertDD = D_("text", "Add", [M("Text", add("text")), M("Paragraph", add("para")), "-", M("Contact QR (vCard)", add("vcard")), M("GS1-128 with AI builder", add("gs1")), "-", M("Line or box", [M("Line", add("line")), M("Box", add("box")), "-", M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]), M("Image…", () => $("dzImgFile").click())]);
   const shapesDD = D_("ellipse", "Shapes", [...Object.keys(DZ_SHAPES).map(k => M(DZ_SHAPES[k], add("shape:" + k))), "-", M("Text in a shape", ["rect", "ellipse", "star", "hexagon"].map(k => M(DZ_SHAPES[k], add("tshape:" + k))))]);
   const pictureDD = D_("photo", "Picture", [M("Picture to label (AI)…", () => dzPicOpen()), M("Picture to PRN…", () => dzPicOpen(true))]);
   const editDD = D_("paste", "Edit", [M("Paste", dzPaste, () => !!dz.clip, null, "Ctrl+V"), M("Copy", dzCopy, has, null, "Ctrl+C"), M("Duplicate", dzDuplicate, has, null, "Ctrl+D"), M("Delete", dzDelete, has, null, "Del")]);
@@ -4360,7 +4359,7 @@ function dzRibbonDef() {
       ["", [{ font: true }, B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
       ["", [alignDD, orderDD, rotateDD]],
       ["", [outputDD]]],
-    Insert: [["", [B("text", "Text", add("text")), { symsel: true }, B("qr", "QR code", add("qrcode")), B("image", "Image", () => $("dzImgFile").click()), insertDD, shapesDD, pictureDD]]],
+    Insert: [["", [B("text", "Text", add("text")), { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), insertDD, shapesDD, pictureDD]]],
     Arrange: [["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
     Text: [["", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt), curveDD]]],
     Data: [["", [connectDD, { dbinfo: true }, { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
