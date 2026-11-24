@@ -4243,7 +4243,7 @@ function dzMenus() {
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
     File: [["New design", click("dzNew")],
-      ["Open", [["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")], "-", ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)]]],
+      ["Open", [["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")]]],
       ["Save", [["Save to cloud", click("dzSave"), "Ctrl+S"], ["Save as .ldl file…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG]]],
       "-",
       ["Print…", () => ldPrintOpen(), "Ctrl+P"],
@@ -4255,7 +4255,7 @@ function dzMenus() {
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
-    Text: [["Choose font…", () => { dzRibbonShow("Text"); setTimeout(() => { const b = document.querySelector(".rfontbtn"); if (b && !b.disabled) b.click(); }, 60); }, "", txt], ["Printer font (sharpest)", () => dzSetFont(""), "", txt, () => { const it = dzSelTextLike(); return !!it && !it.font; }], "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
+    Text: [["Choose font…", () => { dzRibbonShow("Home"); setTimeout(() => { const b = document.querySelector(".rfontbtn"); if (b && !b.disabled) b.click(); }, 60); }, "", txt], ["Printer font (sharpest)", () => dzSetFont(""), "", txt, () => { const it = dzSelTextLike(); return !!it && !it.font; }], "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
     View: [["Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, "", null, () => $("dzGrid").checked], "#Snap", ...[["0", "No snap"], ["0.5", "0.5 mm"], ["1", "1 mm"]].map(([v, n]) => [n, () => { $("dzSnap").value = v; }, "", null, () => $("dzSnap").value === v]), "#Zoom", ["Zoom in", click("dzZoomIn"), "Ctrl+="], ["Zoom out", click("dzZoomOut"), "Ctrl+-"], ["Fit to window", click("dzZoomFit"), "Ctrl+0"], ["Actual size", dzActual, "Ctrl+1"], ["Calibrate screen…", () => dzCalibrate()]],
   };
 }
@@ -4353,22 +4353,23 @@ function dzRibbonDef() {
   const connectDD = D_("folder", "Connect", [M("CSV / Excel / JSON / XML file…", () => $("dzDbFile").click()), M("Business software", [M("Tally", () => dzTally()), M("Zoho Inventory", () => dzZoho()), M("SAP / Oracle / other ERP…", () => ldConnOpen()), M("ODBC / SQL", () => dzDbLiveInfo())]), "-", M("Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db))]);
   const filesDD = D_("openf", "Printer files", [M("Open .prn…", () => $("fileIn").click()), M("Paste printer code…", () => { dzShowViewer(); $("pasteBtn").click(); }), M("Picture to PRN…", () => dzPicOpen(true))]);
   const checkDD = D_("check", "Check", [M("LMPC check", () => lmpcCheck(false, $("dzDlg").classList.contains("viewing") ? "viewer" : "design")), M("GS1 guide", () => window.open("gs1.html", "_blank"))]);
+  const textDD = D_("text", "Text", [M("Text", add("text")), M("Paragraph (wraps in a box)", add("para"))]);
+  const linesDD = D_("line", "Line or box", [M("Line", add("line")), M("Box", add("box")), "-", M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]);
+  const boldB = B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)");
+  const italB = B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)");
+  // every command has one home: Home = edit and format, Insert = new objects, the rest as named
   return {
     Home: [["", [editDD, B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
-      ["", [insertDD, { symsel: true }, pictureDD]],
-      ["", [{ font: true }, B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt)]],
-      ["", [alignDD, orderDD, rotateDD]],
-      ["", [outputDD]]],
-    Insert: [["", [B("text", "Text", add("text")), { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), insertDD, shapesDD, pictureDD]]],
-    Arrange: [["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
-    Text: [["", [{ font: true }, { size: true }, B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)"), B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)"), B("bigger", "Bigger", () => dzSize(0.5), txt), B("smaller", "Smaller", () => dzSize(-0.5), txt), curveDD]]],
+      ["", [{ font: true }, { size: true }, boldB, italB, curveDD]],
+      ["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
+    Insert: [["", [textDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD]]],
     Data: [["", [connectDD, { dbinfo: true }, { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
+    View: [["", [showDD, zoomDD]]],
     Tools: [["", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing")), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing")), filesDD, B("lib", "Templates", () => openLibrary()), checkDD, B("vcard", "Talk to us", () => openLead("talk"))]]],
-    View: [["", [showDD, zoomDD, B("fit", "Fit", click("dzZoomFit")), B("ruler", "Actual size", dzActual)]]],
   };
 }
 function dzRibbonShow(tab) {
-  dz.tab = tab || dz.tab || "Home";
+  dz.tab = tab || dz.tab || "Home"; if (dz.tab === "Arrange" || dz.tab === "Text") dz.tab = "Home";
   for (const b of document.querySelectorAll("#dzRibbon .rt [data-tab]")) b.setAttribute("aria-selected", b.dataset.tab === dz.tab);
   const host = $("dzRibbonBody"); host.replaceChildren();
   const isSetup = dz.tab === "Label"; $("dzSetup").hidden = !isSetup; host.hidden = isSetup; if (isSetup) return;
@@ -4389,7 +4390,7 @@ function dzRibbonShow(tab) {
       if (b.symsel) { // one Barcode ▾ button: groups as sub-menus; with a barcode selected it changes that barcode's type
         const cur = dz.D && dz.D.items.find(i => i.id === dz.sel && i.type === "barcode");
         const pick = v => () => { const it = dz.D.items.find(i => i.id === dz.sel && i.type === "barcode"); if (it) { it._grp = dzSymGroup(v); dzSetSym(it, v); } else { dzAdd("barcode"); const n = dz.D.items[dz.D.items.length - 1]; if (n) { n._grp = dzSymGroup(v); dzSetSym(n, v); } } };
-        const items = [...(cur ? [`#Change ${(DZ_SYM[cur.symbology] || { name: "barcode" }).name} to`] : []), ...DZ_SYM_GROUPS.map(g => [g[0], g[1].filter(k => DZ_SYM[k]).map(k => [DZ_SYM[k].name, pick(k), "", null, () => !!cur && cur.symbology === k])]).filter(g => g[1].length)];
+        const items = [...(cur ? [`#Change ${(DZ_SYM[cur.symbology] || { name: "barcode" }).name} to`] : []), ...DZ_SYM_GROUPS.map(g => [g[0], g[1].filter(k => DZ_SYM[k]).map(k => [DZ_SYM[k].name, pick(k), "", null, () => !!cur && cur.symbology === k])]).filter(g => g[1].length), ...(cur ? [] : ["-", ["Contact QR (vCard)", () => dzAdd("vcard")], ["GS1-128 with AI builder", () => dzAdd("gs1")]])];
         const el = document.createElement("button"); el.type = "button"; el.className = "rb rdd"; el.title = cur ? "Change the selected barcode's type" : "Insert any of " + DZ_SYMS.length + " barcode types"; el.setAttribute("aria-haspopup", "menu"); el.setAttribute("aria-expanded", "false");
         el.innerHTML = `${dzIcon("barcode")}<span></span>`; el.lastChild.textContent = (cur ? (DZ_SYM[cur.symbology] || { name: "Barcode" }).name : "Barcodes") + " ▾";
         el.onclick = e => { e.stopPropagation(); const open = el.getAttribute("aria-expanded") === "true"; dzMenuClose(); if (!open) ldMenu(items, el); }; row.append(el); continue; }
@@ -4411,7 +4412,7 @@ function dzRibbonShow(tab) {
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
-  for (const t of ["Label", "Home", "Insert", "Data", "Arrange", "Text", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
+  for (const t of ["Label", "Home", "Insert", "Data", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
   document.addEventListener("click", e => { if (e.target.closest(".dz-drop") || Date.now() - (ldMenu.at || 0) < 450) return; dzMenuClose(); });
   dzRibbonShow("Label");
 })();
