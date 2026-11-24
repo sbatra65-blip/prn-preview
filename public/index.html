@@ -468,7 +468,6 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
     <button type="button" data-open="lib">Library</button>
     <a href="gs1.html">GS1 guide</a>
     <a href="#languages">Printer languages</a>
-    <a href="https://buytscprinters.com" rel="noopener">Printers</a>
   </nav>
   <button type="button" class="btn dark" data-lead="talk">Talk to Infinite Solutions</button>
 </header>
@@ -3875,7 +3874,7 @@ function dzRibbonDef() {
       ["Printer files", [B("openf", "Open PRN", () => $("fileIn").click(), null, null, "Open a .prn file"), B("code", "Paste code", () => { dzShowViewer(); $("pasteBtn").click(); }, null, null, "Paste printer code to view it"), B("pic", "From picture", () => $("picDlg").showModal(), null, null, "Logo or label photo to PRN")]],
       ["Templates", [B("lib", "Library", () => openLibrary())]],
       ["Check", [B("check", "LMPC check", () => lmpcCheck(false, $("dzDlg").classList.contains("viewing") ? "viewer" : "design"), null, null, "Check this label against LMPC rules: report only, the label is not changed"), B("gs1", "GS1 guide", () => window.open("gs1.html", "_blank"))]],
-      ["Infinite Solutions", [B("printers", "Printers", () => window.open("https://buytscprinters.com", "_blank")), B("vcard", "Talk to us", () => openLead("talk"))]]],
+      ["Infinite Solutions", [B("vcard", "Talk to us", () => openLead("talk"))]]],
     View: [["Show the label", [B("fit", "As designed", () => { dz.D.viewMode = "auto"; dzDraw(); dzSave(); }, null, () => (dz.D.viewMode || "auto") === "auto"), B("rect", "Portrait", () => { dz.D.viewMode = "portrait"; dzDraw(); dzSave(); }, null, () => dz.D.viewMode === "portrait"), B("box", "Landscape", () => { dz.D.viewMode = "landscape"; dzDraw(); dzSave(); }, null, () => dz.D.viewMode === "landscape")]], ["Show", [B("grid", "Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, null, () => $("dzGrid").checked)]],
       ["Zoom", [B("zin", "Zoom in", click("dzZoomIn"), null, null, "Ctrl+="), B("zout", "Zoom out", click("dzZoomOut"), null, null, "Ctrl+-"), B("fit", "Fit", click("dzZoomFit"), null, null, "Ctrl+0")]],
       ["Snap", [{ snap: true }]]],
