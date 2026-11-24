@@ -2156,7 +2156,6 @@ function dzPicOpen(prn) {
   const D = dz.D || dzDefault(), ls = $("bmLang");
   if (!ls.options.length) ls.innerHTML = Object.keys(DZ_LANG_NAME).map(l => `<option value="${l}">${DZ_LANG_NAME[l]}</option>`).join("");
   ls.value = D.lang; $("bmDpi").value = String(D.dpi); $("bmPrnRow").hidden = false; $("bmPrnGo").hidden = false;
-  if (!$("bmW").value) $("bmW").value = r1(dzLW()); if (!$("bmH").value) $("bmH").value = r1(D.h);
   $("useAI").checked = true; $("useAI").dispatchEvent(new Event("change"));
   $("bmStatus").textContent = prn ? "Choose a photo of a label, then press “Make PRN file”." : "Choose a photo or image of a label. AI reads its text, barcodes and lines into an editable design.";
   $("picDlg").showModal(); if (!p2l.img) setTimeout(() => $("bmFile").click(), 50);
