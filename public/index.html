@@ -375,6 +375,8 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-drop button:disabled { color: #a3a9b5; cursor: default; }
 .dz-drop button .ck { width: 14px; color: var(--accent); font-weight: 700; }
 .dz-drop button kbd { margin-left: auto; font: 11.5px var(--font-mono); color: var(--muted); }
+.dz-drop button .sub { margin-left: auto; color: var(--muted); font-size: 11px; } .dz-drop button.back { font-weight: 600; color: var(--accent); } .dz-drop button.open { background: var(--accent-soft); }
+.dz-drop { min-width: 200px; } @media (pointer: coarse) { .dz-drop button { padding: 11px 12px; font-size: 15px; } }
 .dz-drop hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
 .dz-drop .grp { font: 600 11px var(--font); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 6px 10px 2px; }
 .dz-objs { margin-top: 18px; }
@@ -3085,37 +3087,46 @@ addEventListener("keydown", e => { // Del / Backspace deletes the selection even
 $("dzStage").addEventListener("dblclick", e => { if (matchMedia("(pointer: coarse)").matches) return; const o = e.target.closest("#dzPaperEl .dz-o"); if (o) { const it = dz.D.items.find(i => i.id === +o.dataset.id); if (it) { dzSelect(it.id); dzEditObj(it); } return; } dzInsertMenu(e.clientX, e.clientY); });
 // Insert menu at a point on the canvas: the new object lands where you clicked
 function dzInsertMenu(x, y) {
-  dzMenuOff(); const lab = $("dzLab"), r = lab && lab.getBoundingClientRect(), s = dz.s || 1, v = typeof dzView === "function" ? dzView() : 0;
+  const lab = $("dzLab"), r = lab && lab.getBoundingClientRect(), s = dz.s || 1, v = typeof dzView === "function" ? dzView() : 0;
   const at = r && !v ? { x: Math.max(0, (x - r.left) / s), y: Math.max(0, (y - r.top) / s) } : null;
-  const put = kind => () => { const n0 = dz.D.items.length; dzAdd(kind); const it = dz.D.items[dz.D.items.length - 1]; if (it && dz.D.items.length > n0 && at) { const b = dzBox(it); it.x = r1(Math.max(0, Math.min(dzLW() - Math.min(b.w, dzLW()), at.x))); it.y = r1(Math.max(0, Math.min(dz.D.h - Math.min(b.h, dz.D.h), at.y))); dzRefresh(it); dzDraw(); dzProps(); dzSave(); } };
-  const m = document.createElement("div"); m.id = "dzObjMenu"; m.className = "dz-objmenu mouse";
-  const groups = [["Text", [["Text", "text"], ["Paragraph", "para"]]], ["Codes", [["Barcode", "barcode"], ["GS1-128 barcode", "gs1"], ["QR code", "qrcode"], ["Contact QR (vCard)", "vcard"], ["DataMatrix", "datamatrix"]]],
-    ["Lines and shapes", [["Line", "line"], ["Box", "box"], ["Guide line (not printed)", "guide"], ["Vertical guide (not printed)", "vguide"], ...Object.keys(DZ_SHAPES).slice(0, 6).map(k => [DZ_SHAPES[k], "shape:" + k])]]];
-  for (const [g, list] of groups) { const h = document.createElement("div"); h.className = "grp"; h.textContent = g; m.append(h);
-    for (const [t, k] of list) { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.onclick = () => { dzMenuOff(); put(k)(); }; m.append(b); } }
-  const h = document.createElement("div"); h.className = "grp"; h.textContent = "Pictures"; m.append(h);
-  for (const [t, fn] of [["Image…", () => { dz.imgAt = at; $("dzImgFile").click(); }], ["Picture to label (AI)…", () => dzPicOpen()], ...(dz.clip ? [["Paste", dzPaste]] : [])]) { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.onclick = () => { dzMenuOff(); fn(); }; m.append(b); }
-  document.body.append(m); const rr = m.getBoundingClientRect();
-  m.style.left = Math.max(8, Math.min(innerWidth - rr.width - 8, x)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - rr.height - 8, y)) + "px";
-  setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { dzMenuOff(); removeEventListener("pointerdown", off, true); } }, true), 50);
+  const put = (kind, sym) => () => { const n0 = dz.D.items.length; dzAdd(kind); const it = dz.D.items[dz.D.items.length - 1]; if (!it || dz.D.items.length <= n0) return; if (sym) dzSetSym(it, sym);
+    if (at) { const b = dzBox(it); it.x = r1(Math.max(0, Math.min(dzLW() - Math.min(b.w, dzLW()), at.x))); it.y = r1(Math.max(0, Math.min(dz.D.h - Math.min(b.h, dz.D.h), at.y))); }
+    dzRefresh(it); dzDraw(); dzProps(); dzSave(); };
+  const barcodes = DZ_SYM_GROUPS.map(g => [g[0], (g[1] || []).filter(k => DZ_SYM[k]).map(k => [DZ_SYM[k].name, put("barcode", k)])]).filter(g => g[1].length);
+  ldMenu([
+    ["Text", [["Text", put("text")], ["Paragraph", put("para")]]],
+    ["Barcode", [["Barcode (Code 128)", put("barcode")], ["GS1-128", put("gs1")], "-", ...barcodes]],
+    ["2D code", [["QR code", put("qrcode")], ["Contact QR (vCard)", put("vcard")], ["DataMatrix", put("datamatrix")]]],
+    ["Line or box", [["Line", put("line")], ["Box", put("box")], "-", ["Guide line (not printed)", put("guide")], ["Vertical guide (not printed)", put("vguide")]]],
+    ["Shape", [...Object.keys(DZ_SHAPES).map(k => [DZ_SHAPES[k], put("shape:" + k)]), "-", ["Text in a shape", ["rect", "ellipse", "star", "hexagon"].map(k => [DZ_SHAPES[k], put("tshape:" + k)])]]],
+    ["Picture", [["Image…", () => { dz.imgAt = at; $("dzImgFile").click(); }], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)]]],
+    ...(dz.clip ? ["-", ["Paste", dzPaste, "Ctrl+V"]] : []),
+    "-",
+    ["View", [["Fit", dzFit, "Ctrl+0"], ["Actual size", dzActual, "Ctrl+1"], ["Zoom in", () => dzZoomAt(dz.zoom * 1.25, x, y)], ["Zoom out", () => dzZoomAt(dz.zoom / 1.25, x, y)], "-", ["Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, "", null, () => $("dzGrid").checked]]]
+  ], { x, y });
 }
+
 function dzEditObj(it) { // jump to the text / data box of the object, keyboard up
   dzProps(); if (typeof dzSheet === "function") dzSheet(true);
   setTimeout(() => { const f = document.querySelector('.dz-props [data-k="text"], .dz-props [data-k="data"], .dz-props #dzData'); if (f) { f.focus(); try { f.select(); } catch (e) {} f.scrollIntoView({ block: "center" }); } }, 60);
 }
-function dzMenuOff() { const m = $("dzObjMenu"); if (m) m.remove(); }
 function dzObjMenu(it, x, y, mouse) {
-  dzMenuOff(); const m = document.createElement("div"); m.id = "dzObjMenu"; m.className = "dz-objmenu" + (mouse ? " mouse" : "");
-  const textish = dzSelTextAll().length > 0, pickFont = () => { const a = document.createElement("div"); Object.assign(a.style, { position: "fixed", left: x + "px", top: (mouse ? y - 20 : y) + "px", width: "1px", height: "1px" }); document.body.append(a); dzFontPicker(a, it.font || ""); setTimeout(() => a.remove(), 120000); };
-  const acts = [["Edit text / data", () => dzEditObj(it)], ...(textish ? [[`Font: ${dzFontName(it.font || "")} ▸`, pickFont], ["Bigger", () => dzSize(0.5)], ["Smaller", () => dzSize(-0.5)]] : []), ["Duplicate", dzDuplicate], ["Copy", dzCopy], ["Bring to front", () => dzOrder("front")], ["Send to back", () => dzOrder("back")],
-    ["Turn 90°", () => { dzHist(); it.rot = (dzRot(it) + 90) % 360; dzDraw(); dzProps(); dzSave(); }], [it.noprint ? "Print this object" : "Don't print", () => { it.noprint = !it.noprint; if (!it.noprint) delete it.noprint; dzDraw(); dzProps(); dzSave(); }], ...(dz.clip ? [["Paste", dzPaste]] : []), [dzSelIds().length > 1 ? `Delete ${dzSelIds().length} objects` : "Delete", dzDelete, "bad", "Del"]];
-  for (const [t, fn, cls, key] of acts) { const b = document.createElement("button"); b.type = "button"; b.textContent = t; if (key) { const k = document.createElement("kbd"); k.textContent = key; b.append(k); } if (cls) b.className = cls; b.onclick = () => { dzMenuOff(); fn(); }; m.append(b); }
-  document.body.append(m); const r = m.getBoundingClientRect();
-  if (mouse) { m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y - 20)) + "px"; }
-  else { m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x - r.width / 2)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y - r.height - 18)) + "px"; }
-  m.addEventListener("keydown", e => { if (e.key === "Escape") dzMenuOff(); });
-  setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { dzMenuOff(); removeEventListener("pointerdown", off, true); } }, true), 50);
+  const ids = dzSelIds(), many = ids.length > 1, textish = dzSelTextAll().length > 0, turn = by => () => { if (many) return dzTurnGroup(by); dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); };
+  const pickFont = () => { const a = document.createElement("div"); Object.assign(a.style, { position: "fixed", left: x + "px", top: (mouse ? y - 20 : y) + "px", width: "1px", height: "1px" }); document.body.append(a); dzFontPicker(a, it.font || ""); setTimeout(() => a.remove(), 120000); };
+  ldMenu([
+    ["Edit text / data", () => dzEditObj(it)],
+    ...(textish ? [["Font", [[`Choose font (${dzFontName(it.font || "")})…`, pickFont], ["Printer font (sharpest)", () => dzSetFont(""), "", null, () => !it.font], "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => !!it.font, () => !!it.bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => !!it.font, () => !!it.italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]"], ["Smaller", () => dzSize(-0.5), "Ctrl+["], "-", ["Upload a font…", () => ldFontUpload(f => dzSetFont(f))]]]] : []),
+    ["Clipboard", [["Copy", dzCopy, "Ctrl+C"], ["Duplicate", dzDuplicate, "Ctrl+D"], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip]]],
+    ["Arrange", [["Bring to front", () => dzOrder("front")], ["Forward", () => dzOrder(1)], ["Backward", () => dzOrder(-1)], ["Send to back", () => dzOrder("back")], "-",
+      ["Align", [["Left", () => dzAlign("left")], ["Centre", () => dzAlign("center")], ["Right", () => dzAlign("right")], "-", ["Top", () => dzAlign("top")], ["Middle", () => dzAlign("middle")], ["Bottom", () => dzAlign("bottom")]]]]],
+    ...((it.type !== "line" && it.type !== "box") || many ? [["Rotate", [["90° right", turn(90), "R"], ["90° left", turn(-90), "Shift+R"], ["Straighten", () => turn(-dzRot(it))()]]]] : []),
+    "-",
+    [it.noprint ? "Print this object" : "Don't print", () => { const on = !it.noprint; for (const id of ids) { const o = dz.D.items.find(i => i.id === id); if (!o) continue; if (on) o.noprint = true; else delete o.noprint; } dzDraw(); dzProps(); dzSave(); }],
+    [many ? `Delete ${ids.length} objects` : "Delete", dzDelete, "Del"]
+  ], { x, y: mouse ? y - 20 : y + 8 });
 }
+function dzMenuOff() { dzMenuClose(); }
+
 function dzGestureHelp() {
   let d = $("dzGestDlg"); if (!d) { d = document.createElement("dialog"); d.id = "dzGestDlg"; d.style.cssText = "width:min(460px,94vw);padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
   const row = (g, t) => `<tr><td style="padding:8px 10px;font-weight:700;white-space:nowrap;vertical-align:top">${g}</td><td style="padding:8px 10px">${t}</td></tr>`;
@@ -4203,7 +4214,16 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["My fonts (upload)…", () => ldFontsManage()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")], ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")],
+      ["Open", [["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")], "-", ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)]]],
+      ["Save", [["Save to cloud", click("dzSave"), "Ctrl+S"], ["Save as .ldl file…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG]]],
+      "-",
+      ["Print…", () => ldPrintOpen(), "Ctrl+P"],
+      ["Print more", [["Preview as printed", click("dzToViewer")], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()]]],
+      "-",
+      ["Label setup…", () => dzRibbonShow("Label")],
+      ["Settings", [["My fonts…", () => ldFontsManage()], ["Calibrate screen…", () => dzCalibrate()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")]]],
+      ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About LabelDesk", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -4212,31 +4232,53 @@ function dzMenus() {
   };
 }
 function dzMenuClose() { for (const d of document.querySelectorAll(".dz-drop")) d.remove(); for (const b of document.querySelectorAll("#dzRibbon .mb")) b.setAttribute("aria-expanded", "false"); }
-function dzDropAt(items, btn) { // drop-down list under a ribbon button (fixed, so the scrolling ribbon cannot clip it)
-  const drop = document.createElement("div"); drop.className = "dz-drop"; drop.setAttribute("role", "menu");
-  for (const m of items) {
-    if (m === "-") { drop.append(document.createElement("hr")); continue; }
-    if (typeof m === "string" && m[0] === "#") { const g = document.createElement("div"); g.className = "grp"; g.textContent = m.slice(1); drop.append(g); continue; }
-    const [label, run, key, en, ck] = m, b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
-    b.innerHTML = `<span class="ck">${ck && ck() ? "✓" : ""}</span><span></span>${key ? `<kbd>${key}</kbd>` : ""}`; b.children[1].textContent = label;
-    if (en && !en()) b.disabled = true; b.onclick = () => { dzMenuClose(); run(); dzRibbonShow(); }; drop.append(b);
+/* One menu engine for the whole app: ribbon drop-downs, the File menu and right-click menus.
+   Items: "-" separator · "#Heading" · [label, run, key, enabled, checked] · [label, [sub items]] for a sub-menu ▸.
+   Long menus fold their "#Heading" sections into sub-menus automatically, so no menu runs down the screen. */
+function ldGroupify(items, max = 10) {
+  const real = items.filter(m => Array.isArray(m)).length; if (real <= max || !items.some(m => typeof m === "string" && m[0] === "#")) return items;
+  const out = []; let i = 0;
+  while (i < items.length) {
+    const m = items[i];
+    if (typeof m === "string" && m[0] === "#") { const sub = []; i++; while (i < items.length && typeof items[i] !== "string") sub.push(items[i++]); if (sub.length) out.push([m.slice(1), sub]); continue; }
+    out.push(m); i++;
   }
-  document.body.append(drop); const r = btn.getBoundingClientRect(), w = drop.offsetWidth;
-  Object.assign(drop.style, { position: "fixed", left: Math.max(6, Math.min(innerWidth - w - 6, r.left)) + "px", top: r.bottom + 4 + "px", maxHeight: Math.max(180, innerHeight - r.bottom - 14) + "px" });
-  btn.setAttribute("aria-expanded", "true"); btn.classList.add("mb");
+  return out;
 }
-function dzMenuOpen(name, btn) {
-  dzMenuClose(); const items = dzMenus()[name], drop = document.createElement("div"); drop.className = "dz-drop"; drop.setAttribute("role", "menu");
+function ldMenu(items, at, level = 0) {
+  ldMenu.at = Date.now(); if (!level) dzMenuClose(); else for (const d of document.querySelectorAll(".dz-drop")) if (+d.dataset.level >= level) d.remove();
+  items = ldGroupify(items);
+  const drop = document.createElement("div"); drop.className = "dz-drop"; drop.setAttribute("role", "menu"); drop.dataset.level = level;
+  const touch = matchMedia("(pointer: coarse)").matches;
   for (const m of items) {
-    if (m === "-") { drop.append(document.createElement("hr")); continue; }
+    if (m === "-") { if (drop.lastChild && drop.lastChild.tagName !== "HR") drop.append(document.createElement("hr")); continue; }
     if (typeof m === "string" && m[0] === "#") { const g = document.createElement("div"); g.className = "grp"; g.textContent = m.slice(1); drop.append(g); continue; }
-    const [label, run, key, en, ck] = m, b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
-    b.innerHTML = `<span class="ck">${ck && ck() ? "✓" : ""}</span><span></span>${key ? `<kbd>${key}</kbd>` : ""}`; b.children[1].textContent = label;
+    const [label, run, key, en, ck] = m, sub = Array.isArray(run), b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
+    b.innerHTML = `<span class="ck">${!sub && ck && ck() ? "✓" : ""}</span><span></span>${sub ? '<b class="sub" aria-hidden="true">▸</b>' : key ? `<kbd>${key}</kbd>` : ""}`; b.children[1].textContent = label;
     if (en && !en()) b.disabled = true;
-    b.onclick = () => { dzMenuClose(); run(); }; drop.append(b);
+    if (sub) { b.setAttribute("aria-haspopup", "menu"); const open = () => { for (const x of drop.querySelectorAll(".open")) x.classList.remove("open"); b.classList.add("open");
+        if (touch || innerWidth < 700) { // small screens: the sub-menu replaces this one, with a Back row
+          const r = drop.getBoundingClientRect(), c = ldMenu([["‹ " + label, () => {}], "-", ...run], { x: r.left, y: r.top }, level + 1); drop.style.display = "none";
+          const back = c.querySelector("button"); back.classList.add("back"); back.onclick = e => { e.stopPropagation(); c.remove(); drop.style.display = ""; b.classList.remove("open"); }; return; }
+        ldMenu(run, b, level + 1); };
+      b.onclick = e => { e.stopPropagation(); open(); }; if (!touch) b.onmouseenter = () => { clearTimeout(ldMenu.t); ldMenu.t = setTimeout(open, 120); }; }
+    else { b.onclick = e => { e.stopPropagation(); dzMenuClose(); run(); if (typeof dzRibbonShow === "function" && $("dzDlg") && $("dzDlg").open) dzRibbonShow(); };
+      if (!touch) b.onmouseenter = () => { clearTimeout(ldMenu.t); ldMenu.t = setTimeout(() => { for (const d of document.querySelectorAll(".dz-drop")) if (+d.dataset.level > level) d.remove(); for (const x of drop.querySelectorAll(".open")) x.classList.remove("open"); }, 150); }; }
+    drop.append(b);
   }
-  btn.parentElement.append(drop); btn.setAttribute("aria-expanded", "true");
+  if (drop.lastChild && drop.lastChild.tagName === "HR") drop.lastChild.remove();
+  document.body.append(drop); drop.style.position = "fixed"; const w = drop.offsetWidth, h = drop.offsetHeight;
+  let x, y;
+  if (at instanceof Element) { const r = at.getBoundingClientRect(); if (level) { x = r.right + 2; y = r.top - 6; if (x + w > innerWidth - 6) x = Math.max(6, r.left - w - 2); } else { x = r.left; y = r.bottom + 4; } }
+  else { x = at.x; y = at.y; }
+  x = Math.max(6, Math.min(innerWidth - w - 6, x)); y = Math.max(6, Math.min(innerHeight - h - 6, y));
+  Object.assign(drop.style, { left: x + "px", top: y + "px", maxHeight: innerHeight - 12 + "px" });
+  if (!level && at instanceof Element) { at.setAttribute("aria-expanded", "true"); at.classList.add("mb"); }
+  drop.addEventListener("keydown", e => { if (e.key === "Escape") dzMenuClose(); });
+  return drop;
 }
+function dzDropAt(items, btn) { ldMenu(items, btn); }
+function dzMenuOpen(name, btn) { ldMenu(dzMenus()[name], btn); }
 /* ribbon: tabs of grouped icon buttons (own icon set), plus an icon toolbox on the left */
 const DZ_IC = { // 24x24 stroke icons, drawn for this app
   ruler: "M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4",
@@ -4268,8 +4310,8 @@ function dzRibbonDef() {
   const add = k => () => dzAdd(k), view = m => () => { dz.D.viewMode = m; dzDraw(); dzSave(); };
   const noPrint = () => { const its = dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(Boolean), off = !its.every(i => i.noprint); for (const it of its) { if (off) it.noprint = true; else delete it.noprint; dzRefresh(it); } dzSave(); dzProps(); toast(off ? `${its.length} object(s) will not print` : `${its.length} object(s) will print`); };
   const isNoPrint = () => { const ids = dzSelIds(); return ids.length > 0 && ids.every(id => (dz.D.items.find(i => i.id === id) || {}).noprint); };
-  const insertDD = D_("text", "Add", [M("Text", add("text")), M("Paragraph", add("para")), "-", M("Barcode", add("barcode")), M("GS1-128 barcode", add("gs1")), M("QR code", add("qrcode")), M("Contact QR (vCard)", add("vcard")), M("DataMatrix", add("datamatrix")), "-", M("Image…", () => $("dzImgFile").click()), M("Line", add("line")), M("Box", add("box")), M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]);
-  const shapesDD = D_("ellipse", "Shapes", ["#Shape with text inside", ...Object.keys(DZ_SHAPES).map(k => M(DZ_SHAPES[k], add("shape:" + k))), "#Text in a shape (no outline)", ...["rect", "ellipse", "star", "hexagon"].map(k => M(DZ_SHAPES[k], add("tshape:" + k)))]);
+  const insertDD = D_("text", "Add", [M("Text", [M("Text", add("text")), M("Paragraph", add("para"))]), M("Barcode", [M("Barcode (Code 128)", add("barcode")), M("GS1-128", add("gs1"))]), M("2D code", [M("QR code", add("qrcode")), M("Contact QR (vCard)", add("vcard")), M("DataMatrix", add("datamatrix"))]), M("Line or box", [M("Line", add("line")), M("Box", add("box")), "-", M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]), "-", M("Image…", () => $("dzImgFile").click())]);
+  const shapesDD = D_("ellipse", "Shapes", [...Object.keys(DZ_SHAPES).map(k => M(DZ_SHAPES[k], add("shape:" + k))), "-", M("Text in a shape", ["rect", "ellipse", "star", "hexagon"].map(k => M(DZ_SHAPES[k], add("tshape:" + k))))]);
   const pictureDD = D_("photo", "Picture", [M("Picture to label (AI)…", () => dzPicOpen()), M("Picture to PRN…", () => dzPicOpen(true))]);
   const editDD = D_("paste", "Edit", [M("Paste", dzPaste, () => !!dz.clip, null, "Ctrl+V"), M("Copy", dzCopy, has, null, "Ctrl+C"), M("Duplicate", dzDuplicate, has, null, "Ctrl+D"), M("Delete", dzDelete, has, null, "Del")]);
   const alignDD = D_("ac", "Align", [M("Left", () => dzAlign("left"), has), M("Centre", () => dzAlign("center"), has), M("Right", () => dzAlign("right"), has), "-", M("Top", () => dzAlign("top"), has), M("Middle", () => dzAlign("middle"), has), M("Bottom", () => dzAlign("bottom"), has), "-", M("Space evenly across", () => dzDistribute("x"), () => dzSelIds().length > 2), M("Space evenly down", () => dzDistribute("y"), () => dzSelIds().length > 2)]);
@@ -4280,7 +4322,7 @@ function dzRibbonDef() {
   const curveDD = D_("arcup", "Curve", [M("Straight", () => dzCurveTo(0), isText, () => isText() && !dzCurve(sel()) && !dzOnPath(sel())), M("Arch up", () => dzCurveTo(180), isText, () => isText() && dzCurve(sel()) > 0), M("Arch down", () => dzCurveTo(-180), isText, () => isText() && dzCurve(sel()) < 0), "#Along an outline", ...["circle", "rect", "ellipse", "star", "hexagon", "triangle", "wave"].map(k => M(DZ_PATHS[k] || "Circle", () => dzPathTo(k), isText, () => isText() && sel().path === k))]);
   const showDD = D_("fit", "Show", [M("As designed", view("auto"), null, () => (dz.D.viewMode || "auto") === "auto"), M("Portrait", view("portrait"), null, () => dz.D.viewMode === "portrait"), M("Landscape", view("landscape"), null, () => dz.D.viewMode === "landscape"), "-", M("Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, null, () => $("dzGrid").checked), "#Snap", ...[["0", "No snap"], ["0.5", "0.5 mm"], ["1", "1 mm"]].map(([v, n]) => M(n, () => { $("dzSnap").value = v; }, null, () => $("dzSnap").value === v))]);
   const serial = () => { let it = dz.D.items.find(i => i.id === dz.sel && (i.type === "text" || i.type === "barcode")); if (!it) { dzAdd("text"); it = dz.D.items[dz.D.items.length - 1]; it.text = "SN000001"; } const sl = document.querySelector("#dzSrc"); if (sl) { sl.value = "serial"; sl.dispatchEvent(new Event("change")); } };
-  const connectDD = D_("folder", "Connect", ["#File", M("CSV / Excel / JSON / XML…", () => $("dzDbFile").click()), "#Business software", M("Tally", () => dzTally()), M("Zoho Inventory", () => dzZoho()), M("SAP / Oracle / other ERP…", () => ldConnOpen()), M("ODBC / SQL", () => dzDbLiveInfo()), "-", M("Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db))]);
+  const connectDD = D_("folder", "Connect", [M("CSV / Excel / JSON / XML file…", () => $("dzDbFile").click()), M("Business software", [M("Tally", () => dzTally()), M("Zoho Inventory", () => dzZoho()), M("SAP / Oracle / other ERP…", () => ldConnOpen()), M("ODBC / SQL", () => dzDbLiveInfo())]), "-", M("Disconnect", () => dzDbOff(), () => !!(dz.D && dz.D.db))]);
   const filesDD = D_("openf", "Printer files", [M("Open .prn…", () => $("fileIn").click()), M("Paste printer code…", () => { dzShowViewer(); $("pasteBtn").click(); }), M("Picture to PRN…", () => dzPicOpen(true))]);
   const checkDD = D_("check", "Check", [M("LMPC check", () => lmpcCheck(false, $("dzDlg").classList.contains("viewing") ? "viewer" : "design")), M("GS1 guide", () => window.open("gs1.html", "_blank"))]);
   return {
@@ -4350,7 +4392,7 @@ function dzRibbonShow(tab) {
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
   for (const t of ["Label", "Home", "Insert", "Data", "Arrange", "Text", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
-  document.addEventListener("click", e => { if (!e.target.closest(".dz-drop")) dzMenuClose(); });
+  document.addEventListener("click", e => { if (e.target.closest(".dz-drop") || Date.now() - (ldMenu.at || 0) < 450) return; dzMenuClose(); });
   dzRibbonShow("Label");
 })();
 
