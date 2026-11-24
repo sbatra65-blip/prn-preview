@@ -376,6 +376,28 @@ async function designAIRun(request, env) {
   return json({ error: "AI could not design that just now: " + lastErr.slice(0, 160) }, 502);
 }
 
+/* ---------- record filters from plain words (typed or spoken), e.g. "MRP above 500 and name has rice, 2 copies each" ---------- */
+const FILTER_SYSTEM = `You turn a request about which database records to print into filters.
+Reply with one JSON object only, no prose: {"filters":[{"field":string,"op":string,"value":string,"value2":string}],"copies":number|null,"note":string}
+op is one of: contains, not contains, equals, not equals, starts with, ends with, gt, gte, lt, lte, between, empty, not empty, in.
+Use only the field names given (exact spelling). For "in" put the values comma separated in value. For between use value and value2.
+Numbers and dates: compare as numbers; dates as YYYY-MM-DD. "copies" is labels per record if the request says so (e.g. "3 each"), else null.
+If a word could match several fields, pick the most likely and say so in note. If nothing can be filtered, return {"filters":[],"copies":null,"note":"why"}.`;
+async function recordFilterAIRun(request, env) {
+  if (request.method !== "POST") return json({ error: "Use POST" }, 405);
+  if (!env.GEMINI_API_KEY) return json({ error: "AI is not set up on this site" }, 503);
+  if (env.LIMITER) { const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") || "anon" }); if (!success) return json({ error: "Too many requests; wait a minute." }, 429); }
+  let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400); }
+  const ask = String(b.ask || "").trim().slice(0, 600), fields = (Array.isArray(b.fields) ? b.fields : []).slice(0, 60).map(f => ({ name: String(f.name || "").slice(0, 60), samples: (Array.isArray(f.samples) ? f.samples : []).slice(0, 4).map(v => String(v).slice(0, 40)) }));
+  if (!ask || !fields.length) return json({ error: "Say which records you want" }, 400);
+  const prompt = `Fields with a few sample values:\n${JSON.stringify(fields)}\nRecords: ${+b.count || 0}\nRequest: ${ask}`;
+  let lastErr = "";
+  for (const model of GEMINI_MODELS) {
+    try { const out = extractJSON(await geminiText(env, model, FILTER_SYSTEM, prompt)); if (out && Array.isArray(out.filters)) return json(out); lastErr = "The AI reply was not a filter"; }
+    catch (e) { lastErr = e.message; }
+  }
+  return json({ error: "Could not understand that just now: " + lastErr.slice(0, 160) }, 502);
+}
 // AI is counted per company: sign-in required, monthly allowance by plan (see auth.js PLANS).
 async function aiCounted(request, env, run) {
   if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -419,6 +441,7 @@ export default {
     if (url.pathname === "/api/lead") return saveLead(request, env);
     if (url.pathname === "/api/leads") return listLeads(request, env);
     if (url.pathname === "/api/design-ai") return designAI(request, env);
+    if (url.pathname === "/api/records-ai") return aiCounted(request, env, recordFilterAIRun);
     if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
     if (url.pathname === "/api/fonts" || url.pathname.startsWith("/api/fonts/")) return fonts(request, env, url);
     if (url.pathname.startsWith("/api/qz/")) return qzTray(request, env, url);

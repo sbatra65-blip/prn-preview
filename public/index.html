@@ -5666,6 +5666,34 @@ function ldFormatRecSel(sel, defq) { // the shortest text for a selection: runs 
     const q = e[i][1], r = j > i ? `${e[i][0] + 1}-${e[j][0] + 1}` : `${e[i][0] + 1}`; out.push(q !== defq ? `${r}(${q})` : r); i = j + 1; }
   return out.join(", ");
 }
+/* Filters for the record browser: field rules (AND), typed or spoken requests turned into rules by AI, with a simple local reader as back-up */
+const LD_OPS = [["contains", "contains"], ["not contains", "does not contain"], ["equals", "is"], ["not equals", "is not"], ["starts with", "starts with"], ["ends with", "ends with"], ["gt", ">"], ["gte", "≥"], ["lt", "<"], ["lte", "≤"], ["between", "between"], ["in", "is one of"], ["empty", "is empty"], ["not empty", "is not empty"]];
+function ldNum(v) { const s = String(v ?? "").replace(/[₹,\s]|rs\.?|inr/gi, ""); if (/^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/.test(String(v).trim())) { const [d, m, y] = String(v).trim().split(/[\/.-]/).map(Number); return Date.UTC(y < 100 ? 2000 + y : y, m - 1, d); } if (/^\d{4}-\d{2}-\d{2}/.test(String(v).trim())) return Date.parse(String(v).trim().slice(0, 10)); const n = parseFloat(s); return isNaN(n) ? null : n; }
+function ldRecMatch(rec, f) {
+  const raw = rec[f.field], v = String(raw ?? "").toLowerCase().trim(), q = String(f.value ?? "").toLowerCase().trim();
+  switch (f.op) {
+    case "contains": return v.includes(q); case "not contains": return !v.includes(q);
+    case "equals": return v === q || (ldNum(raw) != null && ldNum(raw) === ldNum(f.value)); case "not equals": return !(v === q || (ldNum(raw) != null && ldNum(raw) === ldNum(f.value)));
+    case "starts with": return v.startsWith(q); case "ends with": return v.endsWith(q);
+    case "empty": return !v; case "not empty": return !!v;
+    case "in": return q.split(/\s*,\s*/).filter(Boolean).some(x => v === x);
+  }
+  const a = ldNum(raw), b = ldNum(f.value), c = ldNum(f.value2); if (a == null || b == null) return false;
+  return f.op === "gt" ? a > b : f.op === "gte" ? a >= b : f.op === "lt" ? a < b : f.op === "lte" ? a <= b : f.op === "between" ? (c == null ? a >= b : a >= Math.min(b, c) && a <= Math.max(b, c)) : true;
+}
+function ldLocalFilter(ask, cols) { // back-up reader: "mrp above 500 and name contains rice, 2 copies each"
+  const out = { filters: [], copies: null, note: "" }, low = ask.toLowerCase();
+  const cm = low.match(/(\d+)\s*(copies|copy|labels?|each|nos?)\b/); if (cm && /(cop|each|label)/.test(cm[0])) out.copies = +cm[1];
+  const fieldOf = w => { w = w.trim().toLowerCase(); return cols.find(c => c.toLowerCase() === w) || cols.find(c => c.toLowerCase().includes(w) || w.includes(c.toLowerCase())); };
+  const ops = [[/\s*(?:>=|at least|not less than|minimum)\s*/, "gte"], [/\s*(?:<=|at most|not more than|maximum|upto|up to)\s*/, "lte"], [/\s*(?:>|above|over|more than|greater than|after)\s*/, "gt"], [/\s*(?:<|below|under|less than|before)\s*/, "lt"], [/\s*(?:!=|is not|not equal to|isn't)\s*/, "not equals"], [/\s+(?:does not contain|doesn't contain|without)\s+/, "not contains"], [/\s+(?:contains|has|having|with|includes|like)\s+/, "contains"], [/\s+(?:starts with|beginning with|begins with)\s+/, "starts with"], [/\s+(?:ends with)\s+/, "ends with"], [/\s+between\s+/, "between"], [/\s*(?:=|is|equals|equal to|of)\s+/, "equals"]];
+  for (let cl of low.replace(/,?\s*\d+\s*(copies|copy|labels?)\s*(each)?/g, "").split(/\s+and\s+|,\s*|\s+where\s+/)) {
+    cl = cl.replace(/^(print|show|select|records?|labels?|all|only|the|for|items?|whose|where|with)\s+/g, "").trim(); if (!cl) continue;
+    for (const [re, op] of ops) { const m = cl.split(re); if (m.length < 2) continue; const f = fieldOf(m[0]); if (!f) continue; let val = m.slice(1).join(" ").trim().replace(/^['"]|['"]$/g, "");
+      const r = { field: f, op, value: val }; if (op === "between") { const p = val.split(/\s+(?:and|to|-)\s+/); r.value = p[0]; r.value2 = p[1] || ""; } out.filters.push(r); break; }
+  }
+  if (!out.filters.length) out.note = "Could not read that; try e.g. “MRP above 500 and Name contains rice”.";
+  return out;
+}
 // Pick records one by one, with a quantity for each (search, tick all shown, none)
 function ldPickRecords(done) {
   const s = ldSrcKind(), rows = s === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [], inPrint = !!document.getElementById("ldPrQty") && document.getElementById("ldPrint").open;
@@ -5676,16 +5704,48 @@ function ldPickRecords(done) {
   let d = $("ldPickDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldPickDlg"; d.style.cssText = "width:min(980px,96vw);max-height:94dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)"; document.body.append(d); }
   d.innerHTML = `<div class="dlg-head"><div><h2>Records</h2><div class="sub">${rows.length} records · tap a row to see it on the label · tick the ones to print and set copies</div></div><button type="button" class="x" aria-label="Close">×</button></div>
     <div class="ld-acct"><label class="ld-f" style="margin-bottom:8px">Records to print <small>e.g. 1, 3, 5-9, 14-25(3) · (3) = 3 copies of each label · blank = none ticked</small><input id="ldPkSel" placeholder="1-${Math.min(rows.length, 10)}, 14-25(3), 30(10)" autocomplete="off" style="font:15px var(--font-mono, monospace)"></label><p class="ld-err" id="ldPkErr" style="margin:0 0 6px"></p>
-    <div class="ld-row" style="margin-bottom:8px"><input id="ldPkQ" placeholder="Search any field…" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+    <div class="ld-row" style="margin-bottom:6px"><input id="ldPkAsk" placeholder="Ask in words, e.g. MRP above 500 and name has rice, 2 copies each" autocomplete="off" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
+      <button type="button" class="btn sm" id="ldPkMic" title="Speak your filter" aria-label="Speak">🎤</button><button type="button" class="btn sm primary" id="ldPkAskGo">Find</button></div>
+    <p class="dz-cap" id="ldPkNote" style="margin:0 0 6px"></p>
+    <div id="ldPkF" style="display:grid;gap:6px;margin-bottom:6px"></div>
+    <div class="ld-row" style="margin-bottom:8px"><button type="button" class="btn sm" id="ldPkAddF">+ Filter</button><input id="ldPkQ" placeholder="Search any field…" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <button type="button" class="btn sm" id="ldPkAll">Tick all shown</button><button type="button" class="btn sm" id="ldPkNone">Clear</button><span class="dz-cap" id="ldPkN" style="margin:0"></span></div>
     <div style="max-height:min(46vh,420px);overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="ld-tbl" style="margin:0"><thead style="position:sticky;top:0;background:var(--surface)"><tr><th style="width:30px"></th><th>#</th>${cols.map(c => `<th>${ldEsc(c)}</th>`).join("")}<th style="width:90px">Copies</th></tr></thead><tbody id="ldPkBody"></tbody></table></div>
     <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldPkOk">Use these records</button><button type="button" class="btn" id="ldPkReset">Print all records instead</button></div></div>`;
   const qOf = i => sel.get(i) ?? (qtyCol ? parseInt(rows[i][qtyCol], 10) || defq : defq);
-  const shown = () => { const q = $("ldPkQ").value.trim().toLowerCase(); const out = []; for (let i = 0; i < rows.length && out.length < 500; i++) if (!q || Object.values(rows[i]).some(v => String(v).toLowerCase().includes(q))) out.push(i); return out; };
+  const allCols = Object.keys(rows[0]); LDV.filt = LDV.filt && LDV.filt.src === key ? LDV.filt : { src: key, list: [] }; const F = LDV.filt.list;
+  const shown = () => { const q = $("ldPkQ").value.trim().toLowerCase(), act = F.filter(f => f.field && (f.value !== "" || /empty/.test(f.op))); const out = []; for (let i = 0; i < rows.length && out.length < 500; i++) if ((!q || Object.values(rows[i]).some(v => String(v).toLowerCase().includes(q))) && act.every(f => ldRecMatch(rows[i], f))) out.push(i); return out; };
+  const matchAll = () => { const act = F.filter(f => f.field && (f.value !== "" || /empty/.test(f.op))), q = $("ldPkQ").value.trim().toLowerCase(), out = []; for (let i = 0; i < rows.length; i++) if ((!q || Object.values(rows[i]).some(v => String(v).toLowerCase().includes(q))) && act.every(f => ldRecMatch(rows[i], f))) out.push(i); return out; };
+  const drawF = () => { $("ldPkF").innerHTML = F.map((f, k) => `<div class="ld-row" style="gap:6px;flex-wrap:wrap"><select data-ff="${k}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${allCols.map(c => `<option${c === f.field ? " selected" : ""}>${ldEsc(c)}</option>`).join("")}</select>
+      <select data-fo="${k}" style="font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px">${LD_OPS.map(([o, n]) => `<option value="${o}"${o === f.op ? " selected" : ""}>${n}</option>`).join("")}</select>
+      ${/empty/.test(f.op) ? "" : `<input data-fv1="${k}" value="${ldEsc(f.value || "")}" placeholder="${f.op === "in" ? "a, b, c" : "value"}" style="flex:1;min-width:110px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px">`}
+      ${f.op === "between" ? `<span>and</span><input data-fv2="${k}" value="${ldEsc(f.value2 || "")}" style="width:110px;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px">` : ""}<button type="button" class="btn sm" data-fx="${k}" aria-label="Remove filter">×</button></div>`).join("")
+      + (F.length ? `<div class="ld-row" style="gap:6px"><button type="button" class="btn sm" id="ldPkTickF">Tick all ${matchAll().length} matching</button><button type="button" class="btn sm" id="ldPkClrF">Clear filters</button></div>` : "");
+    const t = $("ldPkTickF"); if (t) t.onclick = () => { for (const i of matchAll()) sel.set(i, qOf(i)); draw(); };
+    const c = $("ldPkClrF"); if (c) c.onclick = () => { F.length = 0; drawF(); draw(); }; };
+  const applyAI = (r, how) => { F.length = 0; for (const f of r.filters || []) if (allCols.includes(f.field)) F.push({ field: f.field, op: LD_OPS.some(o => o[0] === f.op) ? f.op : "contains", value: String(f.value ?? ""), value2: String(f.value2 ?? "") });
+    const m = matchAll(); if (F.length) { sel.clear(); for (const i of m) sel.set(i, r.copies > 0 ? Math.min(99999, r.copies) : qOf(i)); }
+    $("ldPkNote").textContent = F.length ? `${how}: ${m.length} record(s) match${r.copies > 0 ? `, ${r.copies} copies of each` : ""} and are ticked.${r.note ? " " + r.note : ""}` : (r.note || "No filter found in that request.");
+    drawF(); draw(); if (F.length) ldBeep && ldBeep("small"); };
+  const ask = async () => { const q = $("ldPkAsk").value.trim(); if (!q) return; const btn = $("ldPkAskGo"); btn.disabled = true; $("ldPkNote").textContent = "Reading your request…";
+    const fields = allCols.map(c => ({ name: c, samples: [...new Set(rows.slice(0, 200).map(r => r[c]).filter(v => v !== "" && v != null))].slice(0, 3) }));
+    try { const res = await fetch("/api/records-ai", { method: "POST", headers: { "content-type": "application/json", "x-ld": "1" }, body: JSON.stringify({ ask: q, fields, count: rows.length }) }); if (typeof ldAiSeen === "function") ldAiSeen(res);
+      const j = await res.json().catch(() => ({})); if (!res.ok || !Array.isArray(j.filters)) throw new Error(j.error || "AI unavailable"); applyAI(j, "Understood"); }
+    catch (e) { applyAI(ldLocalFilter(q, allCols), "Read without AI"); }
+    finally { btn.disabled = false; } };
   const count = (fromText) => { $("ldPkN").textContent = `${sel.size} record(s) ticked · ${[...sel.values()].reduce((a, b) => a + b, 0)} label(s) in all${rows.length > 500 ? " · search to find records beyond the first 500" : ""}`; if (!fromText) { $("ldPkSel").value = ldFormatRecSel(sel, defq); $("ldPkErr").textContent = ""; } };
   const draw = () => { $("ldPkBody").innerHTML = shown().map(i => `<tr><td><input type="checkbox" data-pk="${i}"${sel.has(i) ? " checked" : ""}></td><td>${i + 1}</td>${cols.map(c => `<td>${ldEsc(String(rows[i][c] ?? "").slice(0, 40))}</td>`).join("")}<td><input type="number" min="1" max="99999" data-pq="${i}" value="${qOf(i)}" style="width:70px;padding:3px 6px;border:1px solid var(--line);border-radius:6px"></td></tr>`).join(""); count(); };
-  d.onchange = d.oninput = e => { const t = e.target; if (t.id === "ldPkQ") return; if (t.dataset.pk != null) { const i = +t.dataset.pk; if (t.checked) sel.set(i, qOf(i)); else sel.delete(i); count(); } if (t.dataset.pq != null) { const i = +t.dataset.pq, v = Math.max(1, +t.value || 1); if (sel.has(i)) sel.set(i, v); else { sel.set(i, v); d.querySelector(`[data-pk="${i}"]`).checked = true; } count(); } };
+  d.onchange = d.oninput = e => { const t = e.target; if (t.id === "ldPkQ" || t.id === "ldPkAsk" || t.id === "ldPkSel") return;
+    if (t.dataset.ff != null) { F[+t.dataset.ff].field = t.value; draw(); return; } if (t.dataset.fo != null) { F[+t.dataset.fo].op = t.value; drawF(); draw(); return; }
+    if (t.dataset.fv1 != null) { F[+t.dataset.fv1].value = t.value; clearTimeout(drawF.t); drawF.t = setTimeout(() => { draw(); const b = $("ldPkTickF"); if (b) b.textContent = `Tick all ${matchAll().length} matching`; }, 200); return; }
+    if (t.dataset.fv2 != null) { F[+t.dataset.fv2].value2 = t.value; draw(); return; } if (t.dataset.pk != null) { const i = +t.dataset.pk; if (t.checked) sel.set(i, qOf(i)); else sel.delete(i); count(); } if (t.dataset.pq != null) { const i = +t.dataset.pq, v = Math.max(1, +t.value || 1); if (sel.has(i)) sel.set(i, v); else { sel.set(i, v); d.querySelector(`[data-pk="${i}"]`).checked = true; } count(); } };
   d.querySelector(".x").onclick = () => d.close(); $("ldPkQ").oninput = draw;
+  $("ldPkF").onclick = e => { const x = e.target.closest("[data-fx]"); if (x) { F.splice(+x.dataset.fx, 1); drawF(); draw(); } };
+  $("ldPkAddF").onclick = () => { F.push({ field: allCols[0], op: "contains", value: "" }); drawF(); const ins = d.querySelectorAll("[data-fv1]"); if (ins.length) ins[ins.length - 1].focus(); };
+  $("ldPkAskGo").onclick = ask; $("ldPkAsk").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); ask(); } };
+  { const SR = window.SpeechRecognition || window.webkitSpeechRecognition, mic = $("ldPkMic"); if (!SR) mic.hidden = true; else mic.onclick = () => { const r = new SR(); r.lang = "en-IN"; r.interimResults = true; mic.textContent = "●"; mic.style.color = "#dc2626";
+      r.onresult = ev => { $("ldPkAsk").value = [...ev.results].map(x => x[0].transcript).join(" "); if (ev.results[ev.results.length - 1].isFinal) { r.stop(); ask(); } }; r.onend = r.onerror = () => { mic.textContent = "🎤"; mic.style.color = ""; }; try { r.start(); } catch (e) {} }; }
+  drawF();
   $("ldPkSel").oninput = () => { const r = ldParseRecSel($("ldPkSel").value, rows.length, defq, qOf); sel.clear(); if (r.sel) for (const [i, q] of r.sel) sel.set(i, q); $("ldPkErr").textContent = r.bad.length ? "Not understood: " + r.bad.join(", ") : "";
     for (const el of d.querySelectorAll("[data-pk]")) el.checked = sel.has(+el.dataset.pk); for (const el of d.querySelectorAll("[data-pq]")) { const i = +el.dataset.pq; if (sel.has(i)) el.value = sel.get(i); } count(true); };
   $("ldPkBody").onclick = e => { const tr = e.target.closest("tr"); if (!tr || e.target.closest("input")) return; const cb = tr.querySelector("[data-pk]"); if (!cb) return; const i = +cb.dataset.pk;
