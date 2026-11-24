@@ -5194,7 +5194,7 @@ async function ldPrintOpen() {
       <div class="ld-f">Label<small id="ldPrInfo"></small></div>
     </div>
     <p class="ld-err" id="ldPrErr" role="alert"></p>
-    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo"${LDQ.printers.length ? "" : " disabled"}>Print</button><button type="button" class="btn" id="ldPrTest"${LDQ.printers.length ? "" : " disabled"}>Print 1 test label</button>
+    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo"${LDQ.printers.length ? "" : " disabled"}>Print</button><button type="button" class="btn" id="ldPrTest"${LDQ.printers.length ? "" : " disabled"}>Print 1 test label</button><button type="button" class="btn" id="ldPrPrev">Preview labels</button>
       <span style="flex:1"></span>
       <select id="ldPdfMode" aria-label="PDF pages" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><option value="row">PDF: labels as on the roll</option><option value="label">PDF: one label per page</option><option value="a4">PDF: A4 sheet of labels</option></select>
       <button type="button" class="btn" id="ldPdfGo">Download PDF</button><button type="button" class="btn" id="ldPrnGo">Download .prn</button></div>
@@ -5221,6 +5221,7 @@ async function ldPrintOpen() {
   document.getElementById("ldPrnGo").onclick = () => ldPrintRun(false, "file");
   if (document.getElementById("ldQzRetry")) document.getElementById("ldQzRetry").onclick = ldPrintOpen;
   document.getElementById("ldPrTest").onclick = () => ldPrintRun(true);
+  document.getElementById("ldPrPrev").onclick = () => { const err = document.getElementById("ldPrErr"); err.textContent = ""; try { ldSerialApply(); const q = Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1)); ldPreviewLabels(ldLabels(q), "Preview of this print"); } catch (e) { err.textContent = e.message; } finally { dz.serialStart = null; } };
 }
 async function ldPrintRun(test, to) {
   const D = dz.D, err = document.getElementById("ldPrErr"), btns = document.querySelectorAll("#ldPrintBody button"); err.textContent = "";
@@ -5694,6 +5695,43 @@ function ldLocalFilter(ask, cols) { // back-up reader: "mrp above 500 and name c
   if (!out.filters.length) out.note = "Could not read that; try e.g. “MRP above 500 and Name contains rice”.";
   return out;
 }
+/* Preview of the labels that will print, page by page: one tile per label row (several labels across = one tile) */
+function ldPreviewLabels(labels, title) {
+  labels = labels || []; if (!labels.length) return toast("Nothing to preview: tick some records first");
+  const D = dz.D, per = Math.max(1, D.across), rows = Math.ceil(labels.length / per), phone = matchMedia("(max-width: 760px)").matches, pageSize = phone ? 4 : 9;
+  const pages = Math.ceil(rows / pageSize); let pg = 0;
+  let d = $("ldPrevDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldPrevDlg"; d.style.cssText = "width:min(1100px,98vw);max-height:96dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:14px;background:#f4f5f8;color:var(--ink)"; document.body.append(d); }
+  const real = labels.filter(l => !l.blank).length;
+  d.innerHTML = `<div class="dlg-head" style="background:#fff"><div><h2>${ldEsc(title || "Label preview")}</h2><div class="sub">${real} label(s)${labels.length > real ? ` · ${labels.length - real} position(s) skipped` : ""}${per > 1 ? ` · ${per} across` : ""}</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2">
+      <button type="button" class="btn sm" id="lpFirst" aria-label="First page">⏮</button><button type="button" class="btn sm" id="lpPrev" aria-label="Previous page">◀</button>
+      <span style="flex:1;text-align:center;font-weight:600" id="lpInfo"></span>
+      <button type="button" class="btn sm" id="lpNext" aria-label="Next page">▶</button><button type="button" class="btn sm" id="lpLast" aria-label="Last page">⏭</button></div>
+    <div id="lpGrid" style="display:grid;grid-template-columns:repeat(${phone ? 1 : per > 1 ? 2 : 3},1fr);gap:14px;padding:16px"></div>`;
+  const recNo = rec => { const all = dz.db && dz.db.rows || LDV.recs || []; const i = all.indexOf(rec); return i >= 0 ? i + 1 : null; };
+  const draw = () => {
+    const g = d.querySelector("#lpGrid"); g.innerHTML = ""; const r0 = pg * pageSize, r1 = Math.min(rows, r0 + pageSize);
+    const keep = dz.serialStart; if (!dz.serialStart) try { ldSerialApply(); } catch (e) { dz.serialStart = {}; }
+    try {
+      for (let r = r0; r < r1; r++) {
+        dz.ctx = { labels, base: r * per }; const c = dzColourPNG(true, { plain: true, k: phone ? 6 : 7 });
+        const row = document.createElement("canvas"); row.width = c.width; row.height = Math.round(D.h * (phone ? 6 : 7)); row.getContext("2d").drawImage(c, 0, -Math.round(D.vgap * (phone ? 6 : 7)));
+        const cap = labels.slice(r * per, r * per + per).map((l, j) => l.blank ? "skipped" : `#${r * per + j + 1}${recNo(l.rec) ? ` · record ${recNo(l.rec)}` : ""}`).join("  |  ");
+        const fig = document.createElement("figure"); fig.style.cssText = "margin:0;background:#fff;border:1px solid #e3e6ec;border-radius:10px;padding:8px;box-shadow:0 2px 6px rgba(15,23,42,.06)";
+        row.style.cssText = "width:100%;height:auto;display:block;border:1px solid #cbd5e1;background:#fff"; const fc = document.createElement("figcaption"); fc.style.cssText = "font-size:12px;color:#64748b;margin-top:6px;text-align:center"; fc.textContent = cap;
+        fig.append(row, fc); g.append(fig);
+      }
+    } finally { dz.ctx = null; dz.gfx = null; dz.serialStart = keep; }
+    d.querySelector("#lpInfo").textContent = `Page ${pg + 1} of ${pages} · labels ${r0 * per + 1}–${Math.min(labels.length, r1 * per)}`;
+    d.querySelector("#lpPrev").disabled = d.querySelector("#lpFirst").disabled = pg === 0; d.querySelector("#lpNext").disabled = d.querySelector("#lpLast").disabled = pg >= pages - 1;
+  };
+  const go = n => { pg = Math.max(0, Math.min(pages - 1, n)); draw(); d.scrollTop = 0; };
+  d.querySelector("#lpFirst").onclick = () => go(0); d.querySelector("#lpPrev").onclick = () => go(pg - 1); d.querySelector("#lpNext").onclick = () => go(pg + 1); d.querySelector("#lpLast").onclick = () => go(pages - 1);
+  d.querySelector(".x").onclick = () => d.close();
+  d.onkeydown = e => { if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); go(pg + 1); } if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(pg - 1); } };
+  { let sx = null; d.ontouchstart = e => { sx = e.touches.length === 1 ? e.touches[0].clientX : null; }; d.ontouchend = e => { if (sx == null) return; const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 70) go(pg + (dx < 0 ? 1 : -1)); sx = null; }; }
+  draw(); if (!d.open) d.showModal();
+}
 // Pick records one by one, with a quantity for each (search, tick all shown, none)
 function ldPickRecords(done) {
   const s = ldSrcKind(), rows = s === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [], inPrint = !!document.getElementById("ldPrQty") && document.getElementById("ldPrint").open;
@@ -5711,7 +5749,7 @@ function ldPickRecords(done) {
     <div class="ld-row" style="margin-bottom:8px"><button type="button" class="btn sm" id="ldPkAddF">+ Filter</button><input id="ldPkQ" placeholder="Search any field…" style="flex:1;min-width:220px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px">
       <button type="button" class="btn sm" id="ldPkAll">Tick all shown</button><button type="button" class="btn sm" id="ldPkNone">Clear</button><span class="dz-cap" id="ldPkN" style="margin:0"></span></div>
     <div style="max-height:min(46vh,420px);overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="ld-tbl" style="margin:0"><thead style="position:sticky;top:0;background:var(--surface)"><tr><th style="width:30px"></th><th>#</th>${cols.map(c => `<th>${ldEsc(c)}</th>`).join("")}<th style="width:90px">Copies</th></tr></thead><tbody id="ldPkBody"></tbody></table></div>
-    <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldPkOk">Use these records</button><button type="button" class="btn" id="ldPkReset">Print all records instead</button></div></div>`;
+    <div class="ld-row" style="margin-top:12px"><button type="button" class="btn" id="ldPkPrev">Preview labels</button><button type="button" class="btn primary" id="ldPkOk">Use these records</button><button type="button" class="btn" id="ldPkReset">Print all records instead</button></div></div>`;
   const qOf = i => sel.get(i) ?? (qtyCol ? parseInt(rows[i][qtyCol], 10) || defq : defq);
   const allCols = Object.keys(rows[0]); LDV.filt = LDV.filt && LDV.filt.src === key ? LDV.filt : { src: key, list: [] }; const F = LDV.filt.list;
   const shown = () => { const q = $("ldPkQ").value.trim().toLowerCase(), act = F.filter(f => f.field && (f.value !== "" || /empty/.test(f.op))); const out = []; for (let i = 0; i < rows.length && out.length < 500; i++) if ((!q || Object.values(rows[i]).some(v => String(v).toLowerCase().includes(q))) && act.every(f => ldRecMatch(rows[i], f))) out.push(i); return out; };
@@ -5752,6 +5790,7 @@ function ldPickRecords(done) {
     for (const x of d.querySelectorAll("tr.cur")) x.classList.remove("cur"); tr.classList.add("cur"); if (s === "db" && typeof dzDbShow === "function") { dzDbShow(i); } };
   $("ldPkBody").ondblclick = e => { const cb = e.target.closest("tr") && e.target.closest("tr").querySelector("[data-pk]"); if (cb && !e.target.closest("input")) { cb.checked = !cb.checked; cb.dispatchEvent(new Event("change", { bubbles: true })); } };
   $("ldPkAll").onclick = () => { for (const i of shown()) sel.set(i, qOf(i)); draw(); }; $("ldPkNone").onclick = () => { sel.clear(); draw(); };
+  $("ldPkPrev").onclick = () => { const lab = []; for (const [i, q] of [...sel].sort((a, b) => a[0] - b[0])) for (let c = 0; c < q; c++) lab.push({ rec: rows[i], n: lab.length }); ldPreviewLabels(lab, `Preview: ${sel.size} record(s)`); };
   if (!inPrint) { $("ldPkOk").textContent = "Print these…"; $("ldPkReset").textContent = "Clear selection"; }
   $("ldPkOk").onclick = () => { LDV.pick = sel.size ? { src: key, sel: new Map([...sel].sort((a, b) => a[0] - b[0])) } : null; d.close(); if (!inPrint) { if (LDV.pick) ldPrintOpen(); return; } if (LDV.onPick) LDV.onPick(); else if (done) done(); };
   $("ldPkReset").onclick = () => { LDV.pick = null; d.close(); if (LDV.onPick) LDV.onPick(); };
