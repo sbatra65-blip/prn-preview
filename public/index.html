@@ -236,7 +236,7 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2), .dz-zf button:nth-child(4), .dz-zf button:nth-child(5) { font-size: 14px; }
 @media (pointer: coarse) { .dz-zf { display: flex; } .dz-stage { touch-action: pan-x pan-y; } }
 .dz-objmenu { position: fixed; z-index: 90; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.25); padding: 4px; display: grid; min-width: 190px; }
-.dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; }
+.dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; } .dz-objmenu kbd { float: right; font: 12px Inter, system-ui, sans-serif; color: #94a3b8; margin-left: 18px; } .dz-objmenu.mouse button { padding: 7px 12px; font-size: 14px; } .dz-objmenu.mouse { min-width: 200px; }
 .dz-paper { position: relative; background: #d9d4c7; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 11px var(--font-mono); }
 .dz-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
@@ -3006,6 +3006,11 @@ function dzCalibrate(thenActual) {
   d.querySelector(".x").onclick = () => { d.close(); if (thenActual) { store.set("ld-pxmm", store.get("ld-pxmm") || ""); const base = dzScale() / dz.zoom; dzZoomAt(dzPxPerMm() / base); toast("Actual size (approximate)"); } };
   show(); d.showModal();
 }
+addEventListener("keydown", e => { // Del / Backspace deletes the selection even when focus is outside the designer box
+  if (e.key !== "Delete" && e.key !== "Backspace") return; if (!$("dzDlg").open || dz.sel == null || e.defaultPrevented) return;
+  const t = e.target; if (t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable)) return; if (t && t.closest && t.closest("#dzDlg")) return; // the designer's own handler takes it
+  if (document.querySelector("dialog[open]:not(#dzDlg)")) return; e.preventDefault(); dzMenuOff(); dzDelete();
+});
 (function dzGestures() {
   const st = $("dzStage"); if (!st) return;
   let G = null, raf = 0, lastTap = { t: 0, id: null }, lp = 0;
@@ -3064,7 +3069,10 @@ function dzCalibrate(thenActual) {
   st.addEventListener("touchend", end, { capture: true }); st.addEventListener("touchcancel", end, { capture: true });
   ["gesturestart", "gesturechange"].forEach(ev => st.addEventListener(ev, e => e.preventDefault(), { passive: false })); // stop Safari zooming the whole page
   st.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); dzZoomAt(dz.zoom * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY); }, { passive: false });
-  st.addEventListener("contextmenu", e => { if (matchMedia("(pointer: coarse)").matches && e.target.closest(".dz-o")) e.preventDefault(); });
+  st.addEventListener("contextmenu", e => { // right-click an object: the same actions menu as a long-press
+    const o = e.target.closest("#dzPaperEl .dz-o"); if (!o) return; e.preventDefault(); if (matchMedia("(pointer: coarse)").matches) return;
+    const it = dz.D.items.find(i => i.id === +o.dataset.id); if (!it) return; if (!dzSelIds().includes(it.id)) dzSelect(it.id); dzObjMenu(it, e.clientX, e.clientY + 20, true);
+  });
   // floating zoom buttons for touch screens
   const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Actual size" title="Actual size">1:1</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
   const [bo, bf, bi, ba, bh] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); ba.onclick = dzActual; bh.onclick = dzGestureHelp;
@@ -3076,13 +3084,15 @@ function dzEditObj(it) { // jump to the text / data box of the object, keyboard 
   setTimeout(() => { const f = document.querySelector('.dz-props [data-k="text"], .dz-props [data-k="data"], .dz-props #dzData'); if (f) { f.focus(); try { f.select(); } catch (e) {} f.scrollIntoView({ block: "center" }); } }, 60);
 }
 function dzMenuOff() { const m = $("dzObjMenu"); if (m) m.remove(); }
-function dzObjMenu(it, x, y) {
-  dzMenuOff(); const m = document.createElement("div"); m.id = "dzObjMenu"; m.className = "dz-objmenu";
+function dzObjMenu(it, x, y, mouse) {
+  dzMenuOff(); const m = document.createElement("div"); m.id = "dzObjMenu"; m.className = "dz-objmenu" + (mouse ? " mouse" : "");
   const acts = [["Edit text / data", () => dzEditObj(it)], ["Duplicate", dzDuplicate], ["Copy", dzCopy], ["Bring to front", () => dzOrder("front")], ["Send to back", () => dzOrder("back")],
-    ["Turn 90°", () => { dzHist(); it.rot = (dzRot(it) + 90) % 360; dzDraw(); dzProps(); dzSave(); }], [it.noprint ? "Print this object" : "Don't print", () => { it.noprint = !it.noprint; if (!it.noprint) delete it.noprint; dzDraw(); dzProps(); dzSave(); }], ["Delete", dzDelete, "bad"]];
-  for (const [t, fn, cls] of acts) { const b = document.createElement("button"); b.type = "button"; b.textContent = t; if (cls) b.className = cls; b.onclick = () => { dzMenuOff(); fn(); }; m.append(b); }
+    ["Turn 90°", () => { dzHist(); it.rot = (dzRot(it) + 90) % 360; dzDraw(); dzProps(); dzSave(); }], [it.noprint ? "Print this object" : "Don't print", () => { it.noprint = !it.noprint; if (!it.noprint) delete it.noprint; dzDraw(); dzProps(); dzSave(); }], ...(dz.clip ? [["Paste", dzPaste]] : []), [dzSelIds().length > 1 ? `Delete ${dzSelIds().length} objects` : "Delete", dzDelete, "bad", "Del"]];
+  for (const [t, fn, cls, key] of acts) { const b = document.createElement("button"); b.type = "button"; b.textContent = t; if (key) { const k = document.createElement("kbd"); k.textContent = key; b.append(k); } if (cls) b.className = cls; b.onclick = () => { dzMenuOff(); fn(); }; m.append(b); }
   document.body.append(m); const r = m.getBoundingClientRect();
-  m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x - r.width / 2)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y - r.height - 18)) + "px";
+  if (mouse) { m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y - 20)) + "px"; }
+  else { m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x - r.width / 2)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y - r.height - 18)) + "px"; }
+  m.addEventListener("keydown", e => { if (e.key === "Escape") dzMenuOff(); });
   setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { dzMenuOff(); removeEventListener("pointerdown", off, true); } }, true), 50);
 }
 function dzGestureHelp() {
