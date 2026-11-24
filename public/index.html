@@ -603,6 +603,11 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <span class="bmonly"><label class="num" for="bmIW">Image width <input type="number" id="bmIW" min="2" max="300" step="0.5" placeholder="fit"> mm</label></span>
         <span class="bmonly"><label class="num" for="bmPos">Place <select id="bmPos"><option value="center">Centre</option><option value="tl">Top left</option></select></label></span>
       </div>
+      <div class="row" id="bmPrnRow" hidden>
+        <label class="num" for="bmLang">PRN language <select id="bmLang"></select></label>
+        <label class="num" for="bmDpi">Resolution <select id="bmDpi"><option value="203">203 dpi</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></label>
+        <span class="status">“Make PRN file” also downloads a printer file; the design stays open to edit.</span>
+      </div>
       <div class="row bmonly">
         <label class="num" for="bmMethod">Method <select id="bmMethod"><option value="threshold">Threshold (logos, text)</option><option value="fs">Floyd–Steinberg dither (photos)</option><option value="atkinson">Atkinson dither (photos, crisper)</option></select></label>
         <label class="num" for="bmThr">Threshold <input type="range" id="bmThr" min="10" max="245" value="128"> <span id="bmThrV" class="mono">128</span></label>
@@ -610,6 +615,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
       </div>
       <div class="row">
         <button type="button" class="btn primary" id="bmGo">Make PRN</button>
+        <button type="button" class="btn" id="bmPrnGo" hidden>Make PRN file</button>
         <span class="status" id="bmStatus" role="status" aria-live="polite">No image yet.</span>
       </div>
     
@@ -2107,7 +2113,7 @@ function syncAI() {
   document.querySelector(".create").classList.toggle("ai-on", on);
   $("p2lHint").textContent = on ? HINT_AI : HINT_BM;
   $("bmW").placeholder = on ? "auto" : "50"; $("bmH").placeholder = on ? "auto" : "25";
-  if (p2l.img) $("bmStatus").textContent = `${p2l.name} ready. Press Make PRN${on ? " to read it with AI" : ""}.`;
+  if (p2l.img) $("bmStatus").textContent = `${p2l.name} ready. Press ${$("bmGo").textContent}${on ? " to read it with AI" : ""}${$("bmPrnGo") && !$("bmPrnGo").hidden ? ", or Make PRN file" : ""}.`;
 }
 $("useAI").onchange = syncAI; syncAI();
 $("bmFile").onchange = async e => {
@@ -2121,7 +2127,29 @@ $("bmFile").onchange = async e => {
     else { $("bmStatus").textContent = `${f.name} · ${p2l.img.naturalWidth} × ${p2l.img.naturalHeight} px · ${an.photo ? "photo: dithered" : "artwork: threshold " + an.threshold}`; genBitmap(); }
   } catch (err) { $("bmStatus").textContent = "Could not read that image."; }
 };
-$("bmGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : (typeof APP !== "undefined" && APP ? dzImageDesign() : genBitmap()); };
+$("bmPrnGo").onclick = () => { if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } p2l.thenPrn = { lang: $("bmLang").value, dpi: +$("bmDpi").value }; $("useAI").checked ? runAI() : dzImageDesign(); };
+// Ribbon / menu: open the picture dialog in the designer
+function dzPicOpen(prn) {
+  const D = dz.D || dzDefault(), ls = $("bmLang");
+  if (!ls.options.length) ls.innerHTML = Object.keys(DZ_LANG_NAME).map(l => `<option value="${l}">${DZ_LANG_NAME[l]}</option>`).join("");
+  ls.value = D.lang; $("bmDpi").value = String(D.dpi); $("bmPrnRow").hidden = false; $("bmPrnGo").hidden = false;
+  if (!$("bmW").value) $("bmW").value = r1(dzLW()); if (!$("bmH").value) $("bmH").value = r1(D.h);
+  $("useAI").checked = true; $("useAI").dispatchEvent(new Event("change"));
+  $("bmStatus").textContent = prn ? "Choose a photo of a label, then press “Make PRN file”." : "Choose a photo or image of a label. AI reads its text, barcodes and lines into an editable design.";
+  $("picDlg").showModal(); if (!p2l.img) setTimeout(() => $("bmFile").click(), 50);
+}
+// After a picture became a design: also hand over a printer file when asked
+async function dzPicPrn() {
+  const o = p2l.thenPrn; p2l.thenPrn = null; if (!o || !dz.D) return;
+  if (dzPrinter().driver) return toast("This colour printer has no printer language: use File → Export colour image.");
+  try { // pictures must finish loading before they can be turned into printer graphics
+    await Promise.all(dz.D.items.filter(i => i.type === "image").map(i => { const im = dzImg(i); return im && !im.complete ? new Promise(ok => { im.onload = im.onerror = ok; setTimeout(ok, 4000); }) : null; }));
+    const lang = o.lang, dpi = lang === "EPL2" ? 203 : o.dpi, { prn } = layoutPRN(dzLayout(), lang, dpi);
+    const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `${(p2l.name || "picture").replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_")}_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast(`PRN downloaded: ${DZ_LANG_NAME[lang] || lang} ${dpi} dpi`);
+  } catch (e) { toast("Could not make the PRN: " + e.message); }
+}
+$("bmGo").onclick = () => { p2l.thenPrn = null; if (!p2l.img) { $("bmStatus").textContent = "Choose an image or photo first."; return; } $("useAI").checked ? runAI() : (typeof APP !== "undefined" && APP ? dzImageDesign() : genBitmap()); };
 // Without AI, in the app: the picture becomes an image object on a new design, sized from the dialog
 function dzImageDesign() {
   const im = p2l.img, lw = +$("bmW").value || 50, iwIn = +$("bmIW").value || 0, ratio = im.naturalHeight / im.naturalWidth;
@@ -2133,6 +2161,7 @@ function dzImageDesign() {
   dz.D = Object.assign(dzDefault(), { printer: D0.printer, lang: D0.lang, dpi: D0.dpi, pw: D0.pw, mw: D0.mw, paper: lw, across: 1, edge: 0, h: lh, items: [{ id: 1, type: "image", x: r1(center ? (lw - iw) / 2 : 2), y: r1(center ? (lh - ih) / 2 : 2), w: r1(iw), h: r1(ih), src: c.toDataURL("image/png"), ratio, name: p2l.name, method: $("bmMethod").value, threshold: +$("bmThr").value, invert: $("bmInv").checked }] });
   dz.sel = 1; dz.seq = 2; $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
   $("dzStatus").textContent = "Picture placed as an image object: add text, barcodes or shapes around it.";
+  dzPicPrn();
 }
 for (const id of ["bmW", "bmH", "bmIW", "bmPos", "bmMethod", "bmThr", "bmInv"]) $(id).addEventListener("change", () => { if (p2l.gen && !$("useAI").checked) genBitmap(true); });
 for (const id of ["bmW", "bmH", "bmIW", "bmThr"]) $(id).addEventListener("input", () => { clearTimeout(genBitmap.t); genBitmap.t = setTimeout(() => { if (p2l.gen && !$("useAI").checked) genBitmap(true); }, 350); });
@@ -2159,10 +2188,10 @@ async function runAI() {
       const notes = dzFromModel({ items: [], dpi: d }, lang, d, L);
       $("picDlg").close(); dzOpen(); dzSave(); dzRibbonShow("Home");
       $("dzStatus").textContent = `Photo read into ${dz.D.items.length} objects${notes.length ? " · " + notes.join(" · ") : ""}. Check every text and barcode value against the label before printing.`;
-      toast(`Design made: ${dz.D.items.length} objects`); return;
+      toast(`Design made: ${dz.D.items.length} objects`); dzPicPrn(); return;
     }
     state.source = { kind: "ai" }; regenSource(lang, dpi, true);
-  } catch (err) { $("bmStatus").textContent = "AI conversion failed: " + err.message; }
+  } catch (err) { p2l.thenPrn = null; $("bmStatus").textContent = "AI conversion failed: " + err.message; }
   finally { $("bmGo").disabled = false; }
 }
 
@@ -3803,7 +3832,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -3826,6 +3855,7 @@ function dzMenuOpen(name, btn) {
 }
 /* ribbon: tabs of grouped icon buttons (own icon set), plus an icon toolbox on the left */
 const DZ_IC = { // 24x24 stroke icons, drawn for this app
+  photo: "M3 8h4l2-3h6l2 3h4v11H3zM12 10.5a3.5 3.5 0 1 0 .01 0M18.5 3l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z",
   text: "M5 6h14M12 6v13M9 19h6", barcode: "M4 5v14M7 5v14M10 5v14M12 5v14M15 5v14M17 5v14M20 5v14", qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2",
   vcard: "M3 5h18v14H3zM9 10a2 2 0 1 0 .01 0M6 16c.5-2 5.5-2 6 0M14 10h4M14 13h4", dm: "M4 4v16h16M8 4h2M12 4h2M16 4h2M20 8v2M20 12v2M20 16v2M8 9h3v3H8zM13 13h3v3h-3z",
   image: "M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15 9.5a1.5 1.5 0 1 0 .01 0", line: "M4 18L20 6", box: "M4 6h16v12H4z",
@@ -3852,9 +3882,10 @@ function dzRibbonDef() {
     Home: [["Clipboard", [B("paste", "Paste", dzPaste, () => !!dz.clip, null, "Paste (Ctrl+V)"), B("copy", "Copy", dzCopy, has, null, "Copy (Ctrl+C)"), B("dup", "Duplicate", dzDuplicate, has, null, "Duplicate (Ctrl+D)"), B("del", "Delete", dzDelete, has, null, "Delete (Del)")]],
       ["History", [B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
       ["Insert", [B("text", "Text", () => dzAdd("text")), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("qr", "QR code", () => dzAdd("qrcode")), B("image", "Image", () => $("dzImgFile").click())]],
+      ["Picture", [B("photo", "Picture to label", () => dzPicOpen(), null, null, "Upload a photo or image of a label: AI turns it into an editable design"), B("printer", "Picture to PRN", () => dzPicOpen(true), null, null, "Upload a photo or image of a label and get a printer file (PRN)")]],
       ["Arrange", [B("ac", "Centre", () => dzAlign("center"), has), B("front", "To front", () => dzOrder("front"), has), B("rotr", "Turn 90°", turn(90), turnable)]],
       ["Output", [B("preview", "Preview", click("dzToViewer"), null, null, "Preview as printed"), B("printer", "Download", click("dzPrn"), null, null, "Download .prn"), B("download", "Save .ldl", () => ldlSaveDialog(), null, null, "Download the label as a LabelDesk file (.ldl): design, printer and settings in one file (Ctrl+Shift+S)"), B("openf", "Open .ldl", () => ldlPick(), null, null, "Open a LabelDesk file (.ldl) (Ctrl+O)"), B("cloud", "Save", click("dzSave"), null, null, "Save to cloud (Ctrl+S)"), B("folder", "My designs", click("dzOpenBtn"))]]],
-    Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click())]],
+    Insert: [["Objects", [B("text", "Text", () => dzAdd("text")), B("text", "Paragraph", () => dzAdd("para"), null, null, "Paragraph: text that wraps inside a box"), B("barcode", "Barcode", () => dzAdd("barcode")), { symsel: true }, B("barcode", "GS1-128", () => dzAdd("gs1"), null, null, "GS1-128 barcode with application identifiers"), B("qr", "QR code", () => dzAdd("qrcode")), B("vcard", "Contact QR", () => dzAdd("vcard")), B("dm", "DataMatrix", () => dzAdd("datamatrix")), B("image", "Image", () => $("dzImgFile").click()), B("photo", "Picture to label", () => dzPicOpen(), null, null, "Upload a photo or image of a label: AI turns it into an editable design")]],
       ["Lines", [B("line", "Line", () => dzAdd("line")), B("box", "Box", () => dzAdd("box")), B("dh", "Guide line", () => dzAdd("guide"), null, null, "Horizontal alignment line that is never printed"), B("dv", "Vertical guide", () => dzAdd("vguide"), null, null, "Vertical alignment line that is never printed")]],
       ["Shapes · text fits inside", Object.keys(DZ_SHAPES).map(k => B(k, DZ_SHAPES[k].split(" ")[0].replace("Circle", "Circle"), () => dzAdd("shape:" + k), null, null, DZ_SHAPES[k]))],
       ["Text shaped like (no outline)", ["rect", "ellipse", "star", "hexagon"].map(k => B(k, DZ_SHAPES[k].split(" ")[0], () => dzAdd("tshape:" + k), null, null, "Text in the form of a " + DZ_SHAPES[k].toLowerCase()))]],
