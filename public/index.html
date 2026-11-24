@@ -3804,7 +3804,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -5405,6 +5405,304 @@ function ldlPick() { const i = document.createElement("input"); i.type = "file";
 // Drop a .ldl anywhere on the app to open it
 document.addEventListener("dragover", e => { if ([...(e.dataTransfer.items || [])].some(x => x.kind === "file")) e.preventDefault(); });
 document.addEventListener("drop", e => { const f = [...(e.dataTransfer.files || [])].find(x => /\.ldl$/i.test(x.name)); if (!f) return; e.preventDefault(); e.stopPropagation(); ldlOpen(f); }, true);
+</script>
+
+<!-- Quick print for phones (installable web app): pick a design, fill or scan the data, send to a print station PC -->
+<style>
+#ldQP { position: fixed; inset: 0; z-index: 70; background: #f4f5f8; color: #0f172a; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+#ldQP[hidden] { display: none; }
+#ldQP .qp-top { display: flex; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: #111827; color: #fff; }
+#ldQP .qp-top img { width: 34px; height: 34px; border-radius: 8px; }
+#ldQP .qp-top b { font-size: 17px; flex: 1; } #ldQP .qp-top b span { color: #94a3b8; font-weight: 500; }
+#ldQP .qp-top button { font: 600 14px Inter, system-ui, sans-serif; background: #1f2937; color: #fff; border: 1px solid #374151; border-radius: 10px; padding: 8px 12px; }
+#ldQP .qp-body { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 12px 12px calc(110px + env(safe-area-inset-bottom)); }
+#ldQP .qp-card { background: #fff; border: 1px solid #e3e6ec; border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+#ldQP .qp-card h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #64748b; }
+#ldQP .qp-row { display: flex; gap: 8px; align-items: center; }
+#ldQP select, #ldQP input { font: 16px Inter, system-ui, sans-serif; padding: 11px 12px; border: 1px solid #d5dae2; border-radius: 10px; background: #fff; color: #0f172a; width: 100%; min-width: 0; box-sizing: border-box; }
+#ldQP .qp-btn { font: 600 15px Inter, system-ui, sans-serif; padding: 11px 14px; border-radius: 10px; border: 1px solid #d5dae2; background: #fff; color: #0f172a; white-space: nowrap; }
+#ldQP .qp-btn.pri { background: var(--accent, #c2410c); border-color: transparent; color: #fff; }
+#ldQP .qp-btn:disabled { opacity: .5; }
+#ldQP .qp-scan { flex: none; width: 48px; height: 46px; display: grid; place-items: center; padding: 0; }
+#ldQP .qp-prev { display: grid; place-items: center; background: #e7e2d6; border-radius: 10px; padding: 10px; min-height: 120px; }
+#ldQP .qp-prev img { max-width: 100%; max-height: 42vh; box-shadow: 0 2px 10px rgba(0,0,0,.15); background: #fff; }
+#ldQP .qp-f { display: block; margin-bottom: 10px; font-size: 14px; font-weight: 600; } #ldQP .qp-f > span { display: block; margin-bottom: 5px; }
+#ldQP .qp-f small { font-weight: 400; color: #64748b; }
+#ldQP .qp-dot { width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; flex: none; } #ldQP .qp-dot.on { background: #16a34a; } #ldQP .qp-dot.off { background: #dc2626; }
+#ldQP .qp-st { flex: 1; font-size: 15px; line-height: 1.3; } #ldQP .qp-st small { display: block; color: #64748b; font-size: 13px; }
+#ldQP .qp-qty { display: flex; align-items: center; gap: 8px; } #ldQP .qp-qty input { text-align: center; font-weight: 700; font-size: 20px; }
+#ldQP .qp-qty button { width: 52px; height: 48px; font-size: 24px; flex: none; }
+#ldQP .qp-bar { position: absolute; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e3e6ec; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; }
+#ldQP .qp-bar .pri { flex: 1; font-size: 17px; padding: 14px; }
+#ldQP .qp-msg { font-size: 14px; color: #64748b; margin: 6px 0 0; } #ldQP .qp-msg.err { color: #b91c1c; } #ldQP .qp-msg.ok { color: #15803d; }
+#ldQP .qp-recs { max-height: 220px; overflow: auto; margin-top: 8px; border: 1px solid #e3e6ec; border-radius: 10px; }
+#ldQP .qp-recs button { display: block; width: 100%; text-align: left; border: 0; border-bottom: 1px solid #eef0f4; background: #fff; padding: 10px 12px; font: 14px Inter, system-ui, sans-serif; color: #0f172a; }
+#ldQPScan { position: fixed; inset: 0; z-index: 80; background: #000; display: flex; flex-direction: column; }
+#ldQPScan[hidden] { display: none; }
+#ldQPScan video { flex: 1; width: 100%; object-fit: cover; }
+#ldQPScan .qs-box { position: absolute; left: 10%; right: 10%; top: 32%; height: 22%; border: 3px solid #38bdf8; border-radius: 16px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); pointer-events: none; }
+#ldQPScan .qs-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); display: flex; gap: 10px; align-items: center; color: #fff; font: 15px Inter, system-ui, sans-serif; }
+#ldQPScan .qs-bar span { flex: 1; } #ldQPScan button { font: 600 16px Inter, system-ui, sans-serif; padding: 12px 18px; border-radius: 12px; border: 0; background: #fff; color: #111; }
+.dz-ribbon .rt .rqp { display: none; } @media (max-width: 760px) { .dz-ribbon .rt .rqp { display: inline-flex; } }
+#ldStation .ls-qr { display: grid; place-items: center; padding: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; }
+#ldStation .ls-log { max-height: 220px; overflow: auto; font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+#ldStation .ls-log div { padding: 4px 0; border-bottom: 1px solid var(--line); }
+</style>
+<div id="ldQP" hidden>
+  <div class="qp-top"><img src="/icons/icon.svg" alt=""><b>LabelDesk <span>· Print</span></b><button type="button" id="qpDesign">Designer</button></div>
+  <div class="qp-body">
+    <div class="qp-card"><h3>Printer</h3>
+      <div class="qp-row"><span class="qp-dot" id="qpDot"></span><div class="qp-st" id="qpSt">Not paired<small>Pair with a PC that has the label printer</small></div><button type="button" class="qp-btn" id="qpPair">Pair</button></div>
+    </div>
+    <div class="qp-card"><h3>Label design</h3>
+      <div class="qp-row"><select id="qpDesign2" aria-label="Design"></select><button type="button" class="qp-btn" id="qpLdl" title="Open a .ldl file">File</button></div>
+      <p class="qp-msg" id="qpDInfo"></p>
+    </div>
+    <div class="qp-card"><div class="qp-prev" id="qpPrev"><p class="qp-msg">No design yet</p></div></div>
+    <div class="qp-card" id="qpDataCard" hidden><h3>Data</h3><div id="qpRecWrap" hidden><input id="qpRecQ" type="search" placeholder="Find a record…" autocomplete="off"><div class="qp-recs" id="qpRecs" hidden></div><p class="qp-msg" id="qpRecInfo"></p></div><div id="qpFields"></div></div>
+    <div class="qp-card"><h3>How many labels</h3>
+      <div class="qp-qty"><button type="button" class="qp-btn" id="qpMinus" aria-label="Fewer">−</button><input id="qpQty" type="number" inputmode="numeric" min="1" max="9999" value="1" aria-label="Number of labels"><button type="button" class="qp-btn" id="qpPlus" aria-label="More">+</button></div>
+      <details style="margin-top:10px"><summary style="font-size:14px;color:#64748b">Printer language and resolution</summary>
+        <div class="qp-row" style="margin-top:8px"><select id="qpLang" aria-label="Printer language"></select><select id="qpDpi" aria-label="Resolution"><option value="203">203 dpi</option><option value="300">300 dpi</option><option value="600">600 dpi</option></select></div></details>
+      <p class="qp-msg" id="qpMsg"></p>
+    </div>
+  </div>
+  <div class="qp-bar"><button type="button" class="qp-btn" id="qpPdf">PDF</button><button type="button" class="qp-btn" id="qpPrn">.prn</button><button type="button" class="qp-btn pri" id="qpGo">Print</button></div>
+</div>
+<div id="ldQPScan" hidden><video id="qsVideo" playsinline muted></video><div class="qs-box"></div><div class="qs-bar"><span id="qsMsg">Point the camera at a barcode or QR code</span><button type="button" id="qsClose">Cancel</button></div></div>
+<dialog id="ldStation" style="width:min(720px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)">
+  <div class="dlg-head"><div><h2>Print station</h2><div class="sub">Phones send labels here; this computer prints them through QZ Tray.</div></div><button type="button" class="x" id="lsClose" aria-label="Close">×</button></div>
+  <div class="ld-acct" id="lsBody"></div>
+</dialog>
+<script>
+/* ---------- Quick print for phones ---------- */
+const QP = { D: null, name: "", rec: {}, cloud: [], recs: null, ser: {} };
+const qp$ = id => document.getElementById(id);
+const qpPhone = () => matchMedia("(max-width: 760px)").matches;
+const qpStation = () => store.get("ld-qp-station") || "";
+const qpEsc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function qpWith(fn) { const keep = dz.D; dz.D = QP.D; try { return fn(); } finally { dz.D = keep; dz.ctx = null; dz.gfx = null; } }
+function qpMsg(t, cls) { const m = qp$("qpMsg"); m.textContent = t || ""; m.className = "qp-msg" + (cls ? " " + cls : ""); }
+
+function qpOpen() {
+  qp$("ldQP").hidden = false; document.body.style.overflow = "hidden"; store.set("ld-qp-mode", "print");
+  if (!qp$("qpLang").options.length) qp$("qpLang").innerHTML = Object.keys(DZ_LANG_NAME).map(l => `<option value="${l}">${qpEsc(DZ_LANG_NAME[l])}</option>`).join("");
+  qpDesigns(); qpStationInfo();
+}
+function qpClose() { qp$("ldQP").hidden = true; document.body.style.overflow = ""; store.set("ld-qp-mode", "design"); if (typeof dzOpen === "function" && !$("dzDlg").open) dzOpen(); }
+
+async function qpDesigns(pick) {
+  const sel = qp$("qpDesign2"), here = dz.D && dz.D.items && dz.D.items.length ? dz.D : null;
+  const opts = [here ? `<option value="device">On this phone: ${qpEsc(here.cloud && here.cloud.name || "current design")}</option>` : ""];
+  sel.innerHTML = opts.join("") + '<option value="" disabled>Loading saved designs…</option>';
+  try { const co = typeof LD !== "undefined" && LD.company, r = await fetch("/api/designs", { headers: co ? { "x-ld": "1" } : { "x-owner": dzOwner() } }), j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "Saved designs unavailable"); QP.cloud = j.designs || []; QP.cloudErr = ""; } catch (e) { QP.cloud = []; QP.cloudErr = e.message; }
+  sel.innerHTML = opts.join("") + (QP.cloud.length ? `<optgroup label="Saved designs">${QP.cloud.map(d => `<option value="c:${d.id}">${qpEsc(d.name)}</option>`).join("")}</optgroup>` : "") + (!here && !QP.cloud.length ? '<option value="">No designs yet</option>' : "");
+  const want = pick || store.get("ld-qp-last") || "device";
+  if ([...sel.options].some(o => o.value === want)) sel.value = want;
+  qp$("qpDInfo").textContent = !QP.cloud.length && QP.cloudErr && !/sign in/i.test(QP.cloudErr) ? "Saved designs: " + QP.cloudErr : "";
+  await qpLoad(sel.value);
+}
+async function qpLoad(v) {
+  if (!v) { QP.D = null; qpForm(); return; }
+  try {
+    if (v === "device") { QP.D = JSON.parse(JSON.stringify(dz.D)); QP.name = dz.D.cloud && dz.D.cloud.name || "Label"; QP.recs = dz.db && dz.db.rows && dz.db.rows.length ? dz.db.rows : null; }
+    else { qp$("qpPrev").innerHTML = '<p class="qp-msg">Opening…</p>'; const j = await dzApi("/" + v.slice(2)); QP.D = Object.assign(dzDefault(), j.design, { cloud: { id: j.id, name: j.name } }); QP.name = j.name; QP.recs = null; }
+    store.set("ld-qp-last", v);
+    for (const it of QP.D.items) if (it.font && typeof dzLoadFont === "function") try { dzLoadFont(it.font); } catch (e) {}
+    QP.rec = {}; qp$("qpLang").value = QP.D.lang; qp$("qpDpi").value = String(QP.D.dpi); qp$("qpQty").value = 1;
+    qpForm();
+  } catch (e) { QP.D = null; qp$("qpPrev").innerHTML = `<p class="qp-msg err">${qpEsc(e.message)}</p>`; }
+}
+function qpForm() {
+  const box = qp$("qpFields"), card = qp$("qpDataCard");
+  if (!QP.D) { card.hidden = true; qpPreview(); return; }
+  const need = qpWith(() => dzVarNeeds()), sers = qpWith(() => dzSerialParts());
+  QP.ser = {};
+  let h = need.fields.map(f => `<label class="qp-f"><span>${qpEsc(f.name)}</span><div class="qp-row"><input data-qf="${qpEsc(f.name)}" value="${qpEsc(QP.rec[f.name] ?? f.sample ?? "")}" autocomplete="off" enterkeyhint="next"><button type="button" class="qp-btn qp-scan" data-qs="${qpEsc(f.name)}" aria-label="Scan ${qpEsc(f.name)}">${qpCamIcon()}</button></div></label>`).join("");
+  for (const { it, p, k } of sers) { const key = it.id + ":" + k; let next = null; try { next = JSON.parse(store.get(qpWith(() => ldSerKey(it, k))) || "null"); } catch (e) {}
+    const start = next && next.next != null ? next.next : dzSerParse(p.start ?? 1, p.base); QP.ser[key] = start;
+    h += `<label class="qp-f"><span>Serial number starts at <small>${next ? "carries on from the last print" : "first print"}</small></span><input data-qser="${key}" data-base="${p.base || "dec"}" value="${qpEsc(dzSerFormat(start, p.base, p.width))}" autocomplete="off"></label>`; }
+  box.innerHTML = h; card.hidden = !h && !QP.recs;
+  qp$("qpRecWrap").hidden = !QP.recs; qp$("qpRecInfo").textContent = QP.recs ? `${QP.recs.length} record(s) from ${QP.D.db && QP.D.db.name || "the connected data"}` : "";
+  qpPreview();
+}
+const qpCamIcon = () => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M7 12h10"/></svg>';
+function qpRead() { // form -> record and serial starts
+  for (const el of document.querySelectorAll("#qpFields [data-qf]")) QP.rec[el.dataset.qf] = el.value;
+  for (const el of document.querySelectorAll("#qpFields [data-qser]")) { const v = dzSerParse(el.value, el.dataset.base); if (isNaN(v)) throw new Error(`Serial start "${el.value}" is not valid.`); QP.ser[el.dataset.qser] = v; }
+}
+function qpPreview() {
+  const box = qp$("qpPrev"); if (!QP.D) { box.innerHTML = '<p class="qp-msg">Choose a design above, or make one in the Designer.</p>'; return; }
+  try { qpRead(); } catch (e) {}
+  try {
+    const c = qpWith(() => { dz.serialStart = QP.ser; dz.ctx = { labels: [{ rec: QP.rec, n: 0 }], base: 0 }; try { return dzColourPNG(true, { k: 10 }); } finally { dz.serialStart = null; } });
+    const D = QP.D; box.innerHTML = `<img alt="Label preview" src="${c.toDataURL("image/png")}">`;
+    qp$("qpDInfo").textContent = `${r1(dzLWOf(D))} × ${r1(D.h)} mm${D.across > 1 ? ` · ${D.across} across` : ""} · ${DZ_LANG_NAME[D.lang] || D.lang} ${D.dpi} dpi`;
+  } catch (e) { box.innerHTML = `<p class="qp-msg err">${qpEsc(e.message)}</p>`; }
+}
+const dzLWOf = D => { const keep = dz.D; dz.D = D; try { return dzLW(); } finally { dz.D = keep; } };
+qpPreview.t = 0; const qpPreviewSoon = () => { clearTimeout(qpPreview.t); qpPreview.t = setTimeout(qpPreview, 250); };
+
+function qpBuild() { // printer file for the chosen quantity
+  qpRead(); const qty = Math.max(1, Math.min(9999, +qp$("qpQty").value || 1)), lang = qp$("qpLang").value, dpi = lang === "EPL2" ? 203 : +qp$("qpDpi").value;
+  return qpWith(() => { dz.serialStart = QP.ser; try { const labels = Array.from({ length: qty }, (_, n) => ({ rec: Object.assign({}, QP.rec), n })); const v = ldVarPRN(labels, lang, dpi); return { prn: v.prn, labels, qty, lang, dpi }; } finally { dz.serialStart = null; } });
+}
+function qpSaveSerial(labels) { qpWith(() => { dz.serialStart = QP.ser; try { ldSerialSave(labels); } finally { dz.serialStart = null; } }); qpForm(); }
+async function qpGo() {
+  if (!QP.D) return qpMsg("Choose a design first.", "err");
+  if (!qpStation()) return qpPair();
+  const b = qp$("qpGo"); b.disabled = true; qpMsg("Preparing labels…");
+  try {
+    const j = qpBuild(), title = `${QP.name} × ${j.qty}`;
+    const r = await fetch("/api/queue/send", { method: "POST", headers: { "content-type": "application/json", "x-ld": "1", "x-station": qpStation() }, body: JSON.stringify({ title, labels: j.qty, prn: await ldB64(prnBytes(j.prn)) }) });
+    const res = await r.json().catch(() => ({})); if (!r.ok) throw new Error(res.error || "Could not send");
+    qpSaveSerial(j.labels);
+    qpMsg(res.online ? `Sent to ${res.station}. Printing…` : `Queued for ${res.station}. It prints when that PC is on with LabelDesk open.`, "ok");
+    qpWatch(res.id);
+  } catch (e) { qpMsg(e.message, "err"); }
+  finally { b.disabled = false; }
+}
+async function qpWatch(id) { // follow one job until the station reports back
+  for (let i = 0; i < 40; i++) {
+    await new Promise(ok => setTimeout(ok, 3000)); if (qp$("ldQP").hidden) return;
+    try { const r = await fetch("/api/queue/info?job=" + id, { headers: { "x-station": qpStation() } }); const j = await r.json(); qpStationShow(j);
+      if (j.job && j.job.status === "printed") return qpMsg("Printed ✓", "ok");
+      if (j.job && j.job.status === "failed") return qpMsg("The PC could not print: " + (j.job.note || "unknown error"), "err"); } catch (e) {}
+  }
+}
+async function qpFile(kind) {
+  if (!QP.D) return qpMsg("Choose a design first.", "err");
+  try {
+    if (kind === "prn") { const j = qpBuild(); await qpShare(prnBytes(j.prn), `${QP.name}_${j.lang}_${j.dpi}dpi.prn`, "application/octet-stream"); qpSaveSerial(j.labels); return; }
+    qpRead(); const qty = Math.max(1, Math.min(500, +qp$("qpQty").value || 1)); qpMsg("Making PDF…");
+    const jsPDF = await loadJsPDF(), D = QP.D, lw = dzLWOf(D), labels = Array.from({ length: qty }, (_, n) => ({ rec: Object.assign({}, QP.rec), n }));
+    const doc = qpWith(() => { dz.serialStart = QP.ser; let doc = null;
+      try { for (let r = 0; r < Math.ceil(qty / D.across); r++) { dz.ctx = { labels, base: r * D.across }; const full = dzColourPNG(true, { plain: true, k: 12 }); const row = document.createElement("canvas"); row.width = full.width; row.height = Math.round(D.h * 12); row.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * 12));
+          if (!doc) doc = new jsPDF({ unit: "mm", format: [D.paper, D.h], orientation: D.paper > D.h ? "l" : "p", compress: true }); else doc.addPage([D.paper, D.h], D.paper > D.h ? "l" : "p");
+          doc.addImage(row.toDataURL("image/png"), "PNG", 0, 0, D.paper, D.h, undefined, "FAST"); } } finally { dz.serialStart = null; } return doc; });
+    await qpShare(doc.output("blob"), `${QP.name}_${qty}.pdf`, "application/pdf"); qpSaveSerial(labels); qpMsg(`PDF with ${qty} label(s)`, "ok");
+  } catch (e) { qpMsg(e.message, "err"); }
+}
+async function qpShare(blob, name, type) { // phones: the share sheet (AirPrint, Files, WhatsApp…); otherwise a download
+  name = name.replace(/[^\w.\- ]+/g, "_"); const file = new File([blob], name, { type });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === "AbortError") return; } }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* pairing: the station shows a QR code holding a link with its token; the phone scans it (or opens the link) */
+async function qpStationInfo() {
+  if (!qpStation()) return qpStationShow(null);
+  try { const r = await fetch("/api/queue/info", { headers: { "x-station": qpStation() } }); const j = await r.json(); if (r.status === 404) { store.set("ld-qp-station", ""); return qpStationShow(null, j.error); } qpStationShow(j); } catch (e) { qpStationShow({ station: "Print station", online: null }); }
+}
+function qpStationShow(j, err) {
+  const dot = qp$("qpDot"), st = qp$("qpSt"); if (!dot) return;
+  if (!j) { dot.className = "qp-dot"; st.innerHTML = `Not paired<small>${qpEsc(err || "Open LabelDesk on the PC with the printer, choose File → Print station, then tap Pair and scan its code.")}</small>`; qp$("qpPair").textContent = "Pair"; qp$("qpGo").textContent = "Pair a printer"; return; }
+  dot.className = "qp-dot " + (j.online ? "on" : j.online === false ? "off" : "");
+  st.innerHTML = `${qpEsc(j.station)}<small>${j.online ? "Online" : j.online === false ? "Offline: jobs wait until the PC opens LabelDesk" : ""}${j.waiting ? ` · ${j.waiting} waiting` : ""}</small>`;
+  qp$("qpPair").textContent = "Change"; qp$("qpGo").textContent = "Print";
+}
+function qpPair() {
+  qpScan(v => { const m = String(v).match(/[?&#]station=([A-Za-z0-9_-]{32,96})/) || String(v).match(/^([A-Za-z0-9_-]{32,96})$/);
+    if (!m) return qpMsg("That is not a LabelDesk print station code.", "err");
+    store.set("ld-qp-station", m[1]); qpStationInfo(); qpMsg("Paired ✓", "ok"); }, "Scan the QR code shown on the PC (File → Print station)");
+}
+(function () { // opened from the station's link
+  const m = location.search.match(/[?&]station=([A-Za-z0-9_-]{32,96})/); if (!m) return;
+  store.set("ld-qp-station", m[1]); store.set("ld-qp-mode", "print"); history.replaceState(null, "", location.pathname + "?print");
+})();
+
+/* camera scanning: the built-in BarcodeDetector where there is one (Android Chrome), ZXing elsewhere (iPhone) */
+let qpZX = null;
+function qpLoadZX() { return qpZX || (qpZX = new Promise((ok, no) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.2.1/umd/zxing-browser.min.js"; s.onload = () => ok(window.ZXingBrowser); s.onerror = () => { qpZX = null; no(new Error("Could not load the scanner")); }; document.head.append(s); })); }
+async function qpScan(done, hint) {
+  const ov = qp$("ldQPScan"), video = qp$("qsVideo"); qp$("qsMsg").textContent = hint || "Point the camera at a barcode or QR code"; ov.hidden = false;
+  let stop = () => {}, over = false; const finish = v => { if (over) return; over = true; stop(); ov.hidden = true; if (v != null) { try { navigator.vibrate && navigator.vibrate(60); } catch (e) {} done(v); } };
+  qp$("qsClose").onclick = () => finish(null);
+  try {
+    if ("BarcodeDetector" in window) {
+      const det = new BarcodeDetector(), stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+      video.srcObject = stream; await video.play(); stop = () => { stream.getTracks().forEach(t => t.stop()); video.srcObject = null; };
+      const tick = async () => { if (over) return; try { const r = await det.detect(video); if (r.length) return finish(r[0].rawValue); } catch (e) {} setTimeout(tick, 120); }; tick();
+    } else {
+      const ZX = await qpLoadZX(); if (over) return; const reader = new ZX.BrowserMultiFormatReader();
+      const ctl = await reader.decodeFromConstraints({ video: { facingMode: "environment" } }, video, res => { if (res) finish(res.getText()); });
+      stop = () => { try { ctl.stop(); } catch (e) {} }; if (over) stop();
+    }
+  } catch (e) { qp$("qsMsg").textContent = /Permission|NotAllowed/i.test(e.name + e.message) ? "Camera blocked. Allow camera access for labeldesk.app in Settings, then try again." : (e.message || "Camera not available"); }
+}
+
+/* wiring */
+qp$("qpDesign").onclick = qpClose;
+qp$("qpDesign2").onchange = e => qpLoad(e.target.value);
+qp$("qpLdl").onclick = () => { const i = document.createElement("input"); i.type = "file"; i.accept = ".ldl,application/x-labeldesk"; i.onchange = async () => { if (!i.files[0]) return; await ldlOpen(i.files[0]); qpDesigns("device"); }; i.click(); };
+qp$("qpPair").onclick = qpPair;
+qp$("qpGo").onclick = qpGo; qp$("qpPdf").onclick = () => qpFile("pdf"); qp$("qpPrn").onclick = () => qpFile("prn");
+qp$("qpMinus").onclick = () => { qp$("qpQty").value = Math.max(1, (+qp$("qpQty").value || 1) - 1); };
+qp$("qpPlus").onclick = () => { qp$("qpQty").value = Math.min(9999, (+qp$("qpQty").value || 0) + 1); };
+qp$("qpFields").addEventListener("input", qpPreviewSoon);
+qp$("qpFields").addEventListener("click", e => { const b = e.target.closest("[data-qs]"); if (!b) return; const inp = document.querySelector(`#qpFields [data-qf="${CSS.escape(b.dataset.qs)}"]`);
+  qpScan(v => { inp.value = v; qpPreview(); const all = [...document.querySelectorAll("#qpFields [data-qf]")], nx = all[all.indexOf(inp) + 1]; if (nx && !nx.value) nx.focus(); }, `Scan ${b.dataset.qs}`); });
+qp$("qpRecQ").oninput = () => { const q = qp$("qpRecQ").value.trim().toLowerCase(), box = qp$("qpRecs"); if (!q || !QP.recs) { box.hidden = true; return; }
+  const hits = []; for (let i = 0; i < QP.recs.length && hits.length < 30; i++) if (Object.values(QP.recs[i]).some(v => String(v).toLowerCase().includes(q))) hits.push(i);
+  box.hidden = false; box.innerHTML = hits.map(i => `<button type="button" data-ri="${i}">${qpEsc(Object.values(QP.recs[i]).slice(0, 3).join(" · "))}</button>`).join("") || '<p class="qp-msg" style="padding:8px 12px">No match</p>'; };
+qp$("qpRecs").onclick = e => { const b = e.target.closest("[data-ri]"); if (!b) return; QP.rec = Object.assign({}, QP.recs[+b.dataset.ri]); qp$("qpRecs").hidden = true; qp$("qpRecQ").value = ""; qpForm(); };
+
+/* ---------- Print station (PC side) ---------- */
+const LS = { on: false, t: 0, log: [] };
+function lsToken() { let t = store.get("ld-station"); if (!t || !/^[A-Za-z0-9_-]{32,96}$/.test(t)) { t = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(30)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); store.set("ld-station", t); } return t; }
+const lsLink = () => `${location.origin}/?print&station=${lsToken()}`;
+async function lsOpen() {
+  const d = qp$("ldStation"), body = qp$("lsBody"); if (!d.open) d.showModal();
+  body.innerHTML = '<p class="dz-empty">Connecting to QZ Tray…</p>';
+  let printers = []; try { await ldQzConnect(); printers = await qz.printers.find(); } catch (e) {}
+  const saved = store.get("ld-station-printer"), qr = bwipCanvas({ bcid: "qrcode", text: lsLink(), scale: 5, eclevel: "M" });
+  body.innerHTML = `${printers.length ? "" : '<div class="dz-warn" style="padding:10px 12px;border-radius:10px;margin-bottom:12px"><b>QZ Tray is needed on this computer.</b> Install it free from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a>, start it, then reopen this window.</div>'}
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start">
+      <div class="ls-qr" id="lsQr"></div>
+      <div><p style="margin:0 0 8px"><b>1.</b> On the phone, open <b>labeldesk.app</b>, tap <b>Pair</b> and scan this code.<br><b>2.</b> Keep this tab open: labels sent from the phone print here.</p>
+        <label class="ld-f">Print on<select id="lsPr">${printers.map(n => `<option${n === saved ? " selected" : ""}>${ldEsc(n)}</option>`).join("")}</select></label>
+        <div class="ld-row" style="margin-top:10px"><button type="button" class="btn primary" id="lsGo"${printers.length ? "" : " disabled"}>${LS.on ? "Stop receiving" : "Start receiving"}</button><button type="button" class="btn" id="lsCopy">Copy phone link</button><button type="button" class="btn" id="lsNew" title="Phones paired earlier stop working">New code</button></div>
+        <p class="dz-cap" id="lsState" style="margin-top:8px"></p></div></div>
+    <h3 style="font-size:14px;margin:14px 0 6px">Recent jobs</h3><div class="ls-log" id="lsLog"></div>`;
+  if (qr) { qr.style.width = "180px"; qr.style.height = "180px"; qr.style.imageRendering = "pixelated"; qp$("lsQr").append(qr); }
+  qp$("lsGo").onclick = () => { LS.on ? lsStop() : lsStart(); lsOpen(); };
+  qp$("lsCopy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(lsLink()).then(() => toast("Phone link copied"));
+  qp$("lsNew").onclick = () => { if (!confirm("Make a new code? Phones paired with the old one must scan again.")) return; store.set("ld-station", ""); lsOpen(); };
+  qp$("lsPr").onchange = e => { store.set("ld-station-printer", e.target.value); if (LS.on) lsHello(); };
+  lsDraw();
+}
+function lsDraw() { const s = qp$("lsState"), l = qp$("lsLog"); if (s) s.textContent = LS.on ? `Receiving · printing on ${store.get("ld-station-printer") || "—"}` : "Not receiving";
+  if (l) l.innerHTML = LS.log.map(x => `<div>${ldEsc(x)}</div>`).join("") || '<div class="dz-cap" style="border:0">Nothing yet</div>'; }
+function lsAdd(t) { LS.log.unshift(new Date().toLocaleTimeString() + " · " + t); LS.log.length = Math.min(LS.log.length, 50); lsDraw(); }
+const lsFetch = (op, body) => fetch("/api/queue/" + op, { method: "POST", headers: { "content-type": "application/json", "x-ld": "1", "x-station": lsToken() }, body: JSON.stringify(body || {}) }).then(r => r.json().then(j => { if (!r.ok) throw new Error(j.error || "Queue error " + r.status); return j; }));
+async function lsHello() { const n = store.get("ld-station-printer") || "PC"; await lsFetch("hello", { name: `${n}${navigator.platform ? "" : ""}` }); }
+async function lsStart() {
+  const sel = qp$("lsPr"); if (sel && sel.value) store.set("ld-station-printer", sel.value);
+  if (!store.get("ld-station-printer")) return toast("Choose the printer first");
+  LS.on = true; store.set("ld-station-on", "1"); try { await lsHello(); lsAdd("Receiving started"); } catch (e) { lsAdd("Error: " + e.message); } lsPoll();
+}
+function lsStop() { LS.on = false; store.set("ld-station-on", ""); clearTimeout(LS.t); lsAdd("Receiving stopped"); }
+async function lsPoll() {
+  clearTimeout(LS.t); if (!LS.on) return;
+  try {
+    const { jobs } = await lsFetch("pull"), name = store.get("ld-station-printer");
+    for (const j of jobs) {
+      try { await ldQzConnect(); await qz.print(qz.configs.create(name, { copies: 1 }), [{ type: "raw", format: "command", flavor: "base64", data: j.prn }]); await lsFetch("done", { id: j.id, ok: true }); lsAdd(`Printed ${j.title}`); toast(`Printed ${j.title}`); }
+      catch (e) { const m = e && e.message || String(e); await lsFetch("done", { id: j.id, ok: false, note: m }).catch(() => {}); lsAdd(`Failed ${j.title}: ${m}`); }
+    }
+  } catch (e) { lsAdd("Error: " + e.message); }
+  LS.t = setTimeout(lsPoll, document.hidden ? 8000 : 4000);
+}
+qp$("lsClose").onclick = () => qp$("ldStation").close();
+if (store.get("ld-station-on") && store.get("ld-station-printer") && !qpPhone()) setTimeout(() => { LS.on = true; lsHello().catch(() => {}); lsPoll(); }, 2500);
+
+/* phones: a button in the designer's ribbon goes back to the print screen */
+setTimeout(() => { const rt = document.querySelector(".dz-ribbon .rt"); if (!rt || rt.querySelector(".rqp")) return; const b = document.createElement("button"); b.type = "button"; b.className = "rprint rqp"; b.textContent = "Print mode"; b.title = "Phone print screen"; b.onclick = qpOpen; rt.append(b); }, 900);
+/* start in print mode on phones (the designer stays one tap away), or when the link says ?print */
+if (APP) setTimeout(() => { if (new URLSearchParams(location.search).has("print") || (qpPhone() && store.get("ld-qp-mode") !== "design")) qpOpen(); }, 600);
+/* service worker: lets phones install the app and open it without a connection */
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("/sw.js").catch(() => {});
 </script>
 
 </body>
