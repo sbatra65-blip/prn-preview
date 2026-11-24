@@ -520,6 +520,28 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
   .dz-setupdlg .dz-setup .rr.sf { grid-template-columns: 1fr 1fr; }
   .dz-setupdlg .dz-setup .w2 { grid-column: 1 / -1; }
 }
+
+/* Quieter pass: one orange per view (Print + selection), lighter chrome */
+.dz-ribbon .rt .rfile { background: none; color: var(--ink); font-weight: 600; border-radius: 8px 8px 0 0; margin: 0 4px 0 0; padding: 9px 12px 10px; }
+.dz-ribbon .rt .rfile:hover, .dz-ribbon .rt .rfile[aria-expanded="true"] { background: #f1f5f9; color: var(--ink); }
+.dz-ask #dzAskGo { background: #fff; color: var(--ink); border-color: var(--line); }
+.dz-ask #dzAskGo:hover { border-color: var(--ink); }
+.dz-label.edit { outline: 1px solid rgba(100, 116, 139, .45); }
+.dz-f input[readonly], .dz-setup input[readonly] { background: #f1f5f9; border-color: var(--line); color: var(--muted); font-weight: 500; }
+.dz-ribbon .rt .rbrand, .dz-ribbon .rt .rbrand b, .dz-props b { font-weight: 600; }
+.dz-ribbon .rfontbtn b { font-weight: 400; }
+.dz-ribbon .rt button.ldchip { border-color: transparent; background: none; padding: 4px 10px; }
+.dz-ribbon .rt button.ldchip:hover { background: #f1f5f9; }
+.dz-ribbon .ldchip .code { background: #f1f5f9; color: var(--ink); font-weight: 600; }
+.dz-ribbon .rbody { min-height: 64px; padding-top: 4px; padding-bottom: 2px; }
+.dz-ribbon .rb { padding-top: 4px; padding-bottom: 4px; gap: 2px; }
+.dz-ribbon .rsize input { width: 76px; }
+.dz-ask { padding-top: 6px; padding-bottom: 6px; border-bottom: 0; }
+.dz-bar { padding-top: 4px; padding-bottom: 4px; }
+.dz-side h3, .dz-ribbon .rl { color: #64748b; }
+#dzAngleR { display: none; }
+.dz-setupdlg .sf2 { justify-content: space-between; align-items: center; }
+.dz-setupdlg .sf2 .nt { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -861,7 +883,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
   <div class="dz-foot">
     <small id="dzStatus">Saved in this browser as you work.</small>
     <span class="sp"></span>
-    <small>Printer specs are typical values; check the model's datasheet.</small>
+
   </div>
 </dialog>
 
@@ -5102,7 +5124,8 @@ function ldChip() {
   let c = rt.querySelector(".ldchip");
   if (!c) { c = document.createElement("button"); c.type = "button"; c.className = "ldchip"; c.onclick = () => LD.company ? ldAccount() : LD.off ? toast("Sign-in is not switched on yet on this server.") : ldSignin(); rt.append(c); }
   const co = LD.company;
-  if (!co) { c.innerHTML = LD.off ? '<span class="nm">Sign-in off</span>' : '<span class="code">?</span><span class="nm">Sign in</span>'; c.title = ""; return; }
+  c.hidden = !co && !!LD.off;
+  if (!co) { c.innerHTML = '<span class="nm">Sign in</span>'; c.title = ""; return; }
   c.innerHTML = `<span class="code">${ldEsc(co.code)}</span><span class="nm">${ldEsc(co.name)}</span>${co.ai ? `<span class="ai" title="AI labels left ${co.ai.period === "trial" ? "in the trial" : "this month"}">${ldAiText(co.ai)}</span>` : ""}<span aria-hidden="true">▾</span>`;
   c.title = `${co.code} · ${co.name} · ${co.plan.name} · ${co.role}`;
 }
@@ -6607,7 +6630,7 @@ function dzSetupOpen() {
   let d = document.getElementById("dzSetupDlg");
   if (!d) {
     d = document.createElement("dialog"); d.id = "dzSetupDlg"; d.className = "dz-setupdlg"; d.setAttribute("aria-labelledby", "dzSetupH");
-    d.innerHTML = '<div class="sh"><h2 id="dzSetupH">Label setup</h2><button type="button" class="btn sm" data-x aria-label="Close label setup">✕</button></div><div class="sb"></div><div class="sf2"><button type="button" class="btn primary" data-x>Close setup</button></div>';
+    d.innerHTML = '<div class="sh"><h2 id="dzSetupH">Label setup</h2><button type="button" class="btn sm" data-x aria-label="Close label setup">✕</button></div><div class="sb"></div><div class="sf2"><small class="nt">Printer specs are typical values; check the model\'s datasheet.</small><button type="button" class="btn primary" data-x>Close setup</button></div>';
     d.querySelector(".sb").append(document.getElementById("dzSetup"));
     d.querySelectorAll("[data-x]").forEach(b => b.onclick = () => d.close());
     d.addEventListener("click", e => { if (e.target === d) d.close(); });
