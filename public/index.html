@@ -232,6 +232,8 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-bar .btn { padding: 6px 10px; font-size: 13px; }
 .dz-bar select { font: 13px var(--font); padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; }
 .dz-stage { flex: 1; overflow: auto; position: relative; padding: 40px; }
+.dz-zf { display: none; position: absolute; right: 10px; bottom: 10px; z-index: 5; gap: 0; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
+.dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2) { font-size: 14px; }
 .dz-paper { position: relative; background: #d9d4c7; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 11px var(--font-mono); }
 .dz-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
@@ -405,6 +407,7 @@ body.appmode { background: #eef0f4; overflow: hidden; overscroll-behavior: none;
   .dz-bar { flex-wrap: nowrap !important; overflow-x: auto; padding: 5px 8px !important; gap: 4px !important; scrollbar-width: none; }
   .dz-bar > * { flex: none; }
   .dz-stage { padding: 14px !important; touch-action: pan-x pan-y; }
+  .dz-zf { display: flex !important; }
   .dz-body { display: flex !important; flex-direction: column; overflow: hidden !important; }
   .dz-main { flex: 1 1 auto; min-height: 0; }
   .dz-props { flex: none; max-height: 42dvh; overflow: auto !important; border-top: 1px solid var(--line) !important; box-shadow: 0 -6px 18px rgba(15, 23, 42, .08); padding: 0 14px 12px !important; transition: max-height .2s; }
@@ -2942,6 +2945,29 @@ function dzMedia() {
 
 /* canvas */
 function dzFit() { dz.zoom = 1; dzDraw(); }
+// Zoom to a level keeping the point (cx, cy) on screen where it was: pinch, Ctrl+wheel / trackpad pinch, buttons
+function dzZoomAt(z, cx, cy) {
+  const st = $("dzStage"), r = st.getBoundingClientRect(), s0 = dz.s || 1; z = Math.max(0.3, Math.min(6, z)); if (Math.abs(z - dz.zoom) < 0.002) return;
+  const px = (cx ?? r.left + r.width / 2) - r.left, py = (cy ?? r.top + r.height / 2) - r.top, ax = st.scrollLeft + px, ay = st.scrollTop + py;
+  dz.zoom = z; dzDraw(); const k = (dz.s || s0) / s0; st.scrollLeft = ax * k - px; st.scrollTop = ay * k - py;
+}
+(function dzPinch() {
+  const st = $("dzStage"); if (!st) return; let P = null, raf = 0, lastTap = 0;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY), mid = t => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+  st.addEventListener("touchstart", e => {
+    if (e.touches.length === 2) { e.preventDefault(); if (dz.grabUndo) dz.grabUndo(); P = { d: dist(e.touches), z: dz.zoom }; dz.pinch = true; return; }
+    if (e.touches.length === 1 && (e.target === st || e.target.id === "dzLab" || e.target.id === "dzPaperEl")) { const now = Date.now(); if (now - lastTap < 300) { e.preventDefault(); dz.zoom > 1.05 ? dzFit() : dzZoomAt(2, e.touches[0].clientX, e.touches[0].clientY); lastTap = 0; } else lastTap = now; }
+  }, { capture: true, passive: false });
+  st.addEventListener("touchmove", e => { if (!P || e.touches.length < 2) return; e.preventDefault(); const t = e.touches, z = P.z * dist(t) / P.d, [cx, cy] = mid(t); cancelAnimationFrame(raf); raf = requestAnimationFrame(() => dzZoomAt(z, cx, cy)); }, { capture: true, passive: false });
+  const end = e => { if (P && e.touches.length < 2) { P = null; setTimeout(() => { dz.pinch = false; }, 50); } };
+  st.addEventListener("touchend", end, { capture: true }); st.addEventListener("touchcancel", end, { capture: true });
+  ["gesturestart", "gesturechange"].forEach(ev => st.addEventListener(ev, e => e.preventDefault(), { passive: false })); // stop Safari zooming the whole page
+  st.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); dzZoomAt(dz.zoom * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY); }, { passive: false });
+  // phones: floating zoom buttons over the canvas
+  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button>';
+  const [bo, bf, bi] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25);
+  st.parentElement.style.position = st.parentElement.style.position || "relative"; st.parentElement.append(f);
+})();
 function dzView() { // 0 = as designed, 90 = shown turned clockwise (printing is not affected)
   const D = dz.D, m = D.viewMode || "auto"; if (m === "auto") return 0;
   const land = dzLW() >= D.h; if ((m === "landscape") === land) return 0;
@@ -3345,7 +3371,9 @@ function dzGrab(e, it, resize) {
   const gs = group ? ids.map(id => dz.D.items.find(i => i.id === id)).filter(Boolean).map(g => ({ it: g, x: g.x, y: g.y })) : [];
   const sx = e.clientX, sy = e.clientY, o = { x: it.x, y: it.y, w: it.w, h: it.h, pw: +it.pw || 30, ph: +it.ph || 20 }, s = dz.s, snap = +$("dzSnap").value;
   const sn = v => snap ? Math.round(v / snap) * snap : r1(v);
+  dz.grabUndo = () => { if (group) gs.forEach(g => { g.it.x = g.x; g.it.y = g.y; }); else Object.assign(it, { x: o.x, y: o.y, w: o.w, h: o.h }); up(); dzDraw(); };
   const move = ev => {
+    if (dz.pinch) return;
     let dx = (ev.clientX - sx) / s, dy = (ev.clientY - sy) / s;
     { const v = dzView(); if (v === 90) [dx, dy] = [dy, -dx]; else if (v === -90) [dx, dy] = [-dy, dx]; } // screen shows the label turned: map the drag back
     if (group) {
@@ -3368,7 +3396,7 @@ function dzGrab(e, it, resize) {
       else { const b = dzBox(it); Object.assign(el.style, { left: it.x * s + "px", top: it.y * s + "px", width: b.w * s + "px", height: b.h * s + "px" }); dzMark(el, it); dzWarnCount(); }
     }
   };
-  const up = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (group) gs.forEach(g => dzRefresh(g.it)); else dzRefresh(it); dzProps(); dzSave(); };
+  const up = () => { dz.grabUndo = null; removeEventListener("pointermove", move); removeEventListener("pointerup", up); if (group) gs.forEach(g => dzRefresh(g.it)); else dzRefresh(it); dzProps(); dzSave(); };
   addEventListener("pointermove", move); addEventListener("pointerup", up);
 }
 function dzMarquee(e, lab) { // drag on empty label space to select everything the box touches
