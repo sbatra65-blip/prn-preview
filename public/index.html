@@ -233,7 +233,7 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-bar select { font: 13px var(--font); padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; }
 .dz-stage { flex: 1; overflow: auto; position: relative; padding: 40px; }
 .dz-zf { display: none; position: absolute; right: 10px; bottom: 10px; z-index: 5; gap: 0; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
-.dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2), .dz-zf button:nth-child(4) { font-size: 14px; }
+.dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2), .dz-zf button:nth-child(4), .dz-zf button:nth-child(5) { font-size: 14px; }
 @media (pointer: coarse) { .dz-zf { display: flex; } .dz-stage { touch-action: pan-x pan-y; } }
 .dz-objmenu { position: fixed; z-index: 90; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.25); padding: 4px; display: grid; min-width: 190px; }
 .dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; }
@@ -774,6 +774,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <select id="dzSnap" aria-label="Snap"><option value="0">No snap</option><option value="0.5" selected>Snap 0.5 mm</option><option value="1">Snap 1 mm</option></select>
         <button type="button" class="btn" id="dzZoomOut" aria-label="Zoom out">−</button>
         <button type="button" class="btn" id="dzZoomFit">Fit</button>
+        <button type="button" class="btn" id="dzZoomActual" title="Actual size: 1 mm on screen = 1 mm on the label (Ctrl+1)">1:1</button>
         <button type="button" class="btn" id="dzZoomIn" aria-label="Zoom in">+</button>
       </div>
       <div class="dz-stage" id="dzStage"><div class="dz-paper" id="dzPaperEl"></div>
@@ -2958,6 +2959,35 @@ function dzZoomAt(z, cx, cy) {
    pinch = zoom · two-finger drag = move around · pinch/twist on the selected object = resize/turn it
    double-tap empty canvas = zoom 2x / fit · double-tap an object = edit its text or data · long-press an object = actions menu
    two-finger tap = undo · three-finger tap = redo · three-finger swipe up = print · swipe left/right with 2 fingers on a label with data = next/previous record */
+/* Actual size: 1 mm on screen = 1 mm on the label. Screens differ, so the user can calibrate once with a bank card (85.6 mm). */
+function dzPxPerMm() { const v = +store.get("ld-pxmm"); if (v > 1 && v < 30) return v;
+  const touch = matchMedia("(pointer: coarse)").matches, w = Math.min(screen.width, screen.height); return touch ? (w < 500 ? 6.2 : 5.1) : 96 / 25.4; } // guesses until calibrated
+function dzActual() {
+  if (!store.get("ld-pxmm") && matchMedia("(pointer: coarse)").matches) return dzCalibrate(true);
+  const base = dzScale() / dz.zoom; dzZoomAt(dzPxPerMm() / base); dz.actual = true;
+  toast(`Actual size: 1 mm on screen = 1 mm on the label${store.get("ld-pxmm") ? "" : " (approximate: View → Calibrate screen for exact size)"}`);
+}
+function dzCalibrate(thenActual) {
+  let d = $("dzCalDlg"); if (!d) { d = document.createElement("dialog"); d.id = "dzCalDlg"; d.style.cssText = "width:min(560px,96vw);max-height:92dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
+  let v = dzPxPerMm();
+  d.innerHTML = `<div class="dlg-head"><div><h2>Calibrate screen size</h2><div class="sub">So “Actual size” shows labels at their real size on this screen.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div style="padding:16px 20px"><p style="margin:0 0 12px" id="dzCalTip"></p>
+    <div style="overflow:hidden;padding:4px 0"><div id="dzCalCard" style="border:2px solid #c2410c;border-radius:3.2mm;background:repeating-linear-gradient(45deg,#fff7ed 0 8px,#ffedd5 8px 16px);display:grid;place-items:center;font:600 14px Inter,system-ui,sans-serif;color:#9a3412">85.6 × 54 mm</div></div>
+    <input type="range" id="dzCalR" min="2" max="12" step="0.01" style="width:100%;margin:14px 0 6px">
+    <div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn sm" id="dzCalM">−</button><button type="button" class="btn sm" id="dzCalP">+</button><span class="dz-cap" id="dzCalV" style="flex:1;margin:0"></span>
+    <button type="button" class="btn" id="dzCalReset">Reset</button><button type="button" class="btn primary" id="dzCalOk">Save</button></div></div>`;
+  const card = d.querySelector("#dzCalCard"), r = d.querySelector("#dzCalR"), show = () => { const avail = Math.min(innerWidth * 0.96, 560) - 48, L = 85.6 * v <= avail ? 85.6 : 54 * v <= avail ? 54 : 50; // pick the longest reference that fits this screen
+    card.style.width = L * v + "px"; card.style.height = (L === 85.6 ? 54 : 14) * v + "px"; card.textContent = L === 85.6 ? "85.6 × 54 mm" : L === 54 ? "Card's short side: 54 mm" : "50 mm";
+    d.querySelector("#dzCalTip").textContent = L === 85.6 ? "Hold a bank card, ID card or any standard card (85.6 × 54 mm) flat against the screen, then move the slider until the box matches the card exactly."
+      : L === 54 ? "Hold a bank card, ID card or any standard card upright against the screen, then move the slider until the bar is exactly as wide as the card's short side."
+      : "Hold a ruler against the screen, then move the slider until the bar is exactly 50 mm long.";
+    r.value = v; d.querySelector("#dzCalV").textContent = `${v.toFixed(2)} px per mm`; };
+  r.oninput = () => { v = +r.value; show(); }; d.querySelector("#dzCalM").onclick = () => { v = Math.max(2, v - 0.02); show(); }; d.querySelector("#dzCalP").onclick = () => { v = Math.min(12, v + 0.02); show(); };
+  d.querySelector("#dzCalReset").onclick = () => { store.set("ld-pxmm", ""); v = dzPxPerMm(); show(); };
+  d.querySelector("#dzCalOk").onclick = () => { store.set("ld-pxmm", String(v.toFixed(3))); d.close(); toast("Screen calibrated"); if (thenActual) dzActual(); };
+  d.querySelector(".x").onclick = () => { d.close(); if (thenActual) { store.set("ld-pxmm", store.get("ld-pxmm") || ""); const base = dzScale() / dz.zoom; dzZoomAt(dzPxPerMm() / base); toast("Actual size (approximate)"); } };
+  show(); d.showModal();
+}
 (function dzGestures() {
   const st = $("dzStage"); if (!st) return;
   let G = null, raf = 0, lastTap = { t: 0, id: null }, lp = 0;
@@ -3018,8 +3048,8 @@ function dzZoomAt(z, cx, cy) {
   st.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); dzZoomAt(dz.zoom * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY); }, { passive: false });
   st.addEventListener("contextmenu", e => { if (matchMedia("(pointer: coarse)").matches && e.target.closest(".dz-o")) e.preventDefault(); });
   // floating zoom buttons for touch screens
-  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
-  const [bo, bf, bi, bh] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); bh.onclick = dzGestureHelp;
+  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Actual size" title="Actual size">1:1</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
+  const [bo, bf, bi, ba, bh] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); ba.onclick = dzActual; bh.onclick = dzGestureHelp;
   st.parentElement.style.position = st.parentElement.style.position || "relative"; st.parentElement.append(f);
   if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(() => { if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); dzGestureHelp(); } }, 4000);
 })();
@@ -3973,7 +4003,7 @@ function dzMenus() {
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
     Text: ["#Font / language", ...DZ_FONTS.map(f => typeof f === "string" ? f : [f[1], () => f[0] === "__local" ? dzPickLocalFont().then(v => v && dzSetFont(v)) : dzSetFont(f[0]), "", txt, () => { const it = dzSelTextLike(); return !!it && (it.font || "") === f[0]; }]), "-", ["Bold", () => dzToggle("bold"), "Ctrl+B", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().bold], ["Italic", () => dzToggle("italic"), "Ctrl+I", () => txt() && !!dzSelTextLike().font, () => !!dzSelTextLike() && !!dzSelTextLike().italic], "-", ["Bigger", () => dzSize(0.5), "Ctrl+]", txt], ["Smaller", () => dzSize(-0.5), "Ctrl+[", txt], "#Curve", ["Straight", () => dzCurveTo(0), "", isText], ["Arch up, half circle", () => dzCurveTo(180), "", isText], ["Arch down, half circle", () => dzCurveTo(-180), "", isText], ["Full circle", () => dzCurveTo(360), "", isText], "#Text along an outline", ...Object.entries(DZ_PATHS).map(([v, n]) => [n, () => dzPathTo(v), "", isText, () => !!sel() && sel().path === v])],
-    View: [["Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, "", null, () => $("dzGrid").checked], "#Snap", ...[["0", "No snap"], ["0.5", "0.5 mm"], ["1", "1 mm"]].map(([v, n]) => [n, () => { $("dzSnap").value = v; }, "", null, () => $("dzSnap").value === v]), "#Zoom", ["Zoom in", click("dzZoomIn"), "Ctrl+="], ["Zoom out", click("dzZoomOut"), "Ctrl+-"], ["Fit to window", click("dzZoomFit"), "Ctrl+0"]],
+    View: [["Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, "", null, () => $("dzGrid").checked], "#Snap", ...[["0", "No snap"], ["0.5", "0.5 mm"], ["1", "1 mm"]].map(([v, n]) => [n, () => { $("dzSnap").value = v; }, "", null, () => $("dzSnap").value === v]), "#Zoom", ["Zoom in", click("dzZoomIn"), "Ctrl+="], ["Zoom out", click("dzZoomOut"), "Ctrl+-"], ["Fit to window", click("dzZoomFit"), "Ctrl+0"], ["Actual size", dzActual, "Ctrl+1"], ["Calibrate screen…", () => dzCalibrate()]],
   };
 }
 function dzMenuClose() { for (const d of document.querySelectorAll(".dz-drop")) d.remove(); for (const b of document.querySelectorAll("#dzRibbon .mb")) b.setAttribute("aria-expanded", "false"); }
@@ -3991,6 +4021,7 @@ function dzMenuOpen(name, btn) {
 }
 /* ribbon: tabs of grouped icon buttons (own icon set), plus an icon toolbox on the left */
 const DZ_IC = { // 24x24 stroke icons, drawn for this app
+  ruler: "M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4",
   photo: "M3 8h4l2-3h6l2 3h4v11H3zM12 10.5a3.5 3.5 0 1 0 .01 0M18.5 3l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z",
   text: "M5 6h14M12 6v13M9 19h6", barcode: "M4 5v14M7 5v14M10 5v14M12 5v14M15 5v14M17 5v14M20 5v14", qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2",
   vcard: "M3 5h18v14H3zM9 10a2 2 0 1 0 .01 0M6 16c.5-2 5.5-2 6 0M14 10h4M14 13h4", dm: "M4 4v16h16M8 4h2M12 4h2M16 4h2M20 8v2M20 12v2M20 16v2M8 9h3v3H8zM13 13h3v3h-3z",
@@ -4043,7 +4074,7 @@ function dzRibbonDef() {
       ["Check", [B("check", "LMPC check", () => lmpcCheck(false, $("dzDlg").classList.contains("viewing") ? "viewer" : "design"), null, null, "Check this label against LMPC rules: report only, the label is not changed"), B("gs1", "GS1 guide", () => window.open("gs1.html", "_blank"))]],
       ["Infinite Solutions", [B("vcard", "Talk to us", () => openLead("talk"))]]],
     View: [["Show the label", [B("fit", "As designed", () => { dz.D.viewMode = "auto"; dzDraw(); dzSave(); }, null, () => (dz.D.viewMode || "auto") === "auto"), B("rect", "Portrait", () => { dz.D.viewMode = "portrait"; dzDraw(); dzSave(); }, null, () => dz.D.viewMode === "portrait"), B("box", "Landscape", () => { dz.D.viewMode = "landscape"; dzDraw(); dzSave(); }, null, () => dz.D.viewMode === "landscape")]], ["Show", [B("grid", "Grid", () => { $("dzGrid").checked = !$("dzGrid").checked; dzDraw(); }, null, () => $("dzGrid").checked)]],
-      ["Zoom", [B("zin", "Zoom in", click("dzZoomIn"), null, null, "Ctrl+="), B("zout", "Zoom out", click("dzZoomOut"), null, null, "Ctrl+-"), B("fit", "Fit", click("dzZoomFit"), null, null, "Ctrl+0")]],
+      ["Zoom", [B("zin", "Zoom in", click("dzZoomIn"), null, null, "Ctrl+="), B("zout", "Zoom out", click("dzZoomOut"), null, null, "Ctrl+-"), B("fit", "Fit", click("dzZoomFit"), null, null, "Ctrl+0"), B("ruler", "Actual size", dzActual, null, null, "Show the label at its real size (Ctrl+1)"), B("ruler", "Calibrate", () => dzCalibrate(), null, null, "Match the screen to a bank card so Actual size is exact")]],
       ["Snap", [{ snap: true }]]],
   };
 }
@@ -4199,7 +4230,7 @@ $("dzStock").addEventListener("input", () => { dz.D.stock = $("dzStock").value; 
 $("dzInk").addEventListener("input", () => { dz.D.ink = $("dzInk").value; dzDraw(); dzSave(); });
 $("dzZoomIn").onclick = () => { dz.zoom = Math.min(4, dz.zoom * 1.25); dzDraw(); };
 $("dzZoomOut").onclick = () => { dz.zoom = Math.max(0.3, dz.zoom / 1.25); dzDraw(); };
-$("dzZoomFit").onclick = dzFit;
+$("dzZoomFit").onclick = dzFit; $("dzZoomActual").onclick = dzActual;
 $("dzClose").onclick = () => { if (!APP) $("dzDlg").close(); };
 $("dzToViewer").onclick = dzToViewer;
 $("dzPrn").onclick = dzDownload;
@@ -4281,6 +4312,7 @@ $("dzDlg").addEventListener("keydown", e => {
   if (mod && (key === "=" || key === "+")) { e.preventDefault(); return $("dzZoomIn").click(); }
   if (mod && key === "-") { e.preventDefault(); return $("dzZoomOut").click(); }
   if (mod && key === "0") { e.preventDefault(); return $("dzZoomFit").click(); }
+  if (mod && key === "1") { e.preventDefault(); return dzActual(); }
   if (e.key === "Tab") { e.preventDefault(); return dzSelNext(e.shiftKey); }
   if (mod && key === "a") { e.preventDefault(); return dzSelectMany(dz.D.items.map(i => i.id)); }
   if (e.key === "Escape" && dz.sel != null) { e.preventDefault(); return dzSelect(null); }
