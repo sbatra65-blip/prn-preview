@@ -4017,6 +4017,54 @@ function dzPaste() {
 function dzSelNext(back) { const a = dz.D.items; if (!a.length) return; const i = a.findIndex(x => x.id === dz.sel); const n = (i + (back ? -1 : 1) + a.length) % a.length; dzSelect(a[i < 0 ? 0 : n].id); }
 function dzSelTextLike() { const it = dz.D.items.find(i => i.id === dz.sel); return it && (it.type === "text" || it.type === "shape") ? it : null; }
 function dzSelTextAll() { return dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && (o.type === "text" || o.type === "shape")); }
+/* My fonts: font files the user uploads (.ttf .otf .woff .woff2). Kept in this browser (IndexedDB), listed under "My fonts",
+   and packed into .ldl files that use them, so the design opens with the same font on another computer. */
+const LDF = { list: [], db: null };
+function ldFontDB() { return LDF.db || (LDF.db = new Promise((ok, no) => { const r = indexedDB.open("ld-fonts", 1); r.onupgradeneeded = () => r.result.createObjectStore("fonts", { keyPath: "family" }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); })); }
+async function ldFontTx(mode, fn) { const db = await ldFontDB(); return new Promise((ok, no) => { const t = db.transaction("fonts", mode), st = t.objectStore("fonts"), r = fn(st); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }); }
+async function ldFontRegister(rec) {
+  try { const ff = new FontFace(rec.family, rec.data); await ff.load(); document.fonts.add(ff); } catch (e) { throw new Error(`“${rec.name}” is not a font file this browser can use.`); }
+  if (!LDF.list.some(f => f.family === rec.family)) LDF.list.push({ family: rec.family, name: rec.name, size: rec.data.byteLength });
+  ldFontsList();
+}
+function ldFontsList() { // keep the "My fonts" group in the font lists up to date
+  let i = DZ_FONTS.indexOf("#My fonts"); if (i >= 0) { let j = i + 1; while (j < DZ_FONTS.length && Array.isArray(DZ_FONTS[j]) && DZ_FONTS[j][2] === "my") j++; DZ_FONTS.splice(i, j - i); }
+  if (!LDF.list.length) return; const at = DZ_FONTS.indexOf("#Indian languages"); DZ_FONTS.splice(at < 0 ? 1 : at, 0, "#My fonts", ...LDF.list.map(f => [f.family, f.family, "my"]));
+}
+async function ldFontsBoot() { try { const all = await ldFontTx("readonly", st => st.getAll()); for (const r of all || []) await ldFontRegister(r).catch(() => {}); if (all && all.length && $("dzDlg").open) dzDraw(); } catch (e) {} }
+async function ldFontUpload(then) {
+  const i = document.createElement("input"); i.type = "file"; i.accept = ".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"; i.multiple = true;
+  i.onchange = async () => { let last = null;
+    for (const f of i.files) {
+      try { if (f.size > 8e6) throw new Error(`${f.name} is larger than 8 MB.`); if (!/\.(ttf|otf|woff2?)$/i.test(f.name)) throw new Error(`${f.name} is not a .ttf, .otf, .woff or .woff2 font.`);
+        let fam = f.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").replace(/[^\w .&+-]/g, "").trim().slice(0, 60) || "My font";
+        if (DZ_GFONTS.has(fam) || ["Arial", "Times New Roman", "Inter", "Roboto Condensed"].includes(fam)) fam += " (mine)";
+        const rec = { family: fam, name: f.name, data: await f.arrayBuffer(), added: Date.now() };
+        await ldFontRegister(rec); await ldFontTx("readwrite", st => st.put(rec)); last = fam; toast(`Font added: ${fam}`); ldBeep && ldBeep("small");
+      } catch (e) { toast(e.message); }
+    }
+    if (last && then) then(last);
+  };
+  i.click();
+}
+async function ldFontRemove(family) { await ldFontTx("readwrite", st => st.delete(family)); LDF.list = LDF.list.filter(f => f.family !== family); ldFontsList(); toast(`Removed ${family} from this browser`); }
+async function ldFontsFor(design) { // fonts of mine that this design uses, for packing into a .ldl
+  const used = new Set((design.items || []).map(i => i.font).filter(Boolean)), out = [];
+  for (const f of LDF.list) if (used.has(f.family)) { const r = await ldFontTx("readonly", st => st.get(f.family)); if (r) out.push({ family: r.family, name: r.name, b64: ldlB64(new Uint8Array(r.data)) }); }
+  return out;
+}
+async function ldFontsImport(list) { for (const f of list || []) { if (LDF.list.some(x => x.family === f.family)) continue; try { const rec = { family: f.family, name: f.name, data: ldlUn64(f.b64).buffer, added: Date.now() }; await ldFontRegister(rec); await ldFontTx("readwrite", st => st.put(rec)); } catch (e) {} } }
+function ldFontsManage() {
+  let d = $("ldFontDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldFontDlg"; d.style.cssText = "width:min(520px,96vw);padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
+  const draw = () => { d.innerHTML = `<div class="dlg-head"><div><h2>My fonts</h2><div class="sub">Fonts you uploaded to this browser. Designs saved as .ldl carry them along.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div style="padding:14px 20px">${LDF.list.length ? LDF.list.map(f => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><span style="flex:1;font:22px '${f.family.replace(/'/g, "")}', sans-serif">${ldEsc(f.family)}</span><small style="color:var(--muted)">${(f.size / 1024).toFixed(0)} KB</small><button type="button" class="btn sm" data-rm="${ldEsc(f.family)}">Remove</button></div>`).join("") : '<p class="dz-empty">No fonts uploaded yet.</p>'}
+    <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldFontAdd">Upload font…</button><span class="dz-cap" style="margin:0">.ttf, .otf, .woff or .woff2 · up to 8 MB · use fonts you are licensed to use</span></div></div>`;
+    d.querySelector(".x").onclick = () => d.close(); d.querySelector("#ldFontAdd").onclick = () => ldFontUpload(() => draw());
+    for (const b of d.querySelectorAll("[data-rm]")) b.onclick = async () => { if (!confirm(`Remove ${b.dataset.rm} from this browser? Text using it falls back to another font.`)) return; await ldFontRemove(b.dataset.rm); draw(); dzDraw(); };
+  };
+  draw(); if (!d.open) d.showModal();
+}
+setTimeout(ldFontsBoot, 300);
 const dzFontName = f => { const e = DZ_FONTS.find(x => Array.isArray(x) && x[0] === (f || "")); return e ? e[1].replace(/ \(.*\)$/, "") : f; };
 // Font picker with every font shown in its own face (only the name's letters are fetched, so the list opens fast)
 function dzFontPicker(anchor, cur) {
@@ -4031,12 +4079,13 @@ function dzFontPicker(anchor, cur) {
     if (g) want.push(v);
     h += `<button type="button" role="option" data-v="${v.replace(/"/g, "&quot;")}" aria-selected="${(cur || "") === v}" style="font-family:${fam.replace(/"/g, "&quot;")}${v === "" ? ";font-weight:700" : ""}">${name}</button>`;
   }
-  list.innerHTML = h;
+  list.innerHTML = h + '<div class="fg">Add fonts</div><button type="button" data-up="1" style="font:600 15px Inter,system-ui,sans-serif;color:var(--accent)">+ Upload a font (.ttf .otf .woff)…</button>' + (LDF.list.length ? '<button type="button" data-man="1" style="font:15px Inter,system-ui,sans-serif">Manage my fonts…</button>' : "");
   // preview faces: one stylesheet, only the letters of the names
   if (!dzFontPicker.css) { const fams = want.map(v => "family=" + encodeURIComponent(v).replace(/%20/g, "+")).join("&"), txt = encodeURIComponent([...new Set(DZ_FONTS.filter(Array.isArray).map(f => f[1]).join("") + "Mixedfonts")].join(""));
     const l = document.createElement("link"); l.rel = "stylesheet"; l.href = `https://fonts.googleapis.com/css2?${fams}&text=${txt}&display=swap`; document.head.append(l); dzFontPicker.css = true; }
   q.oninput = () => { const t = q.value.trim().toLowerCase(); for (const b of list.querySelectorAll("button")) b.hidden = !!t && !b.textContent.toLowerCase().includes(t); for (const g of list.querySelectorAll(".fg")) { let n = g.nextElementSibling, any = false; while (n && n.tagName === "BUTTON") { if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = !any; } };
-  list.onclick = e => { const b = e.target.closest("[data-v]"); if (!b) return; p.remove(); const v = b.dataset.v; if (v === "__local") dzPickLocalFont().then(x => x && dzSetFont(x)); else dzSetFont(v); };
+  list.onclick = e => { if (e.target.closest("[data-up]")) { p.remove(); return ldFontUpload(f => dzSetFont(f)); } if (e.target.closest("[data-man]")) { p.remove(); return ldFontsManage(); }
+    const b = e.target.closest("[data-v]"); if (!b) return; p.remove(); const v = b.dataset.v; if (v === "__local") dzPickLocalFont().then(x => x && dzSetFont(x)); else dzSetFont(v); };
   document.body.append(p); const r = anchor.getBoundingClientRect(), W = Math.min(320, innerWidth - 16);
   p.style.width = W + "px"; p.style.left = Math.max(8, Math.min(innerWidth - W - 8, r.left)) + "px"; p.style.top = Math.min(r.bottom + 4, innerHeight - 200) + "px"; p.style.maxHeight = Math.max(200, innerHeight - Math.min(r.bottom + 4, innerHeight - 200) - 12) + "px";
   const sel = list.querySelector('[aria-selected="true"]'); if (sel) sel.scrollIntoView({ block: "center" });
@@ -4074,7 +4123,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")], ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["My fonts (upload)…", () => ldFontsManage()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")], ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
@@ -5725,7 +5774,8 @@ async function ldlSave(name, lock, withData, exportOnly) {
   const design = JSON.parse(JSON.stringify(D)); delete design.cloud; design.fileName = name;
   const prefs = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^ld-pr:/.test(k)) prefs[k] = localStorage.getItem(k); } } catch (e) {}
   const serial = {}; for (const { it, k } of (typeof dzSerialParts === "function" ? dzSerialParts() : [])) { const v = store.get(ldSerKey(it, k)); if (v) serial[it.id + ":" + k] = v; }
-  const payload = { design, prefs, serial: exportOnly ? {} : serial, data: withData && !exportOnly && dz.db ? { name: dz.db.name, columns: dz.db.columns, rows: dz.db.rows } : null };
+  const fonts = await ldFontsFor(design).catch(() => []);
+  const payload = { design, prefs, fonts, serial: exportOnly ? {} : serial, data: withData && !exportOnly && dz.db ? { name: dz.db.name, columns: dz.db.columns, rows: dz.db.rows } : null };
   const head = JSON.stringify({ format: "LabelDesk label", v: 1, app: "LabelDesk", name, created: D.created || now, modified: now,
     author: (typeof LD !== "undefined" && LD.me && LD.me.user && LD.me.user.name) || "", lock, cid: lock === "company" && co ? co.id : "", company: co ? `${co.code} · ${co.name}` : "",
     printer: { id: p.id, brand: p.brand, model: p.model, kind: p.kind }, lang: D.lang, dpi: D.dpi, label: { w: r1(dzLW()), h: D.h, across: D.across, liner: D.paper },
@@ -5752,6 +5802,7 @@ async function ldlOpen(file) {
     const j = await r.json().catch(() => ({})); if (!r.ok) { if (j.signin && typeof ldSignin === "function") ldSignin(j.error); throw new Error(j.error || "Could not open the file"); }
     const pl = JSON.parse(new TextDecoder().decode(await ldlGzip(ldlUn64(j.payload), true)));
     if (dz.D && dz.D.items.length && !confirm(`Open “${f.h.name}”? The design on screen is replaced (Undo brings it back).`)) return;
+    if (pl.fonts && pl.fonts.length) await ldFontsImport(pl.fonts);
     clearTimeout(dzSave.t); if (dz.D) dzHist();
     dz.D = Object.assign(dzDefault(), pl.design); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1;
     try { for (const [k, v] of Object.entries(pl.prefs || {})) if (/^ld-pr:/.test(k) && !localStorage.getItem(k)) localStorage.setItem(k, v); } catch (e) {}
