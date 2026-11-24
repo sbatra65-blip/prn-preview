@@ -490,6 +490,36 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
   .dz-ribbon .rt button, .dz-zf button { min-width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
+
+/* Label setup: File → Label setup… opens this form */
+.dz-infobtn { font: 13px var(--font); color: var(--muted); background: none; border: 1px solid transparent; border-radius: 8px; padding: 4px 8px; cursor: pointer; text-align: left; }
+.dz-infobtn:hover { border-color: var(--line); color: var(--ink); background: #fff; }
+.dz-setupdlg { border: 1px solid var(--line); border-radius: 12px; padding: 0; width: min(760px, 94vw); max-height: 90dvh; overflow: auto; box-shadow: 0 8px 24px rgba(15, 23, 42, .07); color: var(--ink); background: #fff; }
+.dz-setupdlg::backdrop { background: rgba(15, 23, 42, .45); }
+.dz-setupdlg .sh { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: #fff; z-index: 1; }
+.dz-setupdlg h2 { font-size: 17px; line-height: 1.25; margin: 0; font-weight: 600; }
+.dz-setupdlg .sb { padding: 0 16px; }
+.dz-setupdlg .dz-setup { display: block !important; overflow: visible; min-height: 0 !important; padding: 0 !important; background: none; }
+.dz-setupdlg .dz-setup .rg { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.dz-setupdlg .dz-setup .rg:last-child { border-bottom: 0; }
+.dz-setupdlg .dz-setup .rg::before { display: block; font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.dz-setupdlg .dz-setup .rg:nth-child(1)::before { content: "Printer"; }
+.dz-setupdlg .dz-setup .rg:nth-child(2)::before { content: "Label and media"; }
+.dz-setupdlg .dz-setup .rg:nth-child(3)::before { content: "Colours"; }
+.dz-setupdlg .dz-setup .rr.sf { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px 16px; align-items: end; }
+.dz-setupdlg .dz-setup label { font-size: 13px; gap: 4px; }
+.dz-setupdlg .dz-setup input, .dz-setupdlg .dz-setup select { width: 100%; min-height: 36px; font-size: 14px; }
+.dz-setupdlg .dz-setup input[type=color] { height: 36px; }
+.dz-setupdlg .dz-setup .w2 { grid-column: span 2; }
+.dz-setupdlg .dz-setup .rl { font-size: 13px; line-height: 1.5; color: var(--muted); margin-top: 8px; max-width: 65ch; white-space: normal; }
+.dz-setupdlg .dz-setup .rg:nth-child(3) .rl { display: none; }
+.dz-setupdlg #dzSizeNote, .dz-setupdlg #dzCaps { display: block !important; }
+.dz-setupdlg .sf2 { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); position: sticky; bottom: 0; background: #fff; }
+@media (max-width: 600px) {
+  .dz-setupdlg { width: 100vw; max-width: 100vw; margin: auto 0 0; border-radius: 14px 14px 0 0; max-height: 92dvh; }
+  .dz-setupdlg .dz-setup .rr.sf { grid-template-columns: 1fr 1fr; }
+  .dz-setupdlg .dz-setup .w2 { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -794,7 +824,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
         <div class="msg" id="dzAskMsg" aria-live="polite"></div>
       </form>
       <div class="dz-bar">
-        <span id="dzInfo" style="font-size:13px;color:var(--muted)"></span>
+        <button type="button" id="dzInfo" class="dz-infobtn" title="Change printer, label size and colours"></button>
         <span id="dzWarn" style="font-size:13px;color:var(--ink)"></span>
         <span class="sp"></span>
         <select id="dzViewSel" aria-label="Show the label" title="How the label is shown on screen; printing is not affected"><option value="auto">As designed</option><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
@@ -3129,7 +3159,7 @@ addEventListener("keydown", e => { // Del / Backspace deletes the selection even
   const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Actual size" title="Actual size">1:1</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
   const [bo, bf, bi, ba, bh] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); ba.onclick = dzActual; bh.onclick = dzGestureHelp;
   st.parentElement.style.position = st.parentElement.style.position || "relative"; st.parentElement.append(f);
-  if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(() => { if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); dzGestureHelp(); } }, 4000);
+  if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(function tip() { const su = document.getElementById("dzSetupDlg"); if (su && su.open) return setTimeout(tip, 3000); if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); dzGestureHelp(); } }, 4000);
 })();
 $("dzStage").addEventListener("dblclick", e => { if (matchMedia("(pointer: coarse)").matches) return; const o = e.target.closest("#dzPaperEl .dz-o"); if (o) { const it = dz.D.items.find(i => i.id === +o.dataset.id); if (it) { dzSelect(it.id); dzEditObj(it); } return; } dzInsertMenu(e.clientX, e.clientY); });
 // Insert menu at a point on the canvas: the new object lands where you clicked
@@ -4311,14 +4341,13 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")],
+    File: [["New design", click("dzNew")], ["Label setup…", () => dzSetupOpen()],
       ["Open", [["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")]]],
       ["Save", [["Save to cloud", click("dzSave"), "Ctrl+S"], ["Save as .ldl file…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG]]],
       "-",
       ["Print…", () => ldPrintOpen(), "Ctrl+P"],
       ["Print more", [["Preview as printed", click("dzToViewer")], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()]]],
       "-",
-      ["Label setup…", () => dzRibbonShow("Label")],
       ["Settings", [["My fonts…", () => ldFontsManage()], ["Calibrate screen…", () => dzCalibrate()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")]]],
       ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About LabelDesk", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
@@ -4438,10 +4467,9 @@ function dzRibbonDef() {
   };
 }
 function dzRibbonShow(tab) {
-  dz.tab = tab || dz.tab || "Home"; if (dz.tab === "Arrange" || dz.tab === "Text") dz.tab = "Home";
+  dz.tab = tab || dz.tab || "Home"; if (dz.tab === "Arrange" || dz.tab === "Text" || dz.tab === "Label") dz.tab = "Home";
   for (const b of document.querySelectorAll("#dzRibbon .rt [data-tab]")) b.setAttribute("aria-selected", b.dataset.tab === dz.tab);
   const host = $("dzRibbonBody"); host.replaceChildren();
-  const isSetup = dz.tab === "Label"; $("dzSetup").hidden = !isSetup; host.hidden = isSetup; if (isSetup) return;
   for (const [gname, btns] of dzRibbonDef()[dz.tab]) {
     const g = document.createElement("div"); g.className = "rg"; const row = document.createElement("div"); row.className = "rr";
     for (const b of btns) {
@@ -4481,9 +4509,9 @@ function dzRibbonShow(tab) {
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
-  for (const t of ["Label", "Home", "Insert", "Data", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
+  for (const t of ["Home", "Insert", "Data", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
   document.addEventListener("click", e => { if (e.target.closest(".dz-drop") || Date.now() - (ldMenu.at || 0) < 450) return; dzMenuClose(); });
-  dzRibbonShow("Label");
+  dzRibbonShow("Home");
 })();
 
 for (const el of document.querySelectorAll(".dz-box [data-ic]")) el.insertAdjacentHTML("afterbegin", dzIcon(el.dataset.ic, 22));
@@ -4560,7 +4588,7 @@ $("dzWelcome").addEventListener("click", e => {
   if (e.target.closest("[data-w='ai']")) { $("dzWelcome").hidden = true; store.set("p2l-welcomed", "1"); $("dzAskEdit").checked = false; $("dzAskIn").focus(); return; }
   const b = e.target.closest("[data-w]"); if (!b) return; $("dzWelcome").hidden = true; store.set("p2l-welcomed", "1");
   const w = b.dataset.w;
-  if (w === "new") { dz.D = dzDefault(); dz.D.items = []; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Label"); dzSave(); }
+  if (w === "new") { dz.D = dzDefault(); dz.D.items = []; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Home"); dzSave(); setTimeout(dzSetupOpen, 50); }
   if (w === "open") $("fileIn").click(); if (w === "paste") { dzShowViewer(); $("pasteBtn").click(); }
   if (w === "pic") $("picDlg").showModal(); if (w === "lib") openLibrary();
 });
@@ -6571,6 +6599,29 @@ function ldConfirm(o) {
   document.addEventListener("focusin", ev => { const el = ev.target.closest && ev.target.closest("[title],[data-tip]"); hide(); if (el && ev.target.matches(":focus-visible")) show(el); }, true);
   ["pointerdown", "focusout", "scroll", "keydown"].forEach(k => document.addEventListener(k, ev => { if (k === "keydown" && ev.key !== "Escape") return; hide(); }, true));
 })();
+</script>
+
+<script>
+/* File → Label setup… : printer, label size and colours in one small form */
+function dzSetupOpen() {
+  let d = document.getElementById("dzSetupDlg");
+  if (!d) {
+    d = document.createElement("dialog"); d.id = "dzSetupDlg"; d.className = "dz-setupdlg"; d.setAttribute("aria-labelledby", "dzSetupH");
+    d.innerHTML = '<div class="sh"><h2 id="dzSetupH">Label setup</h2><button type="button" class="btn sm" data-x aria-label="Close label setup">✕</button></div><div class="sb"></div><div class="sf2"><button type="button" class="btn primary" data-x>Close setup</button></div>';
+    d.querySelector(".sb").append(document.getElementById("dzSetup"));
+    d.querySelectorAll("[data-x]").forEach(b => b.onclick = () => d.close());
+    d.addEventListener("click", e => { if (e.target === d) d.close(); });
+    d.addEventListener("close", () => { try { dzFit(); } catch (_) {} const f = d._from; d._from = null; try { f && f.focus && f.focus(); } catch (_) {} });
+    document.body.append(d);
+  }
+  if (d.open) return;
+  document.getElementById("dzSetup").hidden = false;
+  d._from = document.activeElement;
+  try { dzSetupForm(); } catch (_) {}
+  d.showModal();
+  const first = document.getElementById("dzPrinter"); if (first) first.focus();
+}
+document.getElementById("dzInfo").addEventListener("click", dzSetupOpen);
 </script>
 </body>
 </html>
