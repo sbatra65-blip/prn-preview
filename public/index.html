@@ -233,7 +233,10 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-bar select { font: 13px var(--font); padding: 5px 6px; border: 1px solid var(--line); border-radius: 8px; }
 .dz-stage { flex: 1; overflow: auto; position: relative; padding: 40px; }
 .dz-zf { display: none; position: absolute; right: 10px; bottom: 10px; z-index: 5; gap: 0; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
-.dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2) { font-size: 14px; }
+.dz-zf button { font: 600 18px Inter, system-ui, sans-serif; min-width: 46px; height: 44px; border: 0; background: none; color: #0f172a; } .dz-zf button + button { border-left: 1px solid #e3e6ec; } .dz-zf button:nth-child(2), .dz-zf button:nth-child(4) { font-size: 14px; }
+@media (pointer: coarse) { .dz-zf { display: flex; } .dz-stage { touch-action: pan-x pan-y; } }
+.dz-objmenu { position: fixed; z-index: 90; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.25); padding: 4px; display: grid; min-width: 190px; }
+.dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; }
 .dz-paper { position: relative; background: #d9d4c7; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 .dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 11px var(--font-mono); }
 .dz-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
@@ -2951,23 +2954,100 @@ function dzZoomAt(z, cx, cy) {
   const px = (cx ?? r.left + r.width / 2) - r.left, py = (cy ?? r.top + r.height / 2) - r.top, ax = st.scrollLeft + px, ay = st.scrollTop + py;
   dz.zoom = z; dzDraw(); const k = (dz.s || s0) / s0; st.scrollLeft = ax * k - px; st.scrollTop = ay * k - py;
 }
-(function dzPinch() {
-  const st = $("dzStage"); if (!st) return; let P = null, raf = 0, lastTap = 0;
-  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY), mid = t => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2];
+/* Touch gestures (phones and tablets) on the label canvas:
+   pinch = zoom · two-finger drag = move around · pinch/twist on the selected object = resize/turn it
+   double-tap empty canvas = zoom 2x / fit · double-tap an object = edit its text or data · long-press an object = actions menu
+   two-finger tap = undo · three-finger tap = redo · three-finger swipe up = print · swipe left/right with 2 fingers on a label with data = next/previous record */
+(function dzGestures() {
+  const st = $("dzStage"); if (!st) return;
+  let G = null, raf = 0, lastTap = { t: 0, id: null }, lp = 0;
+  const pts = t => [...t].map(x => [x.clientX, x.clientY]), dist = p => Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]), ang = p => Math.atan2(p[1][1] - p[0][1], p[1][0] - p[0][0]) * 180 / Math.PI;
+  const mid = p => [p.reduce((a, q) => a + q[0], 0) / p.length, p.reduce((a, q) => a + q[1], 0) / p.length];
+  const objAt = (x, y) => { const el = document.elementFromPoint(x, y); const o = el && el.closest && el.closest("#dzPaperEl .dz-o"); return o ? dz.D.items.find(i => i.id === +o.dataset.id) : null; };
+  const buzz = n => { try { navigator.vibrate && navigator.vibrate(n || 12); } catch (e) {} };
+  const cancelLP = () => { clearTimeout(lp); lp = 0; };
   st.addEventListener("touchstart", e => {
-    if (e.touches.length === 2) { e.preventDefault(); if (dz.grabUndo) dz.grabUndo(); P = { d: dist(e.touches), z: dz.zoom }; dz.pinch = true; return; }
-    if (e.touches.length === 1 && (e.target === st || e.target.id === "dzLab" || e.target.id === "dzPaperEl")) { const now = Date.now(); if (now - lastTap < 300) { e.preventDefault(); dz.zoom > 1.05 ? dzFit() : dzZoomAt(2, e.touches[0].clientX, e.touches[0].clientY); lastTap = 0; } else lastTap = now; }
+    const p = pts(e.touches), n = p.length; cancelLP(); dzMenuOff();
+    if (n === 1) {
+      const it = objAt(p[0][0], p[0][1]), now = Date.now();
+      if (it) lp = setTimeout(() => { lp = 0; if (dz.grabUndo) dz.grabUndo(); dzSelect(it.id); buzz(20); dzObjMenu(it, p[0][0], p[0][1]); }, 550);
+      if (now - lastTap.t < 320 && Math.hypot(p[0][0] - lastTap.x, p[0][1] - lastTap.y) < 30) { // double-tap
+        e.preventDefault(); cancelLP(); lastTap.t = 0;
+        if (it) { if (dz.grabUndo) dz.grabUndo(); dzSelect(it.id); dzEditObj(it); } else dz.zoom > 1.05 ? dzFit() : dzZoomAt(2, p[0][0], p[0][1]);
+        return;
+      }
+      lastTap = { t: now, x: p[0][0], y: p[0][1] }; G = null; return;
+    }
+    e.preventDefault(); if (dz.grabUndo) dz.grabUndo(); dz.pinch = true;
+    if (G && G.n >= n) return; // a third finger joining: keep the gesture
+    const sel = dz.sel != null && dz.D.items.find(i => i.id === dz.sel), on = sel && n === 2 && p.every(q => { const o = objAt(q[0], q[1]); return o && o.id === sel.id; });
+    G = { n, p0: p, t0: Date.now(), d0: n > 1 ? dist(p) : 0, a0: n > 1 ? ang(p) : 0, m0: mid(p), z0: dz.zoom, sl: st.scrollLeft, st: st.scrollTop, moved: false,
+      obj: on ? { it: sel, h: sel.h, w: sel.w, bw: sel.bw, rot: dzRot(sel) } : null };
+    if (G.obj) dzHist();
   }, { capture: true, passive: false });
-  st.addEventListener("touchmove", e => { if (!P || e.touches.length < 2) return; e.preventDefault(); const t = e.touches, z = P.z * dist(t) / P.d, [cx, cy] = mid(t); cancelAnimationFrame(raf); raf = requestAnimationFrame(() => dzZoomAt(z, cx, cy)); }, { capture: true, passive: false });
-  const end = e => { if (P && e.touches.length < 2) { P = null; setTimeout(() => { dz.pinch = false; }, 50); } };
+  st.addEventListener("touchmove", e => {
+    const p = pts(e.touches); if (lp && p.length === 1 && lastTap.t && Math.hypot(p[0][0] - lastTap.x, p[0][1] - lastTap.y) > 10) cancelLP();
+    if (!G || p.length < 2) return; e.preventDefault();
+    const m = mid(p), dm = [m[0] - G.m0[0], m[1] - G.m0[1]], k = p.length >= 2 && G.d0 ? dist(p.slice(0, 2)) / G.d0 : 1, da = p.length >= 2 ? ang(p.slice(0, 2)) - G.a0 : 0;
+    if (Math.abs(k - 1) > .06 || Math.abs(da) > 6 || Math.hypot(dm[0], dm[1]) > 14) G.moved = true;
+    G.last = { m, dm, k, da };
+    if (G.n >= 3) return; // three-finger gestures are read when the fingers lift
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      if (G.obj) { const o = G.obj, it = o.it;
+        if (it.type === "text" && it.para) it.bw = r1(Math.max(5, (o.bw || 40) * k)); else if (it.type === "text") it.h = r1(Math.max(1, o.h * k));
+        else if (it.type !== "line") { it.w = r1(Math.max(2, o.w * k)); it.h = dzIs2D(it) ? it.w : r1(Math.max(2, o.h * k)); }
+        let r = ((o.rot + da) % 360 + 360) % 360; for (const s9 of [0, 90, 180, 270, 360]) if (Math.abs(r - s9) < 8) r = s9 % 360; // snap to square angles
+        if (it.type !== "line" && Math.abs(da) > 6) it.rot = Math.round(r);
+        dzDraw(); dzWarnCount && dzWarnCount();
+      } else { dzZoomAt(G.z0 * k, m[0], m[1]); st.scrollLeft -= (m[0] - (G.pm ? G.pm[0] : G.m0[0])); st.scrollTop -= (m[1] - (G.pm ? G.pm[1] : G.m0[1])); G.pm = m; }
+    });
+  }, { capture: true, passive: false });
+  const end = e => {
+    cancelLP(); if (!G || e.touches.length) return;
+    const g = G, quick = Date.now() - g.t0 < 350, L = g.last || { dm: [0, 0] }; G = null; setTimeout(() => { dz.pinch = false; }, 60);
+    if (g.obj && (g.moved || !quick)) { dzProps(); dzSave(); return; }
+    if (!g.moved && quick && g.n === 2) { if (dzSave.t) { clearTimeout(dzSave.t); dzHist(); } dzUndo(-1); toast("Undo"); buzz(); return; }
+    if (!g.moved && quick && g.n === 3) { if (dzSave.t) { clearTimeout(dzSave.t); dzHist(); } dzUndo(1); toast("Redo"); buzz(); return; }
+    if (g.n === 3 && L.dm[1] < -70 && Math.abs(L.dm[0]) < Math.abs(L.dm[1])) { buzz(25); typeof ldPrintOpen === "function" && ldPrintOpen(); return; }
+    if (g.n === 3 && L.dm[1] > 70 && Math.abs(L.dm[0]) < Math.abs(L.dm[1]) && typeof qpOpen === "function") { qpOpen(); return; }
+    if (g.n === 2 && dz.db && dz.db.rows && dz.db.rows.length > 1 && Math.abs(L.dm[0]) > 90 && Math.abs(L.k - 1) < .12 && Math.abs(L.dm[0]) > 2 * Math.abs(L.dm[1])) { const n = dz.db.rows.length; dzDbShow(((dz.recIdx || 0) + (L.dm[0] < 0 ? 1 : -1) + n) % n); buzz(); toast(`Record ${(dz.recIdx || 0) + 1} of ${n}`); }
+  };
   st.addEventListener("touchend", end, { capture: true }); st.addEventListener("touchcancel", end, { capture: true });
   ["gesturestart", "gesturechange"].forEach(ev => st.addEventListener(ev, e => e.preventDefault(), { passive: false })); // stop Safari zooming the whole page
   st.addEventListener("wheel", e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); dzZoomAt(dz.zoom * Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY); }, { passive: false });
-  // phones: floating zoom buttons over the canvas
-  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button>';
-  const [bo, bf, bi] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25);
+  st.addEventListener("contextmenu", e => { if (matchMedia("(pointer: coarse)").matches && e.target.closest(".dz-o")) e.preventDefault(); });
+  // floating zoom buttons for touch screens
+  const f = document.createElement("div"); f.className = "dz-zf"; f.innerHTML = '<button type="button" aria-label="Zoom out">−</button><button type="button" aria-label="Fit to screen">Fit</button><button type="button" aria-label="Zoom in">+</button><button type="button" aria-label="Touch gestures" title="Touch gestures">?</button>';
+  const [bo, bf, bi, bh] = f.children; bo.onclick = () => dzZoomAt(dz.zoom / 1.25); bf.onclick = dzFit; bi.onclick = () => dzZoomAt(dz.zoom * 1.25); bh.onclick = dzGestureHelp;
   st.parentElement.style.position = st.parentElement.style.position || "relative"; st.parentElement.append(f);
+  if (matchMedia("(pointer: coarse)").matches && !store.get("ld-gest-seen")) setTimeout(() => { if ($("dzDlg").open && $("dzWelcome").hidden !== false) { store.set("ld-gest-seen", "1"); dzGestureHelp(); } }, 4000);
 })();
+function dzEditObj(it) { // jump to the text / data box of the object, keyboard up
+  dzProps(); if (typeof dzSheet === "function") dzSheet(true);
+  setTimeout(() => { const f = document.querySelector('.dz-props [data-k="text"], .dz-props [data-k="data"], .dz-props #dzData'); if (f) { f.focus(); try { f.select(); } catch (e) {} f.scrollIntoView({ block: "center" }); } }, 60);
+}
+function dzMenuOff() { const m = $("dzObjMenu"); if (m) m.remove(); }
+function dzObjMenu(it, x, y) {
+  dzMenuOff(); const m = document.createElement("div"); m.id = "dzObjMenu"; m.className = "dz-objmenu";
+  const acts = [["Edit text / data", () => dzEditObj(it)], ["Duplicate", dzDuplicate], ["Copy", dzCopy], ["Bring to front", () => dzOrder("front")], ["Send to back", () => dzOrder("back")],
+    ["Turn 90°", () => { dzHist(); it.rot = (dzRot(it) + 90) % 360; dzDraw(); dzProps(); dzSave(); }], [it.noprint ? "Print this object" : "Don't print", () => { it.noprint = !it.noprint; if (!it.noprint) delete it.noprint; dzDraw(); dzProps(); dzSave(); }], ["Delete", dzDelete, "bad"]];
+  for (const [t, fn, cls] of acts) { const b = document.createElement("button"); b.type = "button"; b.textContent = t; if (cls) b.className = cls; b.onclick = () => { dzMenuOff(); fn(); }; m.append(b); }
+  document.body.append(m); const r = m.getBoundingClientRect();
+  m.style.left = Math.max(8, Math.min(innerWidth - r.width - 8, x - r.width / 2)) + "px"; m.style.top = Math.max(8, Math.min(innerHeight - r.height - 8, y - r.height - 18)) + "px";
+  setTimeout(() => addEventListener("pointerdown", function off(e) { if (!m.contains(e.target)) { dzMenuOff(); removeEventListener("pointerdown", off, true); } }, true), 50);
+}
+function dzGestureHelp() {
+  let d = $("dzGestDlg"); if (!d) { d = document.createElement("dialog"); d.id = "dzGestDlg"; d.style.cssText = "width:min(460px,94vw);padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
+  const row = (g, t) => `<tr><td style="padding:8px 10px;font-weight:700;white-space:nowrap;vertical-align:top">${g}</td><td style="padding:8px 10px">${t}</td></tr>`;
+  d.innerHTML = `<div class="dlg-head"><div><h2>Touch gestures</h2><div class="sub">Phones and tablets</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:4px 0 12px">
+    ${row("Drag", "Move an object, or scroll the canvas")}${row("Pinch", "Zoom in and out")}${row("2-finger drag", "Move around a zoomed label")}
+    ${row("Pinch / twist on selected", "Resize and turn the selected object (snaps to 0°, 90°, 180°, 270°)")}
+    ${row("Double-tap object", "Edit its text or barcode data")}${row("Double-tap empty", "Zoom to 2× / back to fit")}${row("Long-press object", "Menu: duplicate, copy, order, turn, don't print, delete")}
+    ${row("2-finger tap", "Undo")}${row("3-finger tap", "Redo")}${row("3-finger swipe up", "Print")}${row("3-finger swipe down", "Phone print screen")}${row("2-finger swipe ← →", "Next / previous record when a database is connected")}</table>`;
+  d.querySelector(".x").onclick = () => d.close(); d.showModal();
+}
 function dzView() { // 0 = as designed, 90 = shown turned clockwise (printing is not affected)
   const D = dz.D, m = D.viewMode || "auto"; if (m === "auto") return 0;
   const land = dzLW() >= D.h; if ((m === "landscape") === land) return 0;
@@ -3888,7 +3968,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")], ["About this site", () => { location.href = "./?about"; }]],
+    File: [["New design", click("dzNew")], ["Paste printer code…", click("dzPasteBtn")], ["Picture to label (AI)…", () => dzPicOpen()], ["Picture to PRN…", () => dzPicOpen(true)], "-", ["My designs…", click("dzOpenBtn")], ["Save to cloud", click("dzSave"), "Ctrl+S"], "-", ["Open LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Save as LabelDesk file (.ldl)…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Print…", () => ldPrintOpen(), "Ctrl+P"], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()], ["Preview as printed", click("dzToViewer")], ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG], ["Label setup…", () => dzRibbonShow("Label")], "-", ...(APP ? [] : [["Close designer", click("dzClose")]]), ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")], ["About this site", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
     Arrange: ["#Align on the label", ["Left", () => dzAlign("left"), "", has], ["Centre across", () => dzAlign("center"), "", has], ["Right", () => dzAlign("right"), "", has], ["Top", () => dzAlign("top"), "", has], ["Middle", () => dzAlign("middle"), "", has], ["Bottom", () => dzAlign("bottom"), "", has], "#Order", ["Bring to front", () => dzOrder("front"), "", has], ["Bring forward", () => dzOrder(1), "", has], ["Send backward", () => dzOrder(-1), "", has], ["Send to back", () => dzOrder("back"), "", has], "#Turn", ["Turn 90° right", turn(90), "R", turnable], ["Turn 90° left", turn(-90), "Shift+R", turnable], ["Straighten (0°)", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, "", turnable]],
