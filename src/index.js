@@ -201,6 +201,37 @@ async function unseal(key, row) {
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64d(row.iv), additionalData: new TextEncoder().encode(row.id + "|" + row.owner) }, key, b64d(row.data));
   return JSON.parse(new TextDecoder().decode(pt));
 }
+/* ---------- uploaded fonts: the owner's property, encrypted like designs, never listed to anyone else ---------- */
+const MAX_FONT = 1400000; // bytes of font data per row (D1 keeps rows under 2 MB after base64)
+async function fonts(request, env, url) {
+  if (!env.LEADS) return json({ error: "Cloud storage is not set up" }, 503);
+  const key = await designKey(env); if (!key) return json({ error: "Cloud fonts need the DESIGN_KEY secret.", local: true }, 503);
+  let sc = null; try { sc = await scope(env, request); } catch (e) {}
+  const tok = request.headers.get("x-owner") || "", id = url.pathname.split("/")[3] || "", m = request.method;
+  if (!sc && !/^[A-Za-z0-9_-]{32,128}$/.test(tok)) return json({ error: "Please sign in.", signin: true }, 401);
+  const owner = sc ? sc.owner : await sha256hex("owner:" + tok);
+  if (m !== "GET" && sc && !sc.csrf) return json({ error: "Bad request" }, 400);
+  if (m !== "GET" && sc && !CAN_EDIT.includes(sc.role)) return json({ error: "Your role cannot add or remove fonts." }, 403);
+  if (m === "GET" && !id) { const { results } = await env.LEADS.prepare("SELECT id, family, name, size, meta, created FROM fonts WHERE owner = ?1 ORDER BY family").bind(owner).all(); return json({ fonts: (results || []).map(r => ({ ...r, meta: r.meta ? JSON.parse(r.meta) : null })) }); }
+  if (m === "GET") { const r = await env.LEADS.prepare("SELECT * FROM fonts WHERE id = ?1 AND owner = ?2").bind(id, owner).first(); if (!r) return json({ error: "Not found" }, 404); const o = await unseal(key, r); return json({ id: r.id, family: r.family, name: r.name, data: o.data }); }
+  if (m === "POST") {
+    if (env.DESIGN_LIMITER) { const { success } = await env.DESIGN_LIMITER.limit({ key: owner }); if (!success) return json({ error: "Too many uploads; wait a minute." }, 429); }
+    let b; try { b = await request.json(); } catch (e) { return json({ error: "Bad JSON" }, 400); }
+    const fam = String(b.family || "").slice(0, 80).trim(), data = String(b.data || "");
+    if (!fam || !data || !/^[A-Za-z0-9+/=]+$/.test(data)) return json({ error: "Missing font" }, 400);
+    if (data.length * 0.75 > MAX_FONT) return json({ error: "Fonts over 1.4 MB stay on this computer only.", tooBig: true }, 413);
+    const n = await env.LEADS.prepare("SELECT COUNT(*) AS n FROM fonts WHERE owner = ?1").bind(owner).first(); if (n.n >= 100) return json({ error: "100 fonts is the limit; remove one first." }, 402);
+    const old = await env.LEADS.prepare("SELECT id FROM fonts WHERE owner = ?1 AND family = ?2").bind(owner, fam).first();
+    const fid = old ? old.id : [...crypto.getRandomValues(new Uint8Array(9))].map(x => x.toString(36).padStart(2, "0")).join("").slice(0, 12);
+    const sealed = await seal(key, fid, owner, { data });
+    const meta = JSON.stringify(Object.assign({}, b.meta || {}, { by: sc ? sc.uid : "", at: new Date().toISOString() })).slice(0, 4000);
+    await env.LEADS.prepare("INSERT INTO fonts (id, owner, family, name, size, iv, data, meta, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT(id) DO UPDATE SET name = ?4, size = ?5, iv = ?6, data = ?7, meta = ?8")
+      .bind(fid, owner, fam, String(b.name || "").slice(0, 120), Math.round(data.length * 0.75), sealed.iv, sealed.data, meta, Date.now()).run();
+    return json({ id: fid, family: fam });
+  }
+  if (m === "DELETE" && id) { await env.LEADS.prepare("DELETE FROM fonts WHERE id = ?1 AND owner = ?2").bind(id, owner).run(); return json({ ok: true }); }
+  return json({ error: "Not found" }, 404);
+}
 const MAX_DESIGN = 1200000; // keeps a row under D1's size limit after encryption and base64
 async function designs(request, env, url) {
   if (!env.LEADS) return json({ error: "Cloud storage is not set up" }, 503);
@@ -389,6 +420,7 @@ export default {
     if (url.pathname === "/api/leads") return listLeads(request, env);
     if (url.pathname === "/api/design-ai") return designAI(request, env);
     if (url.pathname === "/api/designs" || url.pathname.startsWith("/api/designs/")) return designs(request, env, url);
+    if (url.pathname === "/api/fonts" || url.pathname.startsWith("/api/fonts/")) return fonts(request, env, url);
     if (url.pathname.startsWith("/api/qz/")) return qzTray(request, env, url);
     if (url.pathname.startsWith("/api/connect/") || url.pathname.startsWith("/api/zoho/")) return connectors(request, env, url);
     if (url.pathname.startsWith("/api/ldl/")) return ldfile(request, env, url);

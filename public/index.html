@@ -4017,50 +4017,130 @@ function dzPaste() {
 function dzSelNext(back) { const a = dz.D.items; if (!a.length) return; const i = a.findIndex(x => x.id === dz.sel); const n = (i + (back ? -1 : 1) + a.length) % a.length; dzSelect(a[i < 0 ? 0 : n].id); }
 function dzSelTextLike() { const it = dz.D.items.find(i => i.id === dz.sel); return it && (it.type === "text" || it.type === "shape") ? it : null; }
 function dzSelTextAll() { return dzSelIds().map(id => dz.D.items.find(i => i.id === id)).filter(o => o && (o.type === "text" || o.type === "shape")); }
-/* My fonts: font files the user uploads (.ttf .otf .woff .woff2). Kept in this browser (IndexedDB), listed under "My fonts",
-   and packed into .ldl files that use them, so the design opens with the same font on another computer. */
+/* My fonts: font files a user uploads (.ttf .otf .woff .woff2). They are the property of the company (or workspace) that
+   uploaded them: stored encrypted in its cloud space and cached in this browser, never shown to anyone else.
+   Before a font is added, its built-in licence data is read and the uploader confirms the company may use it. */
 const LDF = { list: [], db: null };
-function ldFontDB() { return LDF.db || (LDF.db = new Promise((ok, no) => { const r = indexedDB.open("ld-fonts", 1); r.onupgradeneeded = () => r.result.createObjectStore("fonts", { keyPath: "family" }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); })); }
-async function ldFontTx(mode, fn) { const db = await ldFontDB(); return new Promise((ok, no) => { const t = db.transaction("fonts", mode), st = t.objectStore("fonts"), r = fn(st); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }); }
+const ldFontOwner = () => typeof LD !== "undefined" && LD.company ? "co:" + LD.company.id : "ws";
+function ldFontDB() { return LDF.db || (LDF.db = new Promise((ok, no) => { const r = indexedDB.open("ld-fonts", 2); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("fonts2")) r.result.createObjectStore("fonts2", { keyPath: "key" }); }; r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); })); }
+async function ldFontTx(mode, fn) { const db = await ldFontDB(); return new Promise((ok, no) => { const t = db.transaction("fonts2", mode), st = t.objectStore("fonts2"), r = fn(st); t.oncomplete = () => ok(r && r.result); t.onerror = () => no(t.error); }); }
+const ldFontHeaders = () => typeof LD !== "undefined" && LD.company ? { "x-ld": "1" } : { "x-ld": "1", "x-owner": dzOwner() };
+async function ldFontApi(path, opt = {}) { const r = await fetch("/api/fonts" + path, Object.assign({}, opt, { headers: Object.assign({ "content-type": "application/json" }, ldFontHeaders()) })); const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || "Font cloud error " + r.status); e.status = r.status; e.j = j; throw e; } return j; }
 async function ldFontRegister(rec) {
-  try { const ff = new FontFace(rec.family, rec.data); await ff.load(); document.fonts.add(ff); } catch (e) { throw new Error(`“${rec.name}” is not a font file this browser can use.`); }
-  if (!LDF.list.some(f => f.family === rec.family)) LDF.list.push({ family: rec.family, name: rec.name, size: rec.data.byteLength });
+  try { const ff = new FontFace(rec.family, rec.data); await ff.load(); document.fonts.add(ff); } catch (e) { throw new Error(`“${rec.name || rec.family}” is not a font file this browser can use.`); }
+  if (!LDF.list.some(f => f.family === rec.family)) LDF.list.push({ family: rec.family, name: rec.name, size: rec.data.byteLength, cloud: rec.cloud || null, meta: rec.meta || null });
   ldFontsList();
 }
 function ldFontsList() { // keep the "My fonts" group in the font lists up to date
   let i = DZ_FONTS.indexOf("#My fonts"); if (i >= 0) { let j = i + 1; while (j < DZ_FONTS.length && Array.isArray(DZ_FONTS[j]) && DZ_FONTS[j][2] === "my") j++; DZ_FONTS.splice(i, j - i); }
   if (!LDF.list.length) return; const at = DZ_FONTS.indexOf("#Indian languages"); DZ_FONTS.splice(at < 0 ? 1 : at, 0, "#My fonts", ...LDF.list.map(f => [f.family, f.family, "my"]));
 }
-async function ldFontsBoot() { try { const all = await ldFontTx("readonly", st => st.getAll()); for (const r of all || []) await ldFontRegister(r).catch(() => {}); if (all && all.length && $("dzDlg").open) dzDraw(); } catch (e) {} }
+async function ldFontsBoot() {
+  const owner = ldFontOwner(); LDF.list = []; ldFontsList(); LDF.owner = owner;
+  try { const all = (await ldFontTx("readonly", st => st.getAll())) || []; for (const r of all) if (r.owner === owner) await ldFontRegister(r).catch(() => {}); } catch (e) {}
+  try { // the company's fonts from its cloud space: fetch the ones this browser does not have yet
+    const { fonts } = await ldFontApi("");
+    for (const f of fonts) { const loc = LDF.list.find(x => x.family === f.family); if (loc) { loc.cloud = f.id; loc.meta = f.meta; continue; }
+      try { const j = await ldFontApi("/" + f.id); const rec = { key: owner + "|" + f.family, owner, family: f.family, name: f.name, data: ldlUn64(j.data).buffer, cloud: f.id, meta: f.meta }; await ldFontRegister(rec); await ldFontTx("readwrite", st => st.put(rec)); } catch (e) {} }
+  } catch (e) {}
+  if (LDF.list.length && $("dzDlg").open) dzDraw();
+}
+/* Read a font's own name and licence data (TrueType/OpenType and WOFF 1; WOFF 2 is compressed and cannot be read here). */
+async function ldFontInfo(buf) {
+  const dv = new DataView(buf), tag = String.fromCharCode(...new Uint8Array(buf, 0, 4)), tables = {};
+  if (tag === "wOF2") return { fmt: "woff2" };
+  const woff = tag === "wOFF", n = dv.getUint16(woff ? 12 : 4);
+  for (let i = 0; i < n; i++) { const o = woff ? 44 + i * 20 : 12 + i * 16, t = String.fromCharCode(...new Uint8Array(buf, o, 4));
+    tables[t] = woff ? { off: dv.getUint32(o + 4), clen: dv.getUint32(o + 8), len: dv.getUint32(o + 12) } : { off: dv.getUint32(o + 8), len: dv.getUint32(o + 12) }; }
+  const get = async t => { const e = tables[t]; if (!e) return null; if (!woff || e.clen >= e.len) return new DataView(buf, e.off, e.len);
+    const ds = new Blob([new Uint8Array(buf, e.off, e.clen)]).stream().pipeThrough(new DecompressionStream("deflate")); return new DataView(await new Response(ds).arrayBuffer()); };
+  const info = { fmt: woff ? "woff" : "sfnt" };
+  try { const nm = await get("name"); if (nm) { const cnt = nm.getUint16(2), so = nm.getUint16(4), pick = {};
+      for (let i = 0; i < cnt; i++) { const r = 6 + i * 12, pid = nm.getUint16(r), lid = nm.getUint16(r + 4), id = nm.getUint16(r + 6), len = nm.getUint16(r + 8), off = nm.getUint16(r + 10);
+        const score = pid === 3 && lid === 0x409 ? 3 : pid === 3 ? 2 : pid === 1 && lid === 0 ? 1 : 0; if (!score || (pick[id] && pick[id].score >= score)) continue;
+        let str = ""; if (pid === 3 || pid === 0) for (let k = 0; k + 1 < len; k += 2) str += String.fromCharCode(nm.getUint16(so + off + k)); else for (let k = 0; k < len; k++) str += String.fromCharCode(nm.getUint8(so + off + k));
+        pick[id] = { score, str: str.trim() }; }
+      const v = id => pick[id] && pick[id].str || "";
+      Object.assign(info, { copyright: v(0), family: v(16) || v(1), style: v(17) || v(2), full: v(4), trademark: v(7), maker: v(8), designer: v(9), vendorUrl: v(11), license: v(13), licenseUrl: v(14) }); } } catch (e) {}
+  try { const os2 = await get("OS/2"); if (os2) { info.fsType = os2.getUint16(8); info.vendor = String.fromCharCode(...[58, 59, 60, 61].map(k => os2.getUint8(k))).trim(); } } catch (e) {}
+  return info;
+}
+const LD_FONT_FOUNDRIES = /monotype|linotype|adobe|microsoft|apple|\bitc\b|international typeface|urw|bitstream|hoefler|frere-jones|font bureau|fontfont|fontshop|berthold|emigre|commercial type|klim|typotheque|dalton maag|positype|lettersoup|ascender|agfa|fontsmith|typodermic|letraset|elsner|rosetta|production type|grilli|colophon|swiss typefaces|indian type foundry|itfdevanagari/i;
+const LD_FONT_COMMERCIAL = /^(arial|helvetica|times|futura|gotham|frutiger|avenir|gill sans|calibri|cambria|segoe|myriad|minion|garamond|optima|univers|din\b|proxima|museo|brandon|akzidenz|neue haas|trade gothic|franklin gothic|century gothic|tahoma|verdana|georgia|trebuchet|baskerville|bodoni|rockwell|lucida|palatino|book antiqua|consolas|corbel|candara|constantia|kohinoor|mangal|nirmala|aparajita|kokila|utsaah)/i;
+function ldFontJudge(info, fileName) {
+  const txt = [info.copyright, info.trademark, info.maker, info.license, info.licenseUrl, info.vendorUrl].join(" "), fam = info.family || fileName;
+  const open = /sil open font|openfontlicense|\bofl\b|apache licen|ubuntu font licen|gnu general public|\bgpl\b|creative commons|public domain|bitstream vera|gust font licen/i.test(txt);
+  const restricted = info.fsType != null && (info.fsType & 0x000f) === 0x0002; // "restricted licence embedding"
+  const reasons = [];
+  if (restricted) reasons.push("The font marks itself as “restricted licence”: its maker does not allow it to be embedded or used outside the computer it is licensed for.");
+  if (!open && LD_FONT_FOUNDRIES.test(txt)) reasons.push(`It comes from a commercial type foundry (${(txt.match(LD_FONT_FOUNDRIES) || [""])[0]}).`);
+  if (!open && LD_FONT_COMMERCIAL.test(fam)) reasons.push(`“${fam}” is normally a commercial or operating-system font, licensed only for use on the computer it came with.`);
+  if (!open && !reasons.length && info.fmt !== "woff2" && /copyright|©|\(c\)|all rights reserved|trademark/i.test(txt)) reasons.push("It carries a copyright notice and no open-licence statement.");
+  return { level: restricted ? "stop" : reasons.length ? "warn" : open ? "open" : "unknown", reasons, open };
+}
+function ldFontConfirm(file, info, verdict) { // the uploader must confirm the company holds a licence
+  return new Promise(done => {
+    let d = $("ldFontLic"); if (!d) { d = document.createElement("dialog"); d.id = "ldFontLic"; d.style.cssText = "width:min(560px,96vw);max-height:92dvh;overflow:auto;padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
+    const row = (k, v) => v ? `<tr><td style="padding:4px 10px 4px 0;color:#64748b;vertical-align:top;white-space:nowrap">${k}</td><td style="padding:4px 0;word-break:break-word">${ldEsc(String(v).slice(0, 400))}</td></tr>` : "";
+    const head = { stop: ["#b91c1c", "#fef2f2", "This font looks proprietary and restricted"], warn: ["#b45309", "#fffbeb", "This font may be proprietary"], open: ["#15803d", "#f0fdf4", "Open licence font"], unknown: ["#475569", "#f8fafc", "Licence not stated in the font"] }[verdict.level];
+    d.innerHTML = `<div class="dlg-head"><div><h2>Add font: ${ldEsc(info.family || file.name)}</h2><div class="sub">${ldEsc(file.name)} · ${(file.size / 1024).toFixed(0)} KB</div></div><button type="button" class="x" aria-label="Cancel">×</button></div>
+      <div style="padding:14px 20px">
+      <div style="border:1px solid ${head[0]}33;background:${head[1]};color:${head[0]};border-radius:10px;padding:10px 12px;margin-bottom:12px"><b>${head[2]}.</b>
+        ${verdict.reasons.length ? `<ul style="margin:6px 0 0 18px;padding:0;color:#334155">${verdict.reasons.map(r => `<li>${ldEsc(r)}</li>`).join("")}</ul>` : ""}
+        ${verdict.level === "open" ? '<div style="color:#334155;margin-top:4px">Open licences generally allow use on labels. Keep the licence file with your records.</div>' : ""}
+        ${verdict.level === "unknown" ? `<div style="color:#334155;margin-top:4px">${info.fmt === "woff2" ? "WOFF2 files are compressed, so their licence data cannot be read here." : "The file does not say how it is licensed."} Check the licence that came with it.</div>` : ""}</div>
+      <table style="font-size:13px;border-collapse:collapse;width:100%;margin-bottom:12px">${row("Copyright", info.copyright)}${row("Maker", info.maker)}${row("Trademark", info.trademark)}${row("Licence", info.license)}${row("Licence link", info.licenseUrl)}${row("Vendor ID", info.vendor)}</table>
+      <p style="font-size:13px;color:#334155;margin:0 0 10px">Fonts are software. Uploading one copies it to your company's LabelDesk space and prints it on labels, which many commercial font licences (including fonts that came with Windows or macOS) do not allow. The font stays your company's property: only your company's users can see or use it, and LabelDesk does not share it.</p>
+      <label style="display:flex;gap:10px;align-items:flex-start;font-size:14px;margin:10px 0 14px"><input type="checkbox" id="ldFontAck" style="margin-top:3px;width:18px;height:18px">
+        <span>I confirm that my company owns this font or holds a licence that allows uploading it to a cloud service and using it to print labels, and that we are responsible for that licence.</span></label>
+      <div class="ld-row"><button type="button" class="btn primary" id="ldFontYes" disabled>Add font</button><button type="button" class="btn" id="ldFontNo">Cancel</button></div></div>`;
+    const ack = d.querySelector("#ldFontAck"), yes = d.querySelector("#ldFontYes"), fin = v => { d.close(); done(v); };
+    ack.onchange = () => { yes.disabled = !ack.checked; }; yes.onclick = () => fin(true); d.querySelector("#ldFontNo").onclick = () => fin(false); d.querySelector(".x").onclick = () => fin(false); d.oncancel = () => done(false);
+    if (verdict.level === "stop") { yes.textContent = "Add anyway"; yes.classList.remove("primary"); yes.style.cssText = "background:#b91c1c;color:#fff;border-color:#b91c1c"; }
+    d.showModal(); if (verdict.level !== "stop") ldBeep && ldBeep("small"); else ldBeep && ldBeep("err");
+  });
+}
 async function ldFontUpload(then) {
   const i = document.createElement("input"); i.type = "file"; i.accept = ".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"; i.multiple = true;
   i.onchange = async () => { let last = null;
     for (const f of i.files) {
       try { if (f.size > 8e6) throw new Error(`${f.name} is larger than 8 MB.`); if (!/\.(ttf|otf|woff2?)$/i.test(f.name)) throw new Error(`${f.name} is not a .ttf, .otf, .woff or .woff2 font.`);
-        let fam = f.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ").replace(/[^\w .&+-]/g, "").trim().slice(0, 60) || "My font";
+        const data = await f.arrayBuffer(); let info = {}; try { info = await ldFontInfo(data); } catch (e) {}
+        const verdict = ldFontJudge(info, f.name.replace(/\.[^.]+$/, ""));
+        if (!await ldFontConfirm(f, info, verdict)) continue;
+        let fam = ((info.family && !/^(regular|bold)$/i.test(info.family) ? info.family + (info.style && !/^regular$/i.test(info.style) ? " " + info.style : "") : "") || f.name.replace(/\.[^.]+$/, "").replace(/[_]+/g, " ")).replace(/[^\w .&+-]/g, "").trim().slice(0, 60) || "My font";
         if (DZ_GFONTS.has(fam) || ["Arial", "Times New Roman", "Inter", "Roboto Condensed"].includes(fam)) fam += " (mine)";
-        const rec = { family: fam, name: f.name, data: await f.arrayBuffer(), added: Date.now() };
-        await ldFontRegister(rec); await ldFontTx("readwrite", st => st.put(rec)); last = fam; toast(`Font added: ${fam}`); ldBeep && ldBeep("small");
+        const owner = ldFontOwner(), meta = { licence: verdict.level, reasons: verdict.reasons, copyright: (info.copyright || "").slice(0, 300), maker: (info.maker || "").slice(0, 120), file: f.name, confirmed: new Date().toISOString() };
+        const rec = { key: owner + "|" + fam, owner, family: fam, name: f.name, data, meta };
+        await ldFontRegister(rec);
+        try { const j = await ldFontApi("", { method: "POST", body: JSON.stringify({ family: fam, name: f.name, data: ldlB64(new Uint8Array(data)), meta }) }); rec.cloud = j.id; const l = LDF.list.find(x => x.family === fam); if (l) l.cloud = j.id; toast(`Font added for your company: ${fam}`); }
+        catch (e) { toast(e.j && e.j.tooBig ? `Font added on this computer only: ${fam} (over 1.4 MB)` : `Font added on this computer: ${fam}`); }
+        await ldFontTx("readwrite", st => st.put(rec)); last = fam;
       } catch (e) { toast(e.message); }
     }
     if (last && then) then(last);
   };
   i.click();
 }
-async function ldFontRemove(family) { await ldFontTx("readwrite", st => st.delete(family)); LDF.list = LDF.list.filter(f => f.family !== family); ldFontsList(); toast(`Removed ${family} from this browser`); }
-async function ldFontsFor(design) { // fonts of mine that this design uses, for packing into a .ldl
+async function ldFontRemove(family) {
+  const f = LDF.list.find(x => x.family === family); if (f && f.cloud) { try { await ldFontApi("/" + f.cloud, { method: "DELETE" }); } catch (e) { toast(e.message); } }
+  await ldFontTx("readwrite", st => st.delete(ldFontOwner() + "|" + family)); LDF.list = LDF.list.filter(x => x.family !== family); ldFontsList(); toast(`Removed ${family}`);
+}
+async function ldFontsFor(design) { // company fonts this design uses, for a company-locked .ldl only
   const used = new Set((design.items || []).map(i => i.font).filter(Boolean)), out = [];
-  for (const f of LDF.list) if (used.has(f.family)) { const r = await ldFontTx("readonly", st => st.get(f.family)); if (r) out.push({ family: r.family, name: r.name, b64: ldlB64(new Uint8Array(r.data)) }); }
+  for (const f of LDF.list) if (used.has(f.family)) { const r = await ldFontTx("readonly", st => st.get(ldFontOwner() + "|" + f.family)); if (r) out.push({ family: r.family, name: r.name, b64: ldlB64(new Uint8Array(r.data)) }); }
   return out;
 }
-async function ldFontsImport(list) { for (const f of list || []) { if (LDF.list.some(x => x.family === f.family)) continue; try { const rec = { family: f.family, name: f.name, data: ldlUn64(f.b64).buffer, added: Date.now() }; await ldFontRegister(rec); await ldFontTx("readwrite", st => st.put(rec)); } catch (e) {} } }
+async function ldFontsImport(list) { const owner = ldFontOwner(); for (const f of list || []) { if (LDF.list.some(x => x.family === f.family)) continue; try { const rec = { key: owner + "|" + f.family, owner, family: f.family, name: f.name, data: ldlUn64(f.b64).buffer }; await ldFontRegister(rec); await ldFontTx("readwrite", st => st.put(rec)); } catch (e) {} } }
 function ldFontsManage() {
-  let d = $("ldFontDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldFontDlg"; d.style.cssText = "width:min(520px,96vw);padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
-  const draw = () => { d.innerHTML = `<div class="dlg-head"><div><h2>My fonts</h2><div class="sub">Fonts you uploaded to this browser. Designs saved as .ldl carry them along.</div></div><button type="button" class="x" aria-label="Close">×</button></div>
-    <div style="padding:14px 20px">${LDF.list.length ? LDF.list.map(f => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><span style="flex:1;font:22px '${f.family.replace(/'/g, "")}', sans-serif">${ldEsc(f.family)}</span><small style="color:var(--muted)">${(f.size / 1024).toFixed(0)} KB</small><button type="button" class="btn sm" data-rm="${ldEsc(f.family)}">Remove</button></div>`).join("") : '<p class="dz-empty">No fonts uploaded yet.</p>'}
-    <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldFontAdd">Upload font…</button><span class="dz-cap" style="margin:0">.ttf, .otf, .woff or .woff2 · up to 8 MB · use fonts you are licensed to use</span></div></div>`;
+  let d = $("ldFontDlg"); if (!d) { d = document.createElement("dialog"); d.id = "ldFontDlg"; d.style.cssText = "width:min(560px,96vw);padding:0;border:1px solid var(--line);border-radius:16px;background:#fff;color:#0f172a"; document.body.append(d); }
+  const co = typeof LD !== "undefined" && LD.company;
+  const tagOf = f => { const l = f.meta && f.meta.licence; return l === "open" ? '<small style="color:#15803d">open licence</small>' : l === "stop" ? '<small style="color:#b91c1c">restricted</small>' : l === "warn" ? '<small style="color:#b45309">check licence</small>' : ""; };
+  const draw = () => { d.innerHTML = `<div class="dlg-head"><div><h2>My fonts</h2><div class="sub">${co ? `Property of ${ldEsc(co.code)} · ${ldEsc(co.name)}: only your company's users can see and use them.` : "Fonts you uploaded. Sign in to keep them in your company's space."}</div></div><button type="button" class="x" aria-label="Close">×</button></div>
+    <div style="padding:14px 20px">${LDF.list.length ? LDF.list.map(f => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:22px '${f.family.replace(/'/g, "")}', sans-serif">${ldEsc(f.family)}</span>${tagOf(f)}<small style="color:var(--muted)">${f.cloud ? "cloud" : "this computer"} · ${(f.size / 1024).toFixed(0)} KB</small><button type="button" class="btn sm" data-rm="${ldEsc(f.family)}">Remove</button></div>`).join("") : '<p class="dz-empty">No fonts uploaded yet.</p>'}
+    <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldFontAdd">Upload font…</button><span class="dz-cap" style="margin:0">.ttf, .otf, .woff or .woff2 · only fonts your company is licensed to use</span></div></div>`;
     d.querySelector(".x").onclick = () => d.close(); d.querySelector("#ldFontAdd").onclick = () => ldFontUpload(() => draw());
-    for (const b of d.querySelectorAll("[data-rm]")) b.onclick = async () => { if (!confirm(`Remove ${b.dataset.rm} from this browser? Text using it falls back to another font.`)) return; await ldFontRemove(b.dataset.rm); draw(); dzDraw(); };
+    for (const b of d.querySelectorAll("[data-rm]")) b.onclick = async () => { if (!confirm(`Remove ${b.dataset.rm}? Text using it falls back to another font.`)) return; await ldFontRemove(b.dataset.rm); draw(); dzDraw(); };
   };
   draw(); if (!d.open) d.showModal();
 }
@@ -4840,7 +4920,7 @@ async function ldCompanies(msg) {
   ldForm("#ldJoin", async v => { const t = String(v.token).trim().replace(/^.*#join=/, ""); const j = await ldApi("/api/auth/join", { token: t }); LD.me = null; ldEnter(j.company); });
 }
 function ldEnter(co) {
-  LD.company = co; document.getElementById("ldAuth").hidden = true; ldChip();
+  LD.company = co; document.getElementById("ldAuth").hidden = true; ldChip(); if (typeof ldFontsBoot === "function" && LDF.owner !== ldFontOwner()) ldFontsBoot();
   if (typeof dzCloudList === "function" && document.getElementById("dzCloudDlg").open) dzCloudList();
   const k = store.get("p2l-owner");
   if (k && !store.get("p2l-adopt-asked:" + co.id) && ["owner", "admin", "designer"].includes(co.role)) {
@@ -4854,7 +4934,7 @@ async function ldAdopt() {
     toast(j.moved ? `${j.moved} design(s) moved into ${LD.company.code}${j.skipped ? `; ${j.skipped} did not fit the plan` : ""}` : "No earlier designs to move");
   } catch (e) { toast(e.message); }
 }
-async function ldSignout() { try { await ldApi("/api/auth/logout", {}); } catch (e) {} LD.me = null; LD.company = null; ldChip(); try { document.getElementById("ldAcct").close(); } catch (e) {} ldSignin("You are signed out."); }
+async function ldSignout() { try { await ldApi("/api/auth/logout", {}); } catch (e) {} LD.me = null; LD.company = null; ldChip(); if (typeof ldFontsBoot === "function") ldFontsBoot(); try { document.getElementById("ldAcct").close(); } catch (e) {} ldSignin("You are signed out."); }
 function ldAiText(ai) { return ai ? `AI ${ai.left} left` : ""; }
 function ldChip() {
   const rt = document.querySelector("#dzRibbon .rt"); if (!rt) return;
@@ -5774,7 +5854,8 @@ async function ldlSave(name, lock, withData, exportOnly) {
   const design = JSON.parse(JSON.stringify(D)); delete design.cloud; design.fileName = name;
   const prefs = {}; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^ld-pr:/.test(k)) prefs[k] = localStorage.getItem(k); } } catch (e) {}
   const serial = {}; for (const { it, k } of (typeof dzSerialParts === "function" ? dzSerialParts() : [])) { const v = store.get(ldSerKey(it, k)); if (v) serial[it.id + ":" + k] = v; }
-  const fonts = await ldFontsFor(design).catch(() => []);
+  const fonts = lock === "company" ? await ldFontsFor(design).catch(() => []) : []; // company fonts never leave the company
+  if (lock !== "company" && LDF.list.some(f => design.items.some(i => i.font === f.family))) toast("Your company fonts are not packed into this file. Lock it to your company to include them.");
   const payload = { design, prefs, fonts, serial: exportOnly ? {} : serial, data: withData && !exportOnly && dz.db ? { name: dz.db.name, columns: dz.db.columns, rows: dz.db.rows } : null };
   const head = JSON.stringify({ format: "LabelDesk label", v: 1, app: "LabelDesk", name, created: D.created || now, modified: now,
     author: (typeof LD !== "undefined" && LD.me && LD.me.user && LD.me.user.name) || "", lock, cid: lock === "company" && co ? co.id : "", company: co ? `${co.code} · ${co.name}` : "",
