@@ -4503,7 +4503,7 @@ function dzRibbonDef() {
   const insertDD = D_("text", "Add", [M("Text", add("text")), M("Paragraph", add("para")), "-", M("Contact QR (vCard)", add("vcard")), M("GS1-128 with AI builder", add("gs1")), "-", M("Line or box", [M("Line", add("line")), M("Box", add("box")), "-", M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]), M("Image…", () => $("dzImgFile").click())]);
   const shapesDD = D_("ellipse", "Shapes", [...Object.keys(DZ_SHAPES).map(k => M(DZ_SHAPES[k], add("shape:" + k))), "-", M("Text in a shape", ["rect", "ellipse", "star", "hexagon"].map(k => M(DZ_SHAPES[k], add("tshape:" + k))))]);
   const pictureDD = D_("photo", "Picture", [M("Picture to label (AI)…", () => dzPicOpen()), M("Picture to PRN…", () => dzPicOpen(true))]);
-  const editDD = D_("paste", "Edit", [M("Paste", dzPaste, () => !!dz.clip, null, "Ctrl+V"), M("Copy", dzCopy, has, null, "Ctrl+C"), M("Duplicate", dzDuplicate, has, null, "Ctrl+D"), M("Delete", dzDelete, has, null, "Del")]);
+  const editDD = D_("paste", "Clipboard", [M("Paste", dzPaste, () => !!dz.clip, null, "Ctrl+V"), M("Copy", dzCopy, has, null, "Ctrl+C"), M("Duplicate", dzDuplicate, has, null, "Ctrl+D"), M("Delete", dzDelete, has, null, "Del")]);
   const alignDD = D_("ac", "Align", [M("Left", () => dzAlign("left"), has), M("Centre", () => dzAlign("center"), has), M("Right", () => dzAlign("right"), has), "-", M("Top", () => dzAlign("top"), has), M("Middle", () => dzAlign("middle"), has), M("Bottom", () => dzAlign("bottom"), has), "-", M("Space evenly across", () => dzDistribute("x"), () => dzSelIds().length > 2), M("Space evenly down", () => dzDistribute("y"), () => dzSelIds().length > 2)]);
   const orderDD = D_("front", "Order", [M("Bring to front", () => dzOrder("front"), has), M("Forward", () => dzOrder(1), has), M("Backward", () => dzOrder(-1), has), M("Send to back", () => dzOrder("back"), has)]);
   const rotateDD = D_("rotr", "Rotate", [M("90° right", turn(90), turnable, null, "R"), M("90° left", turn(-90), turnable, null, "Shift+R"), M("Straighten", () => { const it = sel(); if (it) turn(-dzRot(it))(); }, turnable)]);
@@ -4531,7 +4531,7 @@ function dzRibbonDef() {
   };
 }
 function dzRibbonShow(tab) {
-  dz.tab = tab || dz.tab || "Home"; if (dz.tab === "Arrange" || dz.tab === "Text" || dz.tab === "Label") dz.tab = "Home";
+  dz.tab = tab || dz.tab || "Home"; if (dz.tab === "Arrange" || dz.tab === "Text" || dz.tab === "Label" || dz.tab === "Edit") dz.tab = "Home";
   for (const b of document.querySelectorAll("#dzRibbon .rt [data-tab]")) b.setAttribute("aria-selected", b.dataset.tab === dz.tab);
   const host = $("dzRibbonBody"); host.replaceChildren();
   for (const [gname, btns] of dzRibbonDef()[dz.tab]) {
@@ -4573,7 +4573,7 @@ function dzRibbonShow(tab) {
   const file = document.createElement("div"); file.style.position = "relative";
   const fb = document.createElement("button"); fb.type = "button"; fb.className = "rfile mb"; fb.textContent = "File"; fb.setAttribute("aria-haspopup", "menu"); fb.setAttribute("aria-expanded", "false");
   fb.onclick = e => { e.stopPropagation(); fb.getAttribute("aria-expanded") === "true" ? dzMenuClose() : dzMenuOpen("File", fb); }; file.append(fb); tabs.append(file);
-  for (const t of ["Home", "Insert", "Data", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
+  for (const t of ["Home", "Insert", "Data", "View", "Tools"]) { const b = document.createElement("button"); b.type = "button"; b.dataset.tab = t; b.setAttribute("role", "tab"); b.textContent = t === "Home" ? "Edit" : t; b.onclick = () => dzRibbonShow(t); tabs.append(b); }
   document.addEventListener("click", e => { if (e.target.closest(".dz-drop") || Date.now() - (ldMenu.at || 0) < 450) return; dzMenuClose(); });
   dzRibbonShow("Home");
 })();
