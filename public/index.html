@@ -120,7 +120,7 @@ details.code > summary { padding: 14px 16px; font-weight: 600; font-size: 14px; 
 .vside { flex: 1 1 300px; min-width: 0; border-left: 1px solid var(--line); border-top: 1px solid var(--line); margin-top: -1px; display: flex; flex-direction: column; }
 .vside section { padding: 18px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid var(--line); }
 .vside section:last-child { border-bottom: 0; }
-.vside h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.vside h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 
 .langs { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
@@ -238,7 +238,7 @@ dialog.dz { width: 100vw; height: 100vh; height: 100dvh; max-width: 100vw; max-h
 .dz-objmenu { position: fixed; z-index: 90; background: #fff; border: 1px solid #d5dae2; border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.25); padding: 4px; display: grid; min-width: 190px; }
 .dz-objmenu button { font: 500 15px Inter, system-ui, sans-serif; text-align: left; padding: 11px 14px; border: 0; background: none; border-radius: 8px; color: #0f172a; } .dz-objmenu button:active { background: #f1f5f9; } .dz-objmenu button.bad { color: #b91c1c; } .dz-objmenu kbd { float: right; font: 12px Inter, system-ui, sans-serif; color: #94a3b8; margin-left: 18px; } .dz-objmenu.mouse button { padding: 7px 12px; font-size: 14px; } .dz-objmenu.mouse { min-width: 200px; } #ldPkBody tr { cursor: pointer; } #ldPkBody tr.cur td { background: var(--accent-soft, #fff7ed); } .dz-objmenu { max-height: calc(100dvh - 16px); overflow: auto; } .dz-objmenu .grp { font: 600 11px Inter, system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #64748b; padding: 8px 12px 2px; }
 .dz-paper { position: relative; background: #d9d4c7; margin: 0 auto; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
-.dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 11px var(--font-mono); }
+.dz-ruler { position: absolute; left: 0; right: 0; top: -22px; height: 18px; color: #cbd5e1; font: 12px var(--font-mono); }
 .dz-ruler span { position: absolute; top: 0; transform: translateX(-50%); }
 .dz-ruler i { position: absolute; bottom: 0; width: 1px; height: 5px; background: #64748b; }
 .dz-label { position: absolute; background: #fff; border-radius: 3px; overflow: hidden; }
@@ -338,7 +338,7 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-label .dz-bg { border-radius: inherit; }
 .dz-ribbon .rr { display: flex; gap: 2px; align-items: center; flex: 1; }
 .dz-ribbon .rl { font: 11px var(--font); color: var(--muted); text-align: center; padding: 3px 0 2px; white-space: nowrap; }
-.dz-ribbon .rb { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 52px; padding: 5px 6px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--ink); font: 11.5px var(--font); cursor: pointer; white-space: nowrap; }
+.dz-ribbon .rb { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 52px; padding: 5px 6px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--ink); font: 12px var(--font); cursor: pointer; white-space: nowrap; }
 .dz-ribbon .rb:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-line); }
 .dz-ribbon .rb[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
 .dz-ribbon .rb:disabled { color: #b3b9c4; cursor: default; }
@@ -355,7 +355,7 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-setup { display: flex; align-items: stretch; overflow-x: auto; padding: 6px 8px 2px; min-height: 84px; }
 .dz-setup[hidden] { display: none; }
 .dz-setup .sf { gap: 8px; align-items: end; padding-top: 2px; }
-.dz-setup label { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--muted); }
+.dz-setup label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
 .dz-setup input, .dz-setup select { font: 13px var(--font); padding: 5px 6px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); width: 92px; }
 .dz-setup .w2 select { width: 190px; }
 .dz-setup input[type=color] { width: 56px; height: 31px; padding: 2px; }
@@ -375,8 +375,8 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-drop button:hover:not(:disabled) { background: var(--accent-soft); }
 .dz-drop button:disabled { color: #a3a9b5; cursor: default; }
 .dz-drop button .ck { width: 14px; color: var(--accent); font-weight: 700; }
-.dz-drop button kbd { margin-left: auto; font: 11.5px var(--font-mono); color: var(--muted); }
-.dz-drop button .sub { margin-left: auto; color: var(--muted); font-size: 11px; } .dz-drop button.back { font-weight: 600; color: var(--accent); } .dz-drop button.open { background: var(--accent-soft); }
+.dz-drop button kbd { margin-left: auto; font: 12px var(--font-mono); color: var(--muted); }
+.dz-drop button .sub { margin-left: auto; color: var(--muted); font-size: 12px; } .dz-drop button.back { font-weight: 600; color: var(--accent); } .dz-drop button.open { background: var(--accent-soft); }
 .dz-drop { min-width: 200px; } @media (pointer: coarse) { .dz-drop button { padding: 11px 12px; font-size: 15px; } }
 .dz-drop hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
 .dz-drop .grp { font: 600 11px var(--font); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 6px 10px 2px; }
@@ -392,7 +392,7 @@ body.appmode .dz-ribbon .rt .rbrand { display: flex; }
 .dz-empty { color: var(--muted); font-size: 13px; }
 .dz-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
 .dz-foot .sp { flex: 1; }
-.dz-foot small { color: var(--muted); }
+.dz-foot small { color: var(--muted); font-size: 12px; }
 @media (max-width: 1000px) {
   .dz-body { grid-template-columns: 1fr; grid-template-rows: minmax(360px, 1fr) auto; overflow: auto; }
   .dz-side, .dz-props { border: 0; border-bottom: 1px solid var(--line); overflow: visible; }
@@ -411,7 +411,7 @@ body.appmode { background: #eef0f4; overflow: hidden; overscroll-behavior: none;
   .dz-ribbon .rbody, .dz-setup { min-height: 0 !important; padding: 2px 4px !important; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
   .dz-ribbon .rl { display: none; }
   .dz-ribbon .rg { padding: 0 4px !important; }
-  .dz-ribbon .rb { min-width: 46px !important; padding: 4px 3px !important; font-size: 10.5px !important; gap: 1px !important; }
+  .dz-ribbon .rb { min-width: 46px !important; padding: 4px 3px !important; font-size: 12px !important; gap: 1px !important; }
   .dz-ribbon .rb svg { width: 18px; height: 18px; }
   .dz-ribbon .rfont { font-size: 14px !important; max-width: 160px; } .dz-ribbon .rfontbtn { min-width: 140px; }
   .dz-ribbon .rsym { flex-direction: row !important; } .dz-ribbon .rsym small { display: none; }
@@ -451,19 +451,19 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 .dz-ribbon .rb:hover:not(:disabled) svg { color: var(--accent); transform: translateY(-1px); }
 .dz-ribbon .rb[aria-pressed="true"] { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent-line); }
 .dz-ribbon .rb[aria-pressed="true"] svg { color: var(--accent); }
-.dz-ribbon .rl { color: #94a3b8; font-size: 10.5px; letter-spacing: .02em; }
+.dz-ribbon .rl { color: #94a3b8; font-size: 12px; letter-spacing: .02em; }
 .dz-ask { background: #fff; border-bottom: 1px solid #eceef2; padding: 10px 14px; }
 .dz-ask input#dzAskIn { border: 1px solid #e2e8f0; border-radius: 10px; padding: 9px 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
-.dz-ask input#dzAskIn:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(194, 65, 12, .12); }
+.dz-ask input#dzAskIn:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .dz-ask .ai { background: linear-gradient(135deg, #c2410c, #ea580c); border-radius: 7px; padding: 5px 7px; }
 .dz-bar { background: #fff; border-bottom: 1px solid #eceef2; padding: 7px 14px; }
 .dz-main { background: #1b2230; }
 .dz-stage { background: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, .06) 1px, transparent 0) 0 0 / 18px 18px; }
 .dz-paper { border-radius: 4px; box-shadow: 0 18px 50px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .04); }
 .dz-props { background: #fff; border-left: 1px solid #eceef2; }
-.dz-side h3 { color: #94a3b8; font-size: 11px; letter-spacing: .08em; }
+.dz-side h3 { color: #94a3b8; font-size: 12px; letter-spacing: .08em; }
 .dz-f input, .dz-f select, .dz-f textarea { border-color: #e2e8f0; border-radius: 8px; }
-.dz-f input:focus, .dz-f select:focus, .dz-f textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(194, 65, 12, .1); }
+.dz-f input:focus, .dz-f select:focus, .dz-f textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .dz-objs button { border-radius: 8px; }
 .dz-foot { background: #fff; border-top: 1px solid #eceef2; padding: 7px 16px; font-size: 12px; }
 .dz-setup input, .dz-setup select { border-color: #e2e8f0; border-radius: 8px; }
@@ -474,6 +474,22 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 .dz-welcome button[data-w="ai"] { background: linear-gradient(135deg, #fff7ed, #fff); border-color: var(--accent-line); }
 .dz-viewhost { background: #eef0f4; }
 @media (prefers-reduced-motion: reduce) { .dz-ribbon .rb svg, .dz-welcome button { transition: none; } }
+
+/* UX audit: confirm dialog, tooltips, touch targets, reduced motion */
+.ld-cf { border: 1px solid var(--line); border-radius: 12px; padding: 20px; width: min(420px, 92vw); box-shadow: 0 8px 24px rgba(15, 23, 42, .07); color: var(--ink, #0f172a); }
+.ld-cf::backdrop { background: rgba(15, 23, 42, .45); }
+.ld-cf h2 { font-size: 17px; line-height: 1.25; margin: 0 0 8px; font-weight: 600; }
+.ld-cf p { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
+.ld-cf-row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.btn.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+.ld-tip { position: fixed; z-index: 2147483000; pointer-events: none; background: #0f172a; color: #fff; font-size: 12px; line-height: 1.4; padding: 4px 8px; border-radius: 6px; max-width: 260px; opacity: 0; transition: opacity .1s ease-out; }
+.ld-tip.on { opacity: 1; }
+.ld-tip kbd { font: inherit; background: rgba(255, 255, 255, .16); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+@media (pointer: coarse) {
+  .dz-ribbon .rt button, .dz-ribbon .rb, .dz-ribbon select, .dz-ribbon input:not([type=checkbox]), .dz-ask button, .dz-ask select, .dz-ask input, .dz-bar button, .dz-bar select, .dz-zf button, .btn.sm, .seg button { min-height: 44px; }
+  .dz-ribbon .rt button, .dz-zf button { min-width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
 </style>
 </head>
 <body>
@@ -4232,7 +4248,7 @@ function ldFontsManage() {
     <div style="padding:14px 20px">${LDF.list.length ? LDF.list.map(f => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:22px '${f.family.replace(/'/g, "")}', sans-serif">${ldEsc(f.family)}</span>${tagOf(f)}<small style="color:var(--muted)">${f.cloud ? "cloud" : "this computer"} · ${(f.size / 1024).toFixed(0)} KB</small><button type="button" class="btn sm" data-rm="${ldEsc(f.family)}">Remove</button></div>`).join("") : '<p class="dz-empty">No fonts uploaded yet.</p>'}
     <div class="ld-row" style="margin-top:12px"><button type="button" class="btn primary" id="ldFontAdd">Upload font…</button><span class="dz-cap" style="margin:0">.ttf, .otf, .woff or .woff2 · only fonts your company is licensed to use</span></div></div>`;
     d.querySelector(".x").onclick = () => d.close(); d.querySelector("#ldFontAdd").onclick = () => ldFontUpload(() => draw());
-    for (const b of d.querySelectorAll("[data-rm]")) b.onclick = async () => { if (!confirm(`Remove ${b.dataset.rm}? Text using it falls back to another font.`)) return; await ldFontRemove(b.dataset.rm); draw(); dzDraw(); };
+    for (const b of d.querySelectorAll("[data-rm]")) b.onclick = async () => { if (!await ldConfirm({ title: `Remove font “${b.dataset.rm}”?`, body: "Text using it falls back to another font.", verb: "Remove font", danger: 1 })) return; await ldFontRemove(b.dataset.rm); draw(); dzDraw(); };
   };
   draw(); if (!d.open) d.showModal();
 }
@@ -4577,7 +4593,7 @@ $("dzZoomFit").onclick = dzFit; $("dzZoomActual").onclick = dzActual;
 $("dzClose").onclick = () => { if (!APP) $("dzDlg").close(); };
 $("dzToViewer").onclick = dzToViewer;
 $("dzPrn").onclick = dzDownload;
-$("dzNew").onclick = () => { if (!confirm("Start a new blank design? The current one in this browser is replaced.")) return; const p = dz.D; dz.D = Object.assign(dzDefault(), { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw, items: [] }); delete dz.D.cloud; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Label"); };
+$("dzNew").onclick = async () => { if (dz.D.items.length && !await ldConfirm({ title: "Start a new blank design?", body: "The design on screen is replaced.", verb: "Start new design", danger: 1 })) return; const p = dz.D; dz.D = Object.assign(dzDefault(), { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw, items: [] }); delete dz.D.cloud; dz.sel = null; dzSetupForm(); dzProps(); dzRibbonShow("Label"); };
 /* cloud designs: the Worker encrypts them (AES-256-GCM); this browser holds the workspace key that owns them */
 function dzOwner() {
   let k = store.get("p2l-owner");
@@ -4621,7 +4637,7 @@ $("dzCloudList").addEventListener("click", async e => {
   const o = e.target.closest("[data-open-id]"), d = e.target.closest("[data-del-id]");
   try {
     if (o) { const j = await dzApi("/" + o.dataset.openId); dz.D = Object.assign(dzDefault(), j.design, { cloud: { id: j.id, name: j.name } }); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1; $("dzCloudDlg").close(); dzSetupForm(); dzProps(); dzSave(); $("dzStatus").textContent = `Opened “${j.name}” from the cloud.`; }
-    if (d && confirm(`Delete “${d.dataset.name}” from the cloud? This cannot be undone.`)) { await dzApi("/" + d.dataset.delId, { method: "DELETE" }); if (dz.D.cloud && dz.D.cloud.id === d.dataset.delId) { delete dz.D.cloud; dzSave(); } dzCloudList(); }
+    if (d && await ldConfirm({ title: `Delete design “${d.dataset.name}”?`, body: "It is removed from the cloud. This cannot be undone.", verb: "Delete design", danger: 1 })) { await dzApi("/" + d.dataset.delId, { method: "DELETE" }); if (dz.D.cloud && dz.D.cloud.id === d.dataset.delId) { delete dz.D.cloud; dzSave(); } dzCloudList(); }
   } catch (err) { toast(err.message); }
 });
 $("dzSave").onclick = dzCloudSave;
@@ -4874,7 +4890,7 @@ if (!APP && new URLSearchParams(location.search).has("design")) setTimeout(dzOpe
 .dz-ribbon .rt .rprint ~ .ldchip { margin-left: 8px; }
 .ldchip .code { font: 700 11px var(--font-mono, monospace); background: var(--accent); color: #fff; border-radius: 999px; padding: 3px 8px; }
 .ldchip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ldchip .ai { font-size: 11px; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 7px; white-space: nowrap; }
+.ldchip .ai { font-size: 12px; color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 7px; white-space: nowrap; }
 /* account dialog */
 #ldAcct { width: min(860px, 96vw); max-height: 92vh; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink); }
 #ldAcct::backdrop { background: rgba(16, 24, 40, .45); }
@@ -4888,7 +4904,7 @@ if (!APP && new URLSearchParams(location.search).has("design")) setTimeout(dzOpe
 .ld-tbl th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .ld-inv { display: grid; grid-template-columns: 160px 1fr auto; gap: 8px; align-items: end; }
 @media (max-width: 640px) { .ld-inv, .ld-grid2 { grid-template-columns: 1fr; } }
-.ld-pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.ld-pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
 .ld-pill.warn { background: #fffaeb; border-color: #fedf89; color: #b54708; }
 </style>
 
@@ -4952,7 +4968,7 @@ function ldSignin(msg) {
   ldShow(`<h1 id="ldH">Sign in</h1><p class="ld-sub">${ldEsc(msg || "Welcome back. You will confirm with your authenticator app next.")}</p>
   <form id="ldF" autocomplete="on"><label class="ld-f">Email<input name="email" type="email" autocomplete="username" required></label>
   <label class="ld-f">Password<input name="password" type="password" autocomplete="current-password" required></label>
-  <p class="ld-err" role="alert"></p><button class="btn primary block" type="submit">Continue</button></form>
+  <p class="ld-err" role="alert"></p><button class="btn primary block" type="submit">Sign in</button></form>
   <p class="ld-alt">New to LabelDesk? <button type="button" class="ld-link" data-go="up">Create a free account</button></p>
   <p class="ld-note">🔒 Two-factor sign-in protects every account.</p>`);
   ldLinks({ up: ldSignup });
@@ -4990,7 +5006,7 @@ function ldBackup(codes, then) {
   <div class="ld-bk">${codes.map(c => `<span>${ldEsc(c)}</span>`).join("")}</div>
   <div class="ld-row" style="margin-bottom:14px"><button type="button" class="btn sm" id="ldBkCopy">Copy</button><button type="button" class="btn sm" id="ldBkSave">Download as text</button></div>
   <form id="ldF"><label style="display:flex;gap:8px;font-size:14px;margin-bottom:12px"><input type="checkbox" required> I have saved these codes</label>
-  <p class="ld-err" role="alert"></p><button class="btn primary block" type="submit">Continue</button></form>`, "#ldBkCopy");
+  <p class="ld-err" role="alert"></p><button class="btn primary block" type="submit">Finish setup</button></form>`, "#ldBkCopy");
   const txt = "LabelDesk backup codes (each works once)\n\n" + codes.join("\n") + "\n";
   document.getElementById("ldBkCopy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(txt).then(() => toast("Codes copied"));
   document.getElementById("ldBkSave").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" })); a.download = "labeldesk-backup-codes.txt"; a.click(); };
@@ -5042,7 +5058,7 @@ function ldEnter(co) {
   const k = store.get("p2l-owner");
   if (k && !store.get("p2l-adopt-asked:" + co.id) && ["owner", "admin", "designer"].includes(co.role)) {
     store.set("p2l-adopt-asked:" + co.id, "1");
-    setTimeout(() => { if (confirm(`Move the designs saved earlier in this browser into ${co.code} · ${co.name}?`)) ldAdopt(); }, 400);
+    setTimeout(async () => { if (await ldConfirm({ title: `Move earlier designs into ${co.code} · ${co.name}?`, body: "Designs saved in this browser before you signed in go into the company library.", verb: "Move designs" })) ldAdopt(); }, 400);
   }
 }
 async function ldAdopt() {
@@ -5118,7 +5134,7 @@ async function ldAccount() {
   on("ldPw", async (v, f) => { await ldApi("/api/auth/password", v); f.reset(); toast("Password changed. Other devices are signed out."); });
   on("ldBk", async v => { const r = await ldApi("/api/auth/backup", v); dlg.close(); ldBackup(r.backup, () => { document.getElementById("ldAuth").hidden = true; }); });
   body.querySelectorAll("[data-role]").forEach(s => s.onchange = async () => { try { await ldApi("/api/company/member", { user: s.dataset.role, role: s.value }); toast("Role changed"); } catch (e) { toast(e.message); ldAccount(); } });
-  body.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => { if (!confirm(`Remove ${b.dataset.nm} from ${co.name}? They lose access to its designs.`)) return; try { await ldApi("/api/company/member", { user: b.dataset.rm, remove: true }); ldAccount(); } catch (e) { toast(e.message); } });
+  body.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => { if (!await ldConfirm({ title: `Remove ${b.dataset.nm} from ${co.name}?`, body: "They lose access to its designs.", verb: "Remove member", danger: 1 })) return; try { await ldApi("/api/company/member", { user: b.dataset.rm, remove: true }); ldAccount(); } catch (e) { toast(e.message); } });
   const log = $$("ldLog"); if (log) log.addEventListener("toggle", async () => { if (!log.open) return; try { const r = await ldApi("/api/company/audit");
     $$("ldLogOut").innerHTML = r.audit.length ? `<table class="ld-tbl"><thead><tr><th>When (UTC)</th><th>Who</th><th>What</th><th>IP</th></tr></thead><tbody>${r.audit.map(a => `<tr><td>${ldEsc(a.at)}</td><td>${ldEsc(a.email || "")}</td><td>${ldEsc(a.action)}${a.detail ? " · " + ldEsc(a.detail) : ""}</td><td>${ldEsc(a.ip)}</td></tr>`).join("")}</tbody></table>` : "No activity yet."; } catch (e) { $$("ldLogOut").textContent = e.message; } }, { once: true });
 }
@@ -5192,7 +5208,7 @@ async function ldPrintPDF() {
   const q0 = Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1));
   let labels; try { ldSerialApply(); labels = ldLabels(q0); } catch (e) { err.textContent = e.message; dz.serialStart = null; return; }
   if (!labels.length) { err.textContent = "Nothing to print."; return; }
-  if (labels.length > 1500 && !confirm(`Make a PDF of ${labels.length} labels? Large PDFs take a while.`)) return;
+  if (labels.length > 1500 && !await ldConfirm({ title: `Make a PDF of ${labels.length} labels?`, body: "Large PDFs take a while.", verb: "Make PDF" })) return;
   btn.disabled = true; btn.textContent = "Making PDF…";
   try {
     const jsPDF = await loadJsPDF(), k = 12, lw = dzLW(), rows = Math.ceil(labels.length / D.across), var_ = dzVarNeeds().any || labels.some(l => l.blank), mono = !dzPrinter().colour && !D.items.some(i => i.color || i.fillColor || i.textColor);
@@ -5303,7 +5319,7 @@ async function ldPrintRun(test, to, keepOpen) {
   const name = document.getElementById("ldPrName").value, mode = document.getElementById("ldPrMode").value;
   const qty = test ? D.across : Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1)), rows = Math.ceil(qty / D.across);
   if (!name && to !== "file") { err.textContent = "No printer found on this computer."; return; }
-  if (!test && to !== "file" && rows > 50 && !confirm(`Print ${rows * D.across} labels on ${name}?`)) return;
+  if (!test && to !== "file" && rows > 50 && !await ldConfirm({ title: `Print ${rows * D.across} labels on ${name}?`, verb: "Print labels" })) return;
   btns.forEach(b => b.disabled = true);
   try {
     if (name) store.set(ldPrKey(), name);
@@ -5316,7 +5332,7 @@ async function ldPrintRun(test, to, keepOpen) {
       if (dzVarNeeds().any || ldSkip() > 0) { // fields, serial numbers, a start position: every label gets its own data
         let labels = ldLabels(test ? 1 : qty); if (test) labels = labels.filter(l => !l.blank).slice(0, D.across);
         if (!labels.length) throw new Error("Nothing to print: the file has no rows, or every qty is 0.");
-        if (!test && labels.length > 2000 && !confirm(`Print ${labels.length} labels on ${name}?`)) return;
+        if (!test && labels.length > 2000 && !await ldConfirm({ title: `Print ${labels.length} labels on ${name}?`, verb: "Print labels" })) return;
         const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; if (!test) printed = labels; toast(`${labels.filter(l => !l.blank).length} label(s) prepared`);
       } else { const { prn } = layoutPRN(dzLayout(), lang, dpi); q = ldWithQty(prn, lang, rows); }
       if (to === "file") { const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(q.prn)); a.download = `labels_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); if (printed) ldSerialSave(printed); toast("Printer file downloaded"); return; }
@@ -5938,7 +5954,7 @@ function dzDbUse(rows, name, kind) {
     toast(`${rows.length} records, ${columns.length} fields from ${name}`); ldBeep("done");
   }
 }
-function dzDbOff() { if (!dz.D.db) return; if (!confirm(`Disconnect ${dz.D.db.name}? Objects keep their field links and show the sample values.`)) return; delete dz.D.db; dz.db = null; try { localStorage.removeItem("ld-db-rows"); } catch (e) {} dzSave(); dzRibbonShow("Data"); dzProps(); }
+async function dzDbOff() { if (!dz.D.db) return; if (!await ldConfirm({ title: `Disconnect “${dz.D.db.name}”?`, body: "Objects keep their field links and show the sample values.", verb: "Disconnect", danger: 1 })) return; delete dz.D.db; dz.db = null; try { localStorage.removeItem("ld-db-rows"); } catch (e) {} dzSave(); dzRibbonShow("Data"); dzProps(); }
 // Show record i on the label: field samples take that record's values
 function dzDbShow(i) {
   if (!dz.db || !dz.db.rows.length) return; dz.recIdx = Math.max(0, Math.min(dz.db.rows.length - 1, i)); const rec = dz.db.rows[dz.recIdx];
@@ -6089,7 +6105,7 @@ async function ldConnOpen() {
     <div id="ldConnForm"></div>` : '<p class="dz-cap">Only an owner or admin can add connections.</p>'}`;
   for (const b of body.querySelectorAll("[data-load]")) b.onclick = async () => { b.disabled = true; b.textContent = "Loading…";
     try { const j = await ldApi("/api/connect/fetch", { id: b.dataset.load }); if (!j.rows.length) throw new Error("No items came back"); dzDbUse(j.rows, j.name, j.kind); dlg.close(); } catch (e) { toast(e.message); b.disabled = false; b.textContent = "Load items"; } };
-  for (const b of body.querySelectorAll("[data-del]")) b.onclick = async () => { if (!confirm("Delete this connection? Its saved password is removed.")) return; try { await ldApi("/api/connect/delete", { id: b.dataset.del }); ldConnOpen(); } catch (e) { toast(e.message); } };
+  for (const b of body.querySelectorAll("[data-del]")) b.onclick = async () => { if (!await ldConfirm({ title: "Delete this connection?", body: "Its saved password is removed. This cannot be undone.", verb: "Delete connection", danger: 1 })) return; try { await ldApi("/api/connect/delete", { id: b.dataset.del }); ldConnOpen(); } catch (e) { toast(e.message); } };
   for (const b of body.querySelectorAll("[data-edit]")) b.onclick = () => { const c = L.connections.find(x => x.id === b.dataset.edit); $("ldConnKind").value = c.kind; form(c); };
   const form = edit => {
     const kind = $("ldConnKind").value, box = $("ldConnForm");
@@ -6198,7 +6214,7 @@ async function ldlOpen(file) {
     const r = await fetch("/api/ldl/open", { method: "POST", headers: { "content-type": "application/json", "x-ld": "1" }, body: JSON.stringify({ head: f.head, iv: ldlB64(f.iv), data: ldlB64(f.ct) }) });
     const j = await r.json().catch(() => ({})); if (!r.ok) { if (j.signin && typeof ldSignin === "function") ldSignin(j.error); throw new Error(j.error || "Could not open the file"); }
     const pl = JSON.parse(new TextDecoder().decode(await ldlGzip(ldlUn64(j.payload), true)));
-    if (dz.D && dz.D.items.length && !confirm(`Open “${f.h.name}”? The design on screen is replaced (Undo brings it back).`)) return;
+    if (dz.D && dz.D.items.length && !await ldConfirm({ title: `Open “${f.h.name}”?`, body: "The design on screen is replaced. Undo brings it back.", verb: "Open file" })) return;
     if (pl.fonts && pl.fonts.length) await ldFontsImport(pl.fonts);
     clearTimeout(dzSave.t); if (dz.D) dzHist();
     dz.D = Object.assign(dzDefault(), pl.design); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1;
@@ -6476,7 +6492,7 @@ async function lsOpen() {
   if (qr) { qr.style.width = "180px"; qr.style.height = "180px"; qr.style.imageRendering = "pixelated"; qp$("lsQr").append(qr); }
   qp$("lsGo").onclick = () => { LS.on ? lsStop() : lsStart(); lsOpen(); };
   qp$("lsCopy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(lsLink()).then(() => toast("Phone link copied"));
-  qp$("lsNew").onclick = () => { if (!confirm("Make a new code? Phones paired with the old one must scan again.")) return; store.set("ld-station", ""); lsOpen(); };
+  qp$("lsNew").onclick = async () => { if (!await ldConfirm({ title: "Make a new pairing code?", body: "Phones paired with the old code must scan again.", verb: "Make new code", danger: 1 })) return; store.set("ld-station", ""); lsOpen(); };
   qp$("lsPr").onchange = e => { store.set("ld-station-printer", e.target.value); if (LS.on) lsHello(); };
   lsDraw();
 }
@@ -6513,5 +6529,48 @@ if (APP) setTimeout(() => { if (new URLSearchParams(location.search).has("print"
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("/sw.js").catch(() => {});
 </script>
 
+
+<script>
+/* Named confirmation dialog: title names the thing, button names the action. Esc or Cancel = no. */
+function ldConfirm(o) {
+  return new Promise(res => {
+    const e = t => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const prev = document.activeElement;
+    let d = document.getElementById("ldCf");
+    if (!d) { d = document.createElement("dialog"); d.id = "ldCf"; d.className = "ld-cf"; d.setAttribute("aria-labelledby", "ldCfH"); document.body.appendChild(d); }
+    d.innerHTML = `<form method="dialog"><h2 id="ldCfH">${e(o.title)}</h2>${o.body ? `<p>${e(o.body)}</p>` : ""}<div class="ld-cf-row"><button class="btn" value="no">Cancel</button><button class="btn ${o.danger ? "danger" : "primary"}" value="yes">${e(o.verb || "Confirm")}</button></div></form>`;
+    d.returnValue = "";
+    d.onclose = () => { d.onclose = null; res(d.returnValue === "yes"); try { prev && prev.focus && prev.focus(); } catch (_) {} };
+    try { d.showModal(); } catch (_) { d.onclose = null; return res(window.confirm(o.title + (o.body ? "\n" + o.body : ""))); }
+    d.querySelector(o.danger ? 'button[value="no"]' : 'button[value="yes"]').focus();
+  });
+}
+/* Real tooltips: native title becomes aria-label + a tip shown on hover and keyboard focus. */
+(function () {
+  const tip = document.createElement("div"); tip.className = "ld-tip"; tip.setAttribute("role", "tooltip"); tip.id = "ldTip";
+  let cur = null, t = 0;
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+  function prep(el) {
+    if (el.title) { el.dataset.tip = el.title; if (!el.getAttribute("aria-label") && !el.textContent.trim()) el.setAttribute("aria-label", el.title); el.removeAttribute("title"); }
+    return el.dataset.tip;
+  }
+  function show(el) {
+    const txt = prep(el); if (!txt) return;
+    if (!tip.isConnected) document.body.appendChild(tip);
+    const m = txt.match(/^(.*?)\s*\(((?:Ctrl|⌘|Shift|Alt|Del|F\d)[^)]*)\)\s*$/);
+    tip.innerHTML = ""; tip.append(m ? m[1] : txt);
+    if (m) { const k = document.createElement("kbd"); k.textContent = mac ? m[2].replace(/Ctrl\+?/g, "⌘") : m[2]; tip.append(k); }
+    cur = el; el.setAttribute("aria-describedby", "ldTip");
+    const r = el.getBoundingClientRect(); tip.style.left = "0px"; tip.style.top = "0px"; tip.classList.add("on");
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = Math.max(6, Math.min(innerWidth - w - 6, r.left + r.width / 2 - w / 2)), y = r.bottom + 6; if (y + h > innerHeight - 6) y = r.top - h - 6;
+    tip.style.left = x + "px"; tip.style.top = y + "px";
+  }
+  function hide() { clearTimeout(t); tip.classList.remove("on"); if (cur) cur.removeAttribute("aria-describedby"); cur = null; }
+  document.addEventListener("pointerover", ev => { if (ev.pointerType === "touch") return; const el = ev.target.closest && ev.target.closest("[title],[data-tip]"); if (el === cur) return; hide(); if (el) { prep(el); t = setTimeout(() => show(el), 350); } }, true);
+  document.addEventListener("focusin", ev => { const el = ev.target.closest && ev.target.closest("[title],[data-tip]"); hide(); if (el && ev.target.matches(":focus-visible")) show(el); }, true);
+  ["pointerdown", "focusout", "scroll", "keydown"].forEach(k => document.addEventListener(k, ev => { if (k === "keydown" && ev.key !== "Escape") return; hide(); }, true));
+})();
+</script>
 </body>
 </html>
