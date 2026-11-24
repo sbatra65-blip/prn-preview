@@ -5261,7 +5261,7 @@ async function ldPrintOpen() {
       <div class="ld-f">Label<small id="ldPrInfo"></small></div>
     </div>
     <p class="ld-err" id="ldPrErr" role="alert"></p>
-    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo"${LDQ.printers.length ? "" : " disabled"}>Print</button><button type="button" class="btn" id="ldPrTest"${LDQ.printers.length ? "" : " disabled"}>Print 1 test label</button><button type="button" class="btn" id="ldPrPrev">Preview labels</button>
+    <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo"${LDQ.printers.length ? "" : " disabled"}>Print</button><button type="button" class="btn" id="ldPrTest"${LDQ.printers.length ? "" : " disabled"}>Print 1 test label</button><button type="button" class="btn" id="ldPrPrev">Preview labels</button>${dzVarNeeds().fields.some(f => f.ask) ? `<button type="button" class="btn primary" id="ldPrNext"${LDQ.printers.length ? "" : " disabled"} title="Print, then clear the form for the next label (Enter in the last box)">Print and next</button>` : ""}
       <span style="flex:1"></span>
       <select id="ldPdfMode" aria-label="PDF pages" style="font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px"><option value="row">PDF: labels as on the roll</option><option value="label">PDF: one label per page</option><option value="a4">PDF: A4 sheet of labels</option></select>
       ${ldOutlineSelect()}
@@ -5291,9 +5291,14 @@ async function ldPrintOpen() {
   document.getElementById("ldPrnGo").onclick = () => ldPrintRun(false, "file");
   if (document.getElementById("ldQzRetry")) document.getElementById("ldQzRetry").onclick = ldPrintOpen;
   document.getElementById("ldPrTest").onclick = () => ldPrintRun(true);
+  if (document.getElementById("ldPrNext")) document.getElementById("ldPrNext").onclick = async () => { const ok = await ldPrintRun(false, null, true); if (!ok) return;
+    const vals = {}; try { Object.assign(vals, ldAskValues(false)); } catch (e) {} LDV.askLast = vals;
+    for (const el of document.querySelectorAll("#ldAskForm [data-ask]")) { const f = dzFields().find(x => x.name === el.dataset.ask); if (!(f && f.ask && f.ask.keep) && !(f && f.ask && f.ask.type === "date")) el.value = ""; }
+    const f1 = [...document.querySelectorAll("#ldAskForm [data-ask]")].find(el => !el.value) || document.querySelector("#ldAskForm [data-ask]"); if (f1) f1.focus();
+    LDV.count = (LDV.count || 0) + 1; document.getElementById("ldPrErr").textContent = ""; toast(`Printed · ${LDV.count} entr${LDV.count > 1 ? "ies" : "y"} this session`); };
   document.getElementById("ldPrPrev").onclick = () => { const err = document.getElementById("ldPrErr"); err.textContent = ""; try { ldSerialApply(); const q = Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1)); ldPreviewLabels(ldLabels(q), "Preview of this print"); } catch (e) { err.textContent = e.message; } finally { dz.serialStart = null; } };
 }
-async function ldPrintRun(test, to) {
+async function ldPrintRun(test, to, keepOpen) {
   const D = dz.D, err = document.getElementById("ldPrErr"), btns = document.querySelectorAll("#ldPrintBody button"); err.textContent = "";
   const name = document.getElementById("ldPrName").value, mode = document.getElementById("ldPrMode").value;
   const qty = test ? D.across : Math.max(1, Math.min(99999, +document.getElementById("ldPrQty").value || 1)), rows = Math.ceil(qty / D.across);
@@ -5337,8 +5342,9 @@ async function ldPrintRun(test, to) {
         [{ type: "pixel", format: "image", flavor: "base64", data: px }]);
     }
     toast(test ? `Test label sent to ${name}` : `${rows * D.across} label(s) sent to ${name}`); ldBeep(test ? "small" : "done");
-    if (!test) document.getElementById("ldPrint").close();
-  } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); ldBeep("err"); }
+    if (!test && !keepOpen) document.getElementById("ldPrint").close();
+    return true;
+  } catch (e) { err.textContent = (e && e.message || String(e)).slice(0, 300); ldBeep("err"); return false; }
   finally { btns.forEach(b => b.disabled = false); dz.serialStart = null; }
 }
 document.getElementById("ldPrintX").onclick = () => document.getElementById("ldPrint").close();
@@ -5678,10 +5684,24 @@ function ldVarPanel() {
   return `<div class="ld-sec" style="margin-top:4px"><b style="font-size:14px">Data for this print</b>
     ${need.fields.length ? `<div class="ld-row" style="margin:8px 0">${dz.db ? `<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="db" checked> Database: ${ldEsc(dz.db.name)} (${dz.db.rows.length})</label>` : ""}<label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="typed"${dz.db ? "" : " checked"}> Type the values</label><label style="display:flex;gap:6px;align-items:center;font-size:14px"><input type="radio" name="ldVarSrc" value="file"> From a CSV or Excel file</label></div>
     ${dz.db ? `<div id="ldVarDb"><label class="ld-f">Records <small>blank = all ${dz.db.rows.length} · e.g. 1, 3, 5-9, 14-25(3) · (3) = 3 copies of each label</small><input id="ldRecSel" placeholder="All ${dz.db.rows.length} records" autocomplete="off" style="font:15px var(--font-mono, monospace)"></label><p class="ld-err" id="ldRecErr" style="margin:2px 0 0"></p></div>` : ""}
-    <div id="ldVarTyped" class="ld-grid2"${dz.db ? " hidden" : ""}>${need.fields.map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
+    <div id="ldVarTyped" class="ld-grid2"${dz.db || !need.fields.some(f => !f.ask) ? " hidden" : ""}>${need.fields.filter(f => !f.ask).map(f => `<label class="ld-f">${ldEsc(f.name)}<input data-fv="${ldEsc(f.name)}" value="${ldEsc(f.sample || "")}"></label>`).join("")}</div>
+    ${need.fields.some(f => f.ask) ? `<div class="ld-sec" style="border:1px solid var(--accent-line, #fed7aa);background:#fffaf5;border-radius:10px;padding:10px 12px;margin:6px 0"><b style="font-size:14px">Enter for this label</b><div class="ld-grid2" id="ldAskForm" style="margin-top:6px">${need.fields.filter(f => f.ask).map(ldAskInput).join("")}</div></div>` : ""}
     <div class="ld-row" id="ldPickRow" style="margin:6px 0"${dz.db ? "" : " hidden"}><button type="button" class="btn sm soft" id="ldPickGo">Browse and tick records…</button><span class="dz-cap" id="ldPickInfo" style="margin:0"></span></div>
     <div id="ldVarFile" hidden><input type="file" id="ldVarIn" accept=".csv,.txt,.xlsx,.xls,.ods,.json,.xml"><p class="dz-cap" id="ldVarInfo">Columns are matched to the field names: ${need.fields.map(f => ldEsc(f.name)).join(", ")}. A column named qty or quantity sets copies per row.</p></div>` : ""}
     ${need.serial ? ldSerialPanel() : ""}</div>`;
+}
+function ldAskInput(f) {
+  const a = f.ask || {}, v = (a.keep && LDV.askLast && LDV.askLast[f.name] != null) ? LDV.askLast[f.name] : a.type === "date" ? new Date().toISOString().slice(0, 10) : "", req = a.required ? " required" : "", mx = +a.max > 0 ? ` maxlength="${+a.max}"` : "";
+  const lab = `${ldEsc(a.prompt || f.name)}${a.required ? ' <b style="color:#b42318">*</b>' : ""}`, attrs = `data-ask="${ldEsc(f.name)}"${req}${mx} placeholder="${ldEsc(f.sample || "")}"`;
+  if (a.type === "list") return `<label class="ld-f">${lab}<select ${attrs}><option value="">Choose…</option>${String(a.list || "").split(",").map(x => x.trim()).filter(Boolean).map(x => `<option${x === v ? " selected" : ""}>${ldEsc(x)}</option>`).join("")}</select></label>`;
+  const type = a.type === "number" ? "number" : a.type === "date" ? "date" : "text";
+  return `<label class="ld-f">${lab}<span style="display:flex;gap:6px"><input type="${type}" ${attrs} value="${ldEsc(v)}" style="flex:1"${a.type === "scan" ? ' autocomplete="off"' : ""}>${a.type === "scan" && typeof qpScan === "function" ? `<button type="button" class="btn sm" data-askscan="${ldEsc(f.name)}" title="Scan with the camera">📷</button>` : ""}</span></label>`;
+}
+function ldAskValues(check) { // values from the entry form; check = stop on a missing required field
+  const out = {}; for (const el of document.querySelectorAll("#ldAskForm [data-ask]")) { const f = dzFields().find(x => x.name === el.dataset.ask), a = f && f.ask || {};
+    if (check && a.required && !String(el.value).trim()) { el.focus(); throw new Error(`Please fill in “${a.prompt || f.name}”.`); }
+    out[el.dataset.ask] = el.value; }
+  return out;
 }
 function ldVarWire(onChange) {
   const need = dzVarNeeds(); if (!need.fields.length) return;
@@ -5689,6 +5709,9 @@ function ldVarWire(onChange) {
   const pickRow = () => { const s = src(), ok = s === "db" ? !!dz.db : s === "file" && !!(LDV.recs && LDV.recs.length); $("ldPickRow").hidden = !ok; ldPickInfo(); };
   for (const r of document.querySelectorAll('input[name="ldVarSrc"]')) r.onchange = () => { $("ldVarTyped").hidden = src() !== "typed"; $("ldVarFile").hidden = src() !== "file"; if ($("ldVarDb")) $("ldVarDb").hidden = src() !== "db"; pickRow(); onChange(); };
   $("ldPickGo").onclick = () => ldPickRecords(onChange); LDV.onPick = () => { pickRow(); onChange(); }; pickRow();
+  const af = $("ldAskForm"); if (af) { af.oninput = af.onchange = () => onChange(); af.onclick = e => { const b = e.target.closest("[data-askscan]"); if (!b) return; const inp = af.querySelector(`[data-ask="${CSS.escape(b.dataset.askscan)}"]`); qpScan(v => { inp.value = v; onChange(); const all = [...af.querySelectorAll("[data-ask]")], nx = all[all.indexOf(inp) + 1]; if (nx) nx.focus(); }, "Scan " + (b.dataset.askscan)); };
+    af.onkeydown = e => { if (e.key !== "Enter" || e.target.tagName === "SELECT") return; e.preventDefault(); const all = [...af.querySelectorAll("[data-ask]")], i = all.indexOf(e.target); if (i < all.length - 1) all[i + 1].focus(); else { const b = $("ldPrNext"); if (b && !b.disabled) b.click(); } };
+    setTimeout(() => { const f1 = af.querySelector("[data-ask]"); if (f1 && !matchMedia("(pointer: coarse)").matches) f1.focus(); }, 50); }
   if ($("ldRecSel")) { const syncText = () => { const p = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null; $("ldRecSel").value = p ? ldFormatRecSel(p.sel, Math.max(1, +$("ldPrQty").value || 1)) : ""; };
     $("ldRecSel").oninput = () => { const rows = dz.db ? dz.db.rows : [], r = ldParseRecSel($("ldRecSel").value, rows.length, Math.max(1, +$("ldPrQty").value || 1)); $("ldRecErr").textContent = r.bad.length ? "Not understood: " + r.bad.join(", ") : "";
       LDV.pick = r.sel && r.sel.size ? { src: ldSrcKey(), sel: new Map([...r.sel].sort((a, b) => a[0] - b[0])), text: true } : null; ldPickInfo(); onChange(); };
@@ -5704,13 +5727,14 @@ function ldVarLabels(qty) {
   const need = dzVarNeeds(), src = (document.querySelector('input[name="ldVarSrc"]:checked') || {}).value, out = [];
   if (src === "file" || src === "db") {
     const all = src === "db" ? (dz.db ? dz.db.rows : []) : LDV.recs || [], pick = LDV.pick && LDV.pick.src === ldSrcKey() ? LDV.pick : null;
-    if (pick) { for (const [i, q] of pick.sel) for (let c = 0; c < q; c++) out.push({ rec: all[i], n: out.length }); if (!out.length) throw new Error("No records are ticked in Choose records."); return out; }
+    const ask = ldAskValues(true), m = r => Object.keys(ask).length ? Object.assign({}, r, ask) : r;
+    if (pick) { for (const [i, q] of pick.sel) for (let c = 0; c < q; c++) out.push({ rec: m(all[i]), n: out.length }); if (!out.length) throw new Error("No records are ticked in Choose records."); return out; }
     const recs = all;
     if (!recs || !recs.length) throw new Error(src === "db" ? "No records in that range." : "Choose a CSV or Excel file with the records first.");
-    for (const r of recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: r, n: out.length }); }
+    for (const r of recs) { const q = Math.max(0, Math.min(99999, parseInt(r.qty ?? r.Qty ?? r.QTY ?? r.quantity ?? r.Quantity ?? "", 10) || qty)); for (let i = 0; i < q; i++) out.push({ rec: m(r), n: out.length }); }
     return out;
   }
-  const rec = {}; for (const el of document.querySelectorAll("[data-fv]")) rec[el.dataset.fv] = el.value;
+  const rec = {}; for (const el of document.querySelectorAll("[data-fv]")) rec[el.dataset.fv] = el.value; Object.assign(rec, ldAskValues(true));
   for (let i = 0; i < qty; i++) out.push({ rec, n: i });
   return out;
 }
@@ -5943,11 +5967,12 @@ function dzOneSerial(it) { // parts [text?, serial, text?]
 }
 function dzSetSerial(it, o) { it.parts = [o.pre ? { t: "text", v: o.pre } : null, Object.assign({ t: "serial" }, o.s), o.post ? { t: "text", v: o.post } : null].filter(Boolean); delete it.link; dzApplySample(it); dzSave(); }
 function dzSrcPanel(it) {
-  const one = dzOneField(it), ser = dzOneSerial(it), names = dzFieldNames(), cur = !it.parts ? "" : one ? "f:" + one.name : ser ? "serial" : "parts", db = dz.D.db;
+  const one = dzOneField(it), ser = dzOneSerial(it), names = dzFieldNames(), askF = one && dzFields().find(f => f.name === one.name && f.ask), cur = !it.parts ? "" : askF ? "ask" : one ? "f:" + one.name : ser ? "serial" : "parts", db = dz.D.db;
   return `<div class="full" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px">
     <label class="full" style="margin:0">Content comes from<select id="dzSrc">
       <option value=""${cur === "" ? " selected" : ""}>Typed here (fixed)</option>
       ${names.length ? `<optgroup label="${db ? ldEsc(db.kind + ": " + db.name) : "Fields"}">${names.map(n => `<option value="f:${ldEsc(n)}"${cur === "f:" + n ? " selected" : ""}>Field: ${ldEsc(n)}</option>`).join("")}</optgroup>` : ""}
+      <option value="ask"${cur === "ask" ? " selected" : ""}>Asked when printing (data entry form)</option>
       <option value="serial"${cur === "serial" ? " selected" : ""}>Serial number (counts on each label)</option>
       <option value="new">+ New field…</option>
       <option value="parts"${cur === "parts" ? " selected" : ""}>Several parts: fields, FNC1/GS, dates, serials…</option>
@@ -5963,6 +5988,15 @@ function dzSrcPanel(it) {
       <label style="margin:0">Characters<select data-sr="base">${Object.entries(DZ_SER_BASES).map(([k, v]) => `<option value="${k}"${(ser.s.base || "dec") === k ? " selected" : ""}>${v[0]}</option>`).join("")}</select></label>
       <label style="margin:0;grid-column:span 2">Same number on<span style="display:flex;gap:6px;align-items:center"><input data-sr="every" type="number" min="1" value="${ser.s.every ?? 1}" style="width:70px"> label(s), then next</span></label></div>
       <p class="dz-cap" style="margin:0">Labels print as <b id="dzSerPrev">${ldEsc([0, 1, 2].map(n => ser.pre + dzSerialAt(ser.s, n * Math.max(1, +ser.s.every || 1), "_") + ser.post).join(", "))}, …</b> The print window lets you change the start or continue from the last number printed.</p>` : ""}
+    ${askF ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <label style="margin:0;grid-column:1/-1">Question on the form<input data-ask="prompt" value="${ldEsc(askF.ask.prompt || askF.name)}"></label>
+      <label style="margin:0">Type<select data-ask="type">${[["text", "Text"], ["number", "Number"], ["date", "Date"], ["list", "Pick from a list"], ["scan", "Scan a barcode"]].map(([v, n]) => `<option value="${v}"${(askF.ask.type || "text") === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label style="margin:0">Max length<input data-ask="max" type="number" min="0" value="${askF.ask.max || ""}" placeholder="any"></label>
+      ${askF.ask.type === "list" ? `<label style="margin:0;grid-column:1/-1">List choices (comma separated)<input data-ask="list" value="${ldEsc(askF.ask.list || "")}" placeholder="Red, Green, Blue"></label>` : ""}
+      <label style="margin:0;flex-direction:row;align-items:center;gap:6px;display:flex"><input type="checkbox" data-ask="required"${askF.ask.required ? " checked" : ""} style="width:auto"> Must be filled</label>
+      <label style="margin:0;flex-direction:row;align-items:center;gap:6px;display:flex"><input type="checkbox" data-ask="keep"${askF.ask.keep ? " checked" : ""} style="width:auto"> Keep for the next label</label>
+      <label style="margin:0;grid-column:1/-1">Example shown on screen<input data-ask="sample" value="${ldEsc(askF.sample || "")}"></label></div>
+      <p class="dz-cap" style="margin:0">The print window asks for this; <b>Print and next</b> lets you enter and print labels one by one.</p>` : ""}
     ${cur === "parts" ? `<button type="button" class="btn sm soft" id="dzParts">Edit the ${it.parts.length} parts…</button>` : ""}
     ${!db ? `<p class="dz-cap" style="margin:0">Connect a database on the <b>Data</b> tab to pick its fields here.</p>` : ""}
   </div>`;
@@ -5972,11 +6006,18 @@ function dzSrcWire(it) {
   s.onchange = () => { const v = s.value;
     if (v === "") { if (it.parts) { const shown = dzContentOf(it); delete it.parts; delete it.esc; it[dzKeyOf(it)] = shown; dzRefresh(it); dzSave(); } return dzProps(); }
     if (v === "parts") return dzVarBuilder(it);
+    if (v === "ask") { const shown = String(dzContentOf(it) || ""), base = (it.name || (it.type === "barcode" ? "Barcode" : shown.replace(/[^\w ]/g, " ").trim().split(/\s+/).slice(0, 3).join(" ")) || "Value").slice(0, 30); let n = base, k = 2; while (dzFields().some(f => f.name === n && !f.ask)) n = base + " " + k++;
+      if (!dzFields().some(f => f.name === n)) dzFields().push({ name: n, sample: shown }); const f = dzFields().find(x => x.name === n); f.sample = f.sample || shown; f.ask = f.ask || { prompt: n, type: it.type === "barcode" ? "scan" : "text" };
+      dzLinkField(it, n, "", ""); return dzProps(); }
     if (v === "serial") { const keep = String(dzContentOf(it)).match(/^(.*?)(\d+)(\D*)$/); dzSetSerial(it, { pre: keep ? keep[1] : "", post: keep ? keep[3] : "", s: { start: keep ? keep[2] : "1", step: 1, width: keep ? keep[2].length : 6, dir: "up", base: "dec", every: 1 } }); return dzProps(); }
     if (v === "new") { const n = (prompt("Field name (the database column it reads), e.g. batch, mrp, gtin") || "").trim().replace(/[^\w ]/g, "").slice(0, 40); if (!n) return dzProps(); dzLinkField(it, n, "", ""); return dzProps(); }
     const one = dzOneField(it); dzLinkField(it, v.slice(2), one ? one.pre : "", one ? one.post : ""); dzProps(); };
   const upd = () => { const one = dzOneField(it); if (one) dzLinkField(it, one.name, $("dzSrcPre").value, $("dzSrcPost").value); };
   if ($("dzSrcPre")) { $("dzSrcPre").oninput = upd; $("dzSrcPost").oninput = upd; }
+  for (const el of document.querySelectorAll("#dzProps [data-ask]")) el.addEventListener(el.tagName === "SELECT" || el.type === "checkbox" ? "change" : "input", () => {
+    const one = dzOneField(it), f = one && dzFields().find(x => x.name === one.name); if (!f || !f.ask) return; const k = el.dataset.ask;
+    if (k === "sample") { f.sample = el.value; dzApplySample(it); dzSave(); return; }
+    f.ask[k] = el.type === "checkbox" ? el.checked : el.value; dzSave(); if (k === "type") dzProps(); });
   for (const el of document.querySelectorAll("#dzProps [data-sr]")) el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => {
     const o = dzOneSerial(it); if (!o) return; const k = el.dataset.sr, v = el.value;
     if (k === "pre" || k === "post") o[k] = v; else o.s[k] = ["step", "width", "every"].includes(k) ? Math.max(k === "width" ? 0 : 1, +v || 0) : v;
@@ -6286,7 +6327,7 @@ function qpForm() {
   if (!QP.D) { card.hidden = true; qpPreview(); return; }
   const need = qpWith(() => dzVarNeeds()), sers = qpWith(() => dzSerialParts());
   QP.ser = {};
-  let h = need.fields.map(f => `<label class="qp-f"><span>${qpEsc(f.name)}</span><div class="qp-row"><input data-qf="${qpEsc(f.name)}" value="${qpEsc(QP.rec[f.name] ?? f.sample ?? "")}" autocomplete="off" enterkeyhint="next"><button type="button" class="qp-btn qp-scan" data-qs="${qpEsc(f.name)}" aria-label="Scan ${qpEsc(f.name)}">${qpCamIcon()}</button></div></label>`).join("");
+  let h = need.fields.map(f => `<label class="qp-f"><span>${qpEsc(f.ask && f.ask.prompt || f.name)}${f.ask && f.ask.required ? " *" : ""}</span><div class="qp-row"><input data-qf="${qpEsc(f.name)}" type="${f.ask && f.ask.type === "number" ? "number" : f.ask && f.ask.type === "date" ? "date" : "text"}"${f.ask && +f.ask.max > 0 ? ` maxlength="${+f.ask.max}"` : ""} value="${qpEsc(QP.rec[f.name] ?? (f.ask ? "" : f.sample) ?? "")}" placeholder="${qpEsc(f.sample || "")}" autocomplete="off" enterkeyhint="next"><button type="button" class="qp-btn qp-scan" data-qs="${qpEsc(f.name)}" aria-label="Scan ${qpEsc(f.name)}">${qpCamIcon()}</button></div></label>`).join("");
   for (const { it, p, k } of sers) { const key = it.id + ":" + k; let next = null; try { next = JSON.parse(store.get(qpWith(() => ldSerKey(it, k))) || "null"); } catch (e) {}
     const start = next && next.next != null ? next.next : dzSerParse(p.start ?? 1, p.base); QP.ser[key] = start;
     h += `<label class="qp-f"><span>Serial number starts at <small>${next ? "carries on from the last print" : "first print"}</small></span><input data-qser="${key}" data-base="${p.base || "dec"}" value="${qpEsc(dzSerFormat(start, p.base, p.width))}" autocomplete="off"></label>`; }
