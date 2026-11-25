@@ -2804,6 +2804,8 @@ const DZ_PRINTERS = [
   ["Datamax", "I-4310e", [300], ["DPL"], 106, 118, "Industrial"],
   ["Zebra", "ZD421t", [203, 300], ["ZPL", "EPL2"], 104, 118, "Desktop"],
   ["Zebra", "ZT411", [203, 300, 600], ["ZPL"], 104, 114, "Industrial"],
+  ["Zebra", "ZD510-HC (wristbands)", [300], ["ZPL"], 30, 32, "Wristband"],
+  ["Zebra", "HC100 (wristbands)", [300], ["ZPL"], 30, 32, "Wristband"],
   ["SATO", "CL4NX Plus", [203, 300, 600], ["SBPL", "ZPL", "DPL"], 104, 128, "Industrial"],
   ["Citizen", "CL-S621II", [203], ["ZPL", "DPL", "EPL2"], 104, 118, "Desktop"],
   ["Epson", "ColorWorks CW-C6000 (4 inch colour)", [300, 600], ["ZPL"], 108, 112, "Colour"],
@@ -2824,6 +2826,8 @@ const DZ_SIZES = [
   [25, 15, 2, 2, 2, 2], [38, 25, 2, 2, 2, 3], [50, 25, 2, 2, 1, 3], [50, 30, 2, 2, 1, 3], [50, 38, 2, 2, 1, 3], [50, 50, 2, 2, 1, 3],
   [25, 12, 3, 2, 2, 2], [32, 25, 3, 2, 2, 3], [33, 15, 3, 2, 1.5, 2], [33, 22, 3, 2, 1.5, 3], [33, 25, 3, 2, 1.5, 3], [35, 25, 3, 2, 1, 3],
   [25, 25, 4, 2, 1, 3], [24, 12, 4, 2, 1, 2], [20, 10, 5, 1.5, 1, 2],
+  [30, 279, 1, 0, 0, 0, "wb", "Adult wristband"], [25, 254, 1, 0, 0, 0, "wb", "Event / adult wristband (1 × 10 in)"], [25, 178, 1, 0, 0, 0, "wb", "Child wristband"],
+  [25, 152, 1, 0, 0, 0, "wb", "Infant wristband"], [19, 254, 1, 0, 0, 0, "wb", "Slim wristband (¾ in)"],
 ];
 const dzLiner = s => r1(s[2] * s[0] + (s[2] - 1) * s[3] + 2 * s[4]);
 const dzDots = (mm, dpi) => Math.round(mm / 25.4 * dpi);
@@ -2833,7 +2837,7 @@ function dzSizes() {
   const dpi = D.lang === "EPL2" ? 203 : D.dpi, groups = [[1, "One label across"], [2, "Two across"], [3, "Three across"], [4, "Four or more across"]];
   sel.replaceChildren(new Option("Custom size (type below)", ""));
   for (const [n, name] of groups) {
-    const list = ok.filter(s => n === 4 ? s[2] >= 4 : s[2] === n); if (!list.length) continue;
+    const list = ok.filter(s => !s[6] && (n === 4 ? s[2] >= 4 : s[2] === n)); if (!list.length) continue;
     const g = document.createElement("optgroup"); g.label = name;
     for (const s of list) {
       const inch = s[0] % 25.4 < 0.6 || 25.4 - (s[0] % 25.4) < 0.6 ? ` (${(s[0] / 25.4).toFixed(0)}×${(s[1] / 25.4).toFixed(s[1] % 25.4 < 0.6 || 25.4 - (s[1] % 25.4) < 0.6 ? 0 : 1)} in)` : "";
@@ -2841,6 +2845,8 @@ function dzSizes() {
     }
     sel.append(g);
   }
+  const wb = ok.filter(s => s[6] === "wb");
+  if (wb.length) { const g = document.createElement("optgroup"); g.label = "Wristbands (printed along the band)"; for (const s of wb) g.append(new Option(`${s[7]}: ${s[0]} × ${s[1]} mm · ${dzDots(s[0], dpi)} × ${dzDots(s[1], dpi)} dots`, DZ_SIZES.indexOf(s))); sel.append(g); }
   const lw = r1(dzLW()), cur = ok.find(s => s[2] === D.across && Math.abs(s[0] - lw) < 0.3 && s[1] === D.h);
   sel.value = cur ? String(DZ_SIZES.indexOf(cur)) : "";
   $("dzSizeNote").textContent = `${ok.length} stock sizes fit the ${dzPrinter().brand === "Any" ? "printer" : dzPrinter().model} (media up to ${D.mw} mm, prints ${D.pw} mm) · sizes in dots at ${dpi} dpi`;
@@ -4407,7 +4413,7 @@ function dzMenus() {
   const isText = () => !!sel() && sel().type === "text", turnable = () => !!sel() && sel().type !== "line" && sel().type !== "box";
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
-    File: [["New design", click("dzNew")], ["Label setup…", () => dzSetupOpen()],
+    File: [["New design", click("dzNew")], ["New wristband", [["Hospital: adult (30 × 279 mm)", () => dzWristband("adult")], ["Hospital: child (25 × 178 mm)", () => dzWristband("child")], ["Hospital: infant (25 × 152 mm)", () => dzWristband("infant")], "-", ["Event or entry pass (25 × 254 mm)", () => dzWristband("event")], ["Blank wristband (25 × 254 mm)", () => dzWristband("blank")]]], ["Label setup…", () => dzSetupOpen()],
       ["Open", [["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")]]],
       ["Save", [["Save to cloud", click("dzSave"), "Ctrl+S"], ["Save as .ldl file…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG]]],
       "-",
@@ -6848,6 +6854,58 @@ setInterval(() => { try { if (!dz.D || !document.getElementById("dzDlg").open ||
 <script>
 /* Suggestions for the format boxes in the data builder */
 (function () { const dl = document.createElement("datalist"); dl.id = "dzDTFmtList"; dl.innerHTML = [...DZ_DATEF, ...DZ_TIMEF, ...DZ_DTF, "YYDDD", "[Week] WW/YYYY", "dddd, D MMMM YYYY", "DD-MMM-YY [at] hh:mm A"].map(f => `<option value="${f.replace(/"/g, "&quot;")}">`).join(""); document.body.append(dl); })();
+</script>
+
+<script>
+/* Wristbands: laid out along the band, then turned so the band feeds narrow end first; the screen shows it the readable way round */
+const DZ_WB = {
+  adult: { w: 30, L: 279, x0: 32, x1: 205, name: "Adult patient wristband" },
+  child: { w: 25, L: 178, x0: 26, x1: 140, name: "Child patient wristband" },
+  infant: { w: 25, L: 152, x0: 22, x1: 118, name: "Infant wristband" },
+  event: { w: 25, L: 254, x0: 30, x1: 190, name: "Event wristband" },
+  blank: { w: 25, L: 254, x0: 30, x1: 190, name: "Wristband" },
+};
+async function dzWristband(kind) {
+  const k = DZ_WB[kind]; if (!k) return;
+  if (dz.D.items.length && !await ldConfirm({ title: `Start a new ${k.name.toLowerCase()}?`, body: "The design on screen is replaced. Ctrl+Z brings it back.", verb: "Start wristband" })) return;
+  const p = dz.D; dzHist && dzHist();
+  const pr = DZ_PRINTERS.find(x => x.id === p.printer) || DZ_PRINTERS[0], fits = (p.pw || pr.pw) >= k.w;
+  const wbp = DZ_PRINTERS.find(x => x.kind === "Wristband");
+  const base = fits ? { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw } : { printer: wbp.id, lang: "ZPL", dpi: 300, pw: wbp.pw, mw: wbp.mw };
+  const D = Object.assign(dzDefault(), base, { paper: k.L, across: 1, hgap: 0, edge: 0, h: k.w, vgap: 3, items: [], fields: [] });
+  let id = 1; const W = k.w, x0 = k.x0, span = k.x1 - k.x0, ask = (name, sample, type, req) => D.fields.push({ name, sample, ask: { prompt: name, type: type || "text", required: !!req } });
+  const T = (x, y, h, parts, o) => { const it = Object.assign({ id: id++, type: "text", x, y, h, parts }, o || {}); D.items.push(it); return it; };
+  const F = n => ({ t: "field", name: n }), X = v => ({ t: "text", v });
+  if (kind === "adult" || kind === "child" || kind === "infant") {
+    ask("Patient name", "RAHUL SHARMA", "text", true); ask("MRN", "MR0012345", "scan", true); ask("Date of birth", "12/03/1985", "date"); ask("Sex", "M", "list"); ask("Ward / bed", "W3 / 12");
+    D.fields.find(f => f.name === "Sex").ask.list = "M, F, Other";
+    const big = kind === "adult" ? 4.6 : 3.8, sm = kind === "adult" ? 3 : 2.6;
+    T(x0, 1.5, big, [F("Patient name")], { bold: true, name: "Patient name" });
+    T(x0, 1.5 + big * 1.35, sm, [X("MRN: "), F("MRN")], { name: "MRN" });
+    T(x0, 1.5 + big * 1.35 + sm * 1.45, sm, [X("DOB: "), F("Date of birth"), X("   Sex: "), F("Sex")], { name: "DOB and sex" });
+    if (kind !== "infant") T(x0, 1.5 + big * 1.35 + sm * 2.9, sm, [X("Ward: "), F("Ward / bed"), X("   Adm: "), { t: "date", fmt: "DD/MM/YYYY", off: 0, unit: "days", when: "start" }], { name: "Ward and admission" });
+    const bx = x0 + Math.min(78, span * 0.5), bw = Math.min(58, k.x1 - bx - (kind === "infant" ? 0 : 22)), bh = W - 7;
+    D.items.push({ id: id++, type: "barcode", symbology: "code128", parts: [F("MRN")], data: "MR0012345", x: r1(bx), y: 2.5, w: r1(bw), h: r1(bh), name: "MRN barcode" });
+    if (kind !== "infant") D.items.push({ id: id++, type: "barcode", symbology: "datamatrix", parts: [F("MRN")], data: "MR0012345", x: r1(bx + bw + 4), y: r1((W - 16) / 2), w: 16, h: 16, name: "MRN 2D code" });
+  } else if (kind === "event") {
+    ask("Event name", "LABELDESK FEST 2026", "text", true); ask("Guest name", "GUEST", "text");
+    T(x0, 2, 5, [F("Event name")], { bold: true, name: "Event" });
+    T(x0, 9.5, 3.2, [F("Guest name")], { name: "Guest" });
+    T(x0, 15, 3, [X("Valid: "), { t: "date", fmt: "DD MMM YYYY", off: 0, unit: "days", when: "start" }, X("   No. "), { t: "serial", start: 1, step: 1, width: 5, dir: "up", base: "dec", every: 1 }], { name: "Date and number" });
+    D.items.push({ id: id++, type: "barcode", symbology: "qrcode", parts: [X("PASS-"), { t: "serial", start: 1, step: 1, width: 5, dir: "up", base: "dec", every: 1 }], data: "PASS-00001", x: r1(k.x1 - (W - 4)), y: 2, w: W - 4, h: W - 4, name: "Entry QR" });
+  } else {
+    T(x0, W / 2 - 2.5, 5, null, { text: "NAME", bold: true });
+  }
+  for (const it of D.items) if (it.parts === null) delete it.parts;
+  dz.D = D; dz.seq = id; dz.sel = null;
+  for (const it of D.items) if (it.parts) { try { dzApplySample(it); } catch (_) {} }
+  // turn: the band's length becomes the label length
+  const H = D.h, lw = dzLW();
+  for (const it of D.items) { const b = dzBox(it), nx = H - it.y - b.h, ny = it.x; if (it.type === "line" || it.type === "box") { const w = it.w; it.w = it.h; it.h = w; } else it.rot = (dzRot(it) + 90) % 360; it.x = r1(nx); it.y = r1(ny); }
+  D.h = r1(lw); D.paper = r1(H); D.viewMode = "landscape";
+  dzSetupForm(); dzProps(); dzDraw(); try { dzFit(); } catch (_) {} dzSave();
+  toast(`${k.name}: ${k.w} × ${k.L} mm${fits ? "" : ", printer set to " + wbp.brand + " " + wbp.model}. Fields are asked when printing.`, 5000);
+}
 </script>
 </body>
 </html>
