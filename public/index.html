@@ -3794,7 +3794,7 @@ function dzProps() {
   }
   if (it.type === "text" && dzLinkSrc(it)) f.push(`<label class="full">Text (from the linked object)<input value="${(it.text || "").replace(/"/g, "&quot;")}" readonly></label>`);
   if (it.type === "text" && !dzLinkSrc(it)) {
-    if (it.parts) f.push(`<label class="full">Text (built from ${it.parts.length} part(s); sample shown)<textarea readonly style="min-height:${it.para ? 90 : 40}px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
+    if (it.parts) f.push(`<label class="full">Text (built from ${it.parts.length} part(s); sample shown)<textarea readonly id="dzPartsSample" style="min-height:${it.para ? 90 : 40}px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
     else if (it.para) f.push(`<label class="full">Text (Enter for a new line; lines wrap to the box)<textarea data-k="text" style="min-height:90px">${(it.text || "").replace(/</g, "&lt;")}</textarea></label>`);
     else f.push(`<label class="full">Text<input data-k="text" value="${(it.text || "").replace(/"/g, "&quot;")}"></label>`);
     f.push(`<label>Font size, pt<input data-pt="h" type="number" min="3" max="400" step="0.5" value="${dzToPt(it.h)}" list="dzPtList"></label>`);
@@ -5636,12 +5636,19 @@ const DZ_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "
 function dzFmtDate(p, when) {
   const d = new Date(when || dzWhen(p)), n = +p.off || 0, u = p.unit || (p.t === "time" ? "minutes" : "days");
   if (u === "months") d.setMonth(d.getMonth() + n); else if (u === "years") d.setFullYear(d.getFullYear() + n); else if (u === "hours") d.setHours(d.getHours() + n); else if (u === "minutes") d.setMinutes(d.getMinutes() + n); else d.setDate(d.getDate() + n);
-  const z = (v, l = 2) => String(v).padStart(l, "0"), h = d.getHours();
-  return String(p.fmt || (p.t === "time" ? "HH:mm" : "DD/MM/YYYY")).replace(/YYYY|YY|MMM|MM|DD|HH|hh|mm|ss|A/g, t => ({ YYYY: d.getFullYear(), YY: z(d.getFullYear() % 100), MMM: DZ_MON[d.getMonth()], MM: z(d.getMonth() + 1), DD: z(d.getDate()), HH: z(h), hh: z(h % 12 || 12), mm: z(d.getMinutes()), ss: z(d.getSeconds()), A: h < 12 ? "AM" : "PM" }[t]));
+  const z = (v, l = 2) => String(v).padStart(l, "0"), h = d.getHours(), doy = Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 864e5) + 1;
+  const iso = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), dn = iso.getUTCDay() || 7; iso.setUTCDate(iso.getUTCDate() + 4 - dn); const wk = Math.ceil(((iso - Date.UTC(iso.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+  const v = { YYYY: d.getFullYear(), YY: z(d.getFullYear() % 100), MMMM: DZ_MONTHS[d.getMonth()], MMM: DZ_MON[d.getMonth()], MM: z(d.getMonth() + 1), M: d.getMonth() + 1, DDD: z(doy, 3), DD: z(d.getDate()), D: d.getDate(), dddd: DZ_DAYS[d.getDay()], ddd: DZ_DAYS[d.getDay()].slice(0, 3).toUpperCase(), WW: z(wk), Q: Math.floor(d.getMonth() / 3) + 1, HH: z(h), H: h, hh: z(h % 12 || 12), h: h % 12 || 12, mm: z(d.getMinutes()), ss: z(d.getSeconds()), A: h < 12 ? "AM" : "PM", a: h < 12 ? "am" : "pm" };
+  return String(p.fmt || (p.t === "time" ? "HH:mm" : "DD/MM/YYYY")).replace(DZ_TOK, t => t[0] === "[" ? t.slice(1, -1) : String(v[t]));
 }
+const DZ_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], DZ_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DZ_TOK = /\[[^\]]*\]|YYYY|YY|MMMM|MMM|MM|M|DDD|DD|D|dddd|ddd|WW|Q|HH|H|hh|h|mm|ss|A|a/g;
+const DZ_TOKHELP = [["YYYY", "2026"], ["YY", "26"], ["MMMM", "November"], ["MMM", "NOV"], ["MM", "11"], ["M", "11 (no zero)"], ["DD", "05"], ["D", "5 (no zero)"], ["DDD", "day of year 001-366"], ["dddd", "Wednesday"], ["ddd", "WED"], ["WW", "week 01-53"], ["Q", "quarter 1-4"], ["HH", "19 (24 h)"], ["H", "19 (no zero)"], ["hh", "07 (12 h)"], ["h", "7"], ["mm", "minutes"], ["ss", "seconds"], ["A", "AM/PM"], ["a", "am/pm"], ["[text]", "printed as typed"]];
 // Zebra real-time clock: the printer swaps these in as it prints (^FC%)
-function dzClockFmt(p) { return String(p.fmt || (p.t === "time" ? "HH:mm" : "DD/MM/YYYY")).replace(/%/g, "%%").replace(/YYYY|YY|MMM|MM|DD|HH|hh|mm|ss|A/g, t => ({ YYYY: "%Y", YY: "%y", MMM: "%b", MM: "%m", DD: "%d", HH: "%H", hh: "%I", mm: "%M", ss: "%S", A: "%p" }[t])); }
-const dzClockOK = it => dz.clk && it.type === "text" && dzNative(it) && (it.parts || []).some(q => dzIsDT(q) && q.when === "printer") && (it.parts || []).every(q => !(dzIsDT(q) && q.when === "printer") || !+q.off);
+const DZ_ZCLK = { YYYY: "%Y", YY: "%y", MMM: "%b", MM: "%m", DD: "%d", HH: "%H", hh: "%I", mm: "%M", ss: "%S", A: "%p" };
+const dzClockFits = p => (String(p.fmt || "").match(DZ_TOK) || []).every(t => t[0] === "[" || DZ_ZCLK[t]);
+function dzClockFmt(p) { return String(p.fmt || (p.t === "time" ? "HH:mm" : "DD/MM/YYYY")).replace(/%/g, "%%").replace(DZ_TOK, t => t[0] === "[" ? t.slice(1, -1) : DZ_ZCLK[t]); }
+const dzClockOK = it => dz.clk && it.type === "text" && dzNative(it) && (it.parts || []).some(q => dzIsDT(q) && q.when === "printer") && (it.parts || []).every(q => !(dzIsDT(q) && q.when === "printer") || (!+q.off && dzClockFits(q)));
 const dzFields = () => (dz.D.fields = dz.D.fields || []);
 const dzHasSpecial = it => (it.parts || []).some(p => p.t === "special");
 // One label's content: rec = { field: value }, n = label number in the run (0, 1, 2 …)
@@ -5701,8 +5708,8 @@ function dzVarBuilder(it) {
     if (p.t === "text") ins = `<input data-i="${i}" data-p="v" value="${ldEsc(p.v || "")}" placeholder="Fixed text, e.g. Batch: " style="flex:1">`;
     if (p.t === "field") { const f = fields.find(x => x.name === p.name) || {}; ins = `<select data-i="${i}" data-p="name" style="flex:1">${fOpts(p.name)}</select><input data-f="${ldEsc(p.name || "")}" value="${ldEsc(f.sample || "")}" placeholder="Sample value" title="Shown on screen and used when nothing is typed" style="flex:1">`; }
     if (p.t === "special") ins = `<select data-i="${i}" data-p="c" style="flex:1">${Object.entries(DZ_SPECIAL).map(([k, [n]]) => `<option value="${k}"${k === p.c ? " selected" : ""}>${n}</option>`).join("")}</select>`;
-    if (p.t === "date") ins = `<select data-i="${i}" data-p="fmt">${DZ_DATEF.map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">today +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="days"${p.unit !== "months" ? " selected" : ""}>days</option><option value="months"${p.unit === "months" ? " selected" : ""}>months</option><option value="years"${p.unit === "years" ? " selected" : ""}>years</option></select><select data-i="${i}" data-p="when" title="When the date is taken">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${(p.when || "start") === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
-    if (p.t === "time") ins = `<select data-i="${i}" data-p="fmt">${(DZ_TIMEF.includes(p.fmt) ? DZ_TIMEF : [p.fmt, ...DZ_TIMEF]).map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">now +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="minutes"${p.unit !== "hours" ? " selected" : ""}>minutes</option><option value="hours"${p.unit === "hours" ? " selected" : ""}>hours</option></select><select data-i="${i}" data-p="when" title="When the time is taken">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${(p.when || "start") === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
+    if (p.t === "date") ins = `<input data-i="${i}" data-p="fmt" list="dzDTFmtList" value="${ldEsc(p.fmt || "DD/MM/YYYY")}" title="Pick or type a format: YYYY YY MMMM MMM MM M DD D DDD dddd ddd WW Q HH H hh h mm ss A a [text]" spellcheck="false" style="width:150px;font-family:var(--font-mono)"><span style="align-self:center">today +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="days"${p.unit !== "months" ? " selected" : ""}>days</option><option value="months"${p.unit === "months" ? " selected" : ""}>months</option><option value="years"${p.unit === "years" ? " selected" : ""}>years</option></select><select data-i="${i}" data-p="when" title="When the date is taken">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${(p.when || "start") === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
+    if (p.t === "time") ins = `<input data-i="${i}" data-p="fmt" list="dzDTFmtList" value="${ldEsc(p.fmt || "HH:mm")}" title="Pick or type a format: HH H hh h mm ss A a [text]" spellcheck="false" style="width:130px;font-family:var(--font-mono)"><span style="align-self:center">now +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="minutes"${p.unit !== "hours" ? " selected" : ""}>minutes</option><option value="hours"${p.unit === "hours" ? " selected" : ""}>hours</option></select><select data-i="${i}" data-p="when" title="When the time is taken">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${(p.when || "start") === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
     if (p.t === "serial") ins = `<span style="align-self:center">start</span><input data-i="${i}" data-p="start" value="${ldEsc(p.start ?? 1)}" style="width:100px"><select data-i="${i}" data-p="dir"><option value="up"${p.dir !== "down" ? " selected" : ""}>increase</option><option value="down"${p.dir === "down" ? " selected" : ""}>decrease</option></select><span style="align-self:center">by</span><input data-i="${i}" data-p="step" type="number" min="1" value="${p.step ?? 1}" style="width:60px"><span style="align-self:center">digits</span><input data-i="${i}" data-p="width" type="number" min="0" max="20" value="${p.width ?? 6}" style="width:60px"><select data-i="${i}" data-p="base">${Object.entries(DZ_SER_BASES).map(([k, v]) => `<option value="${k}"${(p.base || "dec") === k ? " selected" : ""}>${v[0]}</option>`).join("")}</select><span style="align-self:center">same no. on</span><input data-i="${i}" data-p="every" type="number" min="1" value="${p.every ?? 1}" style="width:56px"><span style="align-self:center">label(s)</span>`;
     const lab = { text: "Text", field: "Field", special: "Special", date: "Date", time: "Time", serial: "Serial" }[p.t];
     return `<div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:6px 8px"><b style="align-self:center;min-width:56px;font-size:12px;color:var(--muted)">${i + 1}. ${lab}</b>${ins}
@@ -6107,11 +6114,14 @@ function dzDTMenu(at) {
     ["Expiry date (EXP, today + 6 months)", ins("date", "DD/MM/YYYY", { pre: "EXP: ", off: 6, unit: "months" })],
     ["Best before (today + 30 days)", ins("date", "DD/MM/YYYY", { pre: "Best before: ", off: 30, unit: "days" })],
     ["Packed on (date and time)", ins("date", "DD/MM/YYYY HH:mm", { pre: "Packed: " })],
+    "-",
+    ["Custom format…", () => { dz.dtCustom = "next"; dz.dtCustomFocus = true; ins("date", "DD-MMM-YYYY")(); }],
   ];
 }
 function dzAddDT(t, fmt, o) {
   o = o || {}; const n0 = dz.D.items.length; dzAdd("text"); const it = dz.D.items[dz.D.items.length - 1]; if (!it || dz.D.items.length <= n0) return;
-  dzSetDT(it, { pre: o.pre || "", post: "", p: { t, fmt, off: o.off || 0, unit: o.unit || (t === "time" ? "minutes" : "days"), when: "start" } });
+  const part = { t, fmt, off: o.off || 0, unit: o.unit || (t === "time" ? "minutes" : "days"), when: "start" }; if (dz.dtCustom === "next") dz.dtCustom = part;
+  dzSetDT(it, { pre: o.pre || "", post: "", p: part });
   it.name = o.pre ? o.pre.replace(/[:\s]+$/, "") : t === "time" ? "Time" : /H/.test(fmt) ? "Date and time" : "Date";
   if (o.at) { const b = dzBox(it); it.x = r1(Math.max(0, Math.min(dzLW() - Math.min(b.w, dzLW()), o.at.x))); it.y = r1(Math.max(0, Math.min(dz.D.h - Math.min(b.h, dz.D.h), o.at.y))); }
   dzRefresh(it); dzDraw(); dzProps(); dzSave();
@@ -6125,32 +6135,41 @@ function dzSetDT(it, o) { it.parts = [o.pre ? { t: "text", v: o.pre } : null, o.
 const dzLocalISO = t => { const d = new Date(t - new Date(t).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 19); };
 function dzDTPanel(dt) {
   const p = dt.p, kind = p.t === "time" ? "time" : /H|h/.test(p.fmt || "") ? "dt" : "date", list = kind === "time" ? DZ_TIMEF : kind === "dt" ? DZ_DTF : DZ_DATEF;
-  const fmts = list.includes(p.fmt) ? list : [p.fmt, ...list], units = kind === "time" ? [["minutes", "minutes"], ["hours", "hours"]] : [["days", "days"], ["months", "months"], ["years", "years"]];
+  const custom = dz.dtCustom === p || !list.includes(p.fmt), units = kind === "time" ? [["minutes", "minutes"], ["hours", "hours"]] : [["days", "days"], ["months", "months"], ["years", "years"]];
   const when = p.when || "start", lang = dz.D.lang, clockNote = when !== "printer" ? "" : lang !== "ZPL" ? `The printer's own clock is used on Zebra (ZPL) printers. With ${ldEsc(lang)}, LabelDesk fills in the time as each label is sent.` : +p.off ? "The printer's clock cannot add days or months: LabelDesk fills in the time as each label is sent." : "Needs a Zebra printer with the clock option, set to the right time. Use a printer font (no custom font, no curve).";
+  const clockMiss = when === "printer" && lang === "ZPL" && !dzClockFits(p) ? " This format has codes the printer clock does not know, so LabelDesk fills it in." : "";
   const note = { start: "One moment, taken when you press Print, on every label of that job.", label: "Each label gets the time it is made, so a long job shows the time moving on.", printer: clockNote, fixed: "Stays the same on every label and every reprint until you change it." }[when];
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
       <label style="margin:0">Type<select data-dt="kind"><option value="date"${kind === "date" ? " selected" : ""}>Date</option><option value="time"${kind === "time" ? " selected" : ""}>Time</option><option value="dt"${kind === "dt" ? " selected" : ""}>Date and time</option></select></label>
-      <label style="margin:0">Format<select data-dt="fmt">${fmts.map(f => `<option value="${ldEsc(f)}"${f === p.fmt ? " selected" : ""}>${ldEsc(dzFmtDate(Object.assign({}, p, { fmt: f, off: 0 }), Date.now()))}  (${ldEsc(f)})</option>`).join("")}<option value="__custom">Custom…</option></select></label>
+      <label style="margin:0">Format<select data-dt="fmt">${list.map(f => `<option value="${ldEsc(f)}"${f === p.fmt && !custom ? " selected" : ""}>${ldEsc(dzFmtDate(Object.assign({}, p, { fmt: f, off: 0 }), Date.now()))}  (${ldEsc(f)})</option>`).join("")}<option value="__custom"${custom ? " selected" : ""}>Custom format…</option></select></label>
+      ${custom ? `<label style="margin:0;grid-column:1/-1">Custom format<input data-dt="custom" id="dzDTCustom" value="${ldEsc(p.fmt)}" spellcheck="false" autocomplete="off" style="font-family:var(--font-mono)"></label>
+      <div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:4px" aria-label="Insert a code">${DZ_TOKHELP.map(([t, m]) => `<button type="button" class="btn sm dz-tok" data-tok="${ldEsc(t)}" title="${ldEsc(m)}">${ldEsc(t)}</button>`).join("")}</div>
+      <p class="dz-cap" style="margin:0;grid-column:1/-1">Click a code to add it. Put words in [square brackets] so their letters print as typed, e.g. <code>[Batch] YYDDD</code> or <code>DD-MMM-YY [at] hh:mm A</code>.</p>` : ""}
       <label style="margin:0">Add or subtract<input data-dt="off" type="number" value="${+p.off || 0}" title="Use a minus sign to go back, e.g. -1"></label>
       <label style="margin:0">Unit<select data-dt="unit">${units.map(([v, n]) => `<option value="${v}"${(p.unit || units[0][0]) === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       <label style="margin:0;grid-column:1/-1">Takes the date and time<select data-dt="when">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${when === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>
       ${when === "fixed" ? `<label style="margin:0;grid-column:1/-1">Fixed at<span style="display:flex;gap:6px"><input data-dt="at" type="datetime-local" step="1" value="${ldEsc(dzLocalISO(dzWhen(p)))}" style="flex:1"><button type="button" class="btn sm" id="dzDTNow">Take now</button></span></label>` : ""}
       <label style="margin:0">Text before<input data-dt="pre" value="${ldEsc(dt.pre)}" placeholder="e.g. EXP: "></label>
       <label style="margin:0">Text after<input data-dt="post" value="${ldEsc(dt.post)}"></label></div>
-      <p class="dz-cap" style="margin:0">Prints as <b id="dzDTPrev">${ldEsc(dt.pre + dzFmtDate(p) + dt.post)}</b>. ${ldEsc(note)}</p>`;
+      <p class="dz-cap" style="margin:0">Prints as <b id="dzDTPrev">${ldEsc(dt.pre + dzFmtDate(p) + dt.post)}</b>. ${ldEsc(note + clockMiss)}</p>`;
 }
 function dzDTWire(it) {
   for (const el of document.querySelectorAll("#dzProps [data-dt]")) el.addEventListener(el.tagName === "SELECT" || el.type === "datetime-local" ? "change" : "input", () => {
     const o = dzOneDT(it); if (!o) return; const k = el.dataset.dt, p = o.p; let redraw = el.tagName === "SELECT";
     if (k === "pre" || k === "post") o[k] = el.value;
-    else if (k === "kind") { const v = el.value; p.t = v === "time" ? "time" : "date"; p.fmt = v === "time" ? DZ_TIMEF[0] : v === "dt" ? DZ_DTF[0] : DZ_DATEF[0]; p.unit = v === "time" ? "minutes" : "days"; }
-    else if (k === "fmt") { if (el.value === "__custom") { const f = (prompt("Format: YYYY YY MMM MM DD for the date, HH (24 h) hh (12 h) mm ss A (AM/PM) for the time. Anything else prints as typed.", p.fmt) || "").trim(); if (f) p.fmt = f; } else p.fmt = el.value; }
+    else if (k === "kind") { const v = el.value; p.t = v === "time" ? "time" : "date"; p.fmt = v === "time" ? DZ_TIMEF[0] : v === "dt" ? DZ_DTF[0] : DZ_DATEF[0]; p.unit = v === "time" ? "minutes" : "days"; dz.dtCustom = null; }
+    else if (k === "fmt") { if (el.value === "__custom") { dz.dtCustom = p; dzProps(); const c = $("dzDTCustom"); if (c) { c.focus(); c.select(); } return; } dz.dtCustom = null; p.fmt = el.value; }
+    else if (k === "custom") { if (!el.value.trim()) return; p.fmt = el.value; redraw = false; }
     else if (k === "off") p.off = Math.round(+el.value || 0);
     else if (k === "unit") p.unit = el.value;
     else if (k === "when") { p.when = el.value; if (p.when === "fixed" && !p.at) p.at = dzLocalISO(Date.now()); }
     else if (k === "at") { if (el.value) p.at = el.value; }
-    dzSetDT(it, o); const pv = $("dzDTPrev"); if (pv) pv.textContent = o.pre + dzFmtDate(p) + o.post; if (redraw) dzProps();
+    dzSetDT(it, o); const pv = $("dzDTPrev"); if (pv) pv.textContent = o.pre + dzFmtDate(p) + o.post; const sm = $("dzPartsSample"); if (sm) sm.value = dzContentOf(it); if (redraw) dzProps();
   });
+  for (const b of document.querySelectorAll("#dzProps [data-tok]")) b.onclick = () => {
+    const c = $("dzDTCustom"); if (!c) return; const t = b.dataset.tok === "[text]" ? "[]" : b.dataset.tok, a = c.selectionStart ?? c.value.length, e = c.selectionEnd ?? a;
+    c.value = c.value.slice(0, a) + t + c.value.slice(e); const pos = a + (t === "[]" ? 1 : t.length); c.focus(); c.setSelectionRange(pos, pos); c.dispatchEvent(new Event("input")); };
+  const cu = $("dzDTCustom"); if (cu && dz.dtCustomFocus) { dz.dtCustomFocus = false; cu.focus(); cu.select(); }
   const now = $("dzDTNow"); if (now) now.onclick = () => { const o = dzOneDT(it); if (!o) return; o.p.at = dzLocalISO(Date.now()); dzSetDT(it, o); dzProps(); };
 }
 function dzOneSerial(it) { // parts [text?, serial, text?]
@@ -6824,6 +6843,11 @@ addEventListener("online", () => toast("Back online.", 2000));
 <script>
 /* Date and time objects stay current on screen */
 setInterval(() => { try { if (!dz.D || !document.getElementById("dzDlg").open || dz.drag) return; for (const it of dz.D.items) if ((it.parts || []).some(p => dzIsDT(p) && p.when !== "fixed")) { const k = dzKeyOf(it), before = it[k]; it[k] = dzCompose(it, null, 0); if (it[k] !== before) dzRefresh(it); } } catch (_) {} }, 20000);
+</script>
+
+<script>
+/* Suggestions for the format boxes in the data builder */
+(function () { const dl = document.createElement("datalist"); dl.id = "dzDTFmtList"; dl.innerHTML = [...DZ_DATEF, ...DZ_TIMEF, ...DZ_DTF, "YYDDD", "[Week] WW/YYYY", "dddd, D MMMM YYYY", "DD-MMM-YY [at] hh:mm A"].map(f => `<option value="${f.replace(/"/g, "&quot;")}">`).join(""); document.body.append(dl); })();
 </script>
 </body>
 </html>
