@@ -2022,7 +2022,7 @@ function layoutPRN(L, lang, dpi) {
   const D = mm => dotsOf(mm, dpi), W = D(L.w), H = D(L.h), out = [], warn = [];
   const items = L.items.filter(e => e.w > 0 && e.h > 0 || e.type === "line");
   if (lang === "TSPL") out.push(`SIZE ${L.w} mm, ${L.h} mm`, `GAP ${L.gap ?? 2} mm, 0 mm`, "DIRECTION 1", "CODEPAGE UTF-8", "CLS");
-  if (lang === "ZPL") out.push("^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0");
+  if (lang === "ZPL") out.push("^XA", "^CI28", `^PW${W}`, `^LL${H}`, "^LH0,0"); if (lang === "ZPL" && L.items.some(e => e.clk)) out.push("^SLT");
   if (lang === "EPL2") out.push("N", `q${W}`, `Q${H},24`);
   const pgl = { alpha: [], horz: [], vert: [], box: [], bars: [] };
   for (const e of items) {
@@ -2035,9 +2035,9 @@ function layoutPRN(L, lang, dpi) {
     if (e.type === "text") {
       const s = String(e.text || "").replace(/[\r\n]+/g, " ").trim(); if (!s) continue;
       const em = Math.max(8, Math.round(h * 1.2)); // box_2d hugs the glyphs; the em square is taller
-      const sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(s, em)))) : 1;
+      const sx = w ? Math.min(1, Math.max(0.55, w / Math.max(1, measureEm(e.mtext || s, em)))) : 1;
       if (lang === "TSPL") { const pt = Math.max(4, Math.round(em / dpi * 72)), [ax, ay] = mp(0, 0); out.push(`TEXT ${ax},${ay},"0",${rot},${Math.max(4, Math.round(pt * sx))},${pt},"${tsplQ(s)}"`); }
-      else if (lang === "ZPL") { const [fx, fy] = zo(0, 0, w, h); out.push(`^FO${fx},${fy}^A0${ZR},${em},${Math.round(em * sx)}^FD${s.replace(/[\^~]/g, " ")}^FS`); }
+      else if (lang === "ZPL") { const [fx, fy] = zo(0, 0, w, h); out.push(`^FO${fx},${fy}^A0${ZR},${em},${Math.round(em * sx)}${e.clk ? "^FC%" : ""}^FD${s.replace(/[\^~]/g, " ")}^FS`); }
       else if (lang === "EPL2") {
         // EPL2 fonts are fixed-pitch: pick font + multipliers closest in height that still fit the width
         let best = [2, 1, 1], score = 1e9;
@@ -2294,7 +2294,7 @@ async function dzPicPrn() {
   if (dzPrinter().driver) return toast("This colour printer has no printer language: use File → Export colour image.");
   try { // pictures must finish loading before they can be turned into printer graphics
     await Promise.all(dz.D.items.filter(i => i.type === "image").map(i => { const im = dzImg(i); return im && !im.complete ? new Promise(ok => { im.onload = im.onerror = ok; setTimeout(ok, 4000); }) : null; }));
-    const lang = o.lang, dpi = lang === "EPL2" ? 203 : o.dpi, { prn } = layoutPRN(dzLayout(), lang, dpi);
+    const lang = o.lang, dpi = lang === "EPL2" ? 203 : o.dpi, { prn } = layoutPRN(dzLayoutFor(lang), lang, dpi);
     const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `${(p2l.name || "picture").replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_")}_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     toast(`PRN downloaded: ${DZ_LANG_NAME[lang] || lang} ${dpi} dpi`); ldBeep("done");
   } catch (e) { toast("Could not make the PRN: " + e.message); ldBeep("err"); }
@@ -3236,6 +3236,7 @@ function dzInsertMenu(x, y) {
   const barcodes = DZ_SYM_GROUPS.map(g => [g[0], (g[1] || []).filter(k => DZ_SYM[k]).map(k => [DZ_SYM[k].name, put("barcode", k)])]).filter(g => g[1].length);
   ldMenu([
     ["Text", [["Text", put("text")], ["Paragraph", put("para")]]],
+    ["Date & time", dzDTMenu(at)],
     ["Barcode", [...barcodes, "-", ["Contact QR (vCard)", put("vcard")], ["GS1-128 with AI builder", put("gs1")]]],
     ["Line or box", [["Line", put("line")], ["Box", put("box")], "-", ["Guide line (not printed)", put("guide")], ["Vertical guide (not printed)", put("vguide")]]],
     ["Shape", [...Object.keys(DZ_SHAPES).map(k => [DZ_SHAPES[k], put("shape:" + k)]), "-", ["Text in a shape", ["rect", "ellipse", "star", "hexagon"].map(k => [DZ_SHAPES[k], put("tshape:" + k)])]]],
@@ -4011,6 +4012,7 @@ function dzDuplicate() {
   const ids = dzSelIds(); if (ids.length > 1) { const made = []; for (const id of ids) { const it = dz.D.items.find(i => i.id === id); if (!it) continue; const c = Object.assign(JSON.parse(JSON.stringify(it)), { id: dz.seq++, x: r1(it.x + 2), y: r1(it.y + 2) }); dz.D.items.push(c); made.push(c.id); } dzDraw(); dzSelectMany(made); dzSave(); return; } const it = dz.D.items.find(i => i.id === dz.sel); if (!it) return; const c = Object.assign({}, it, { id: dz.seq++, x: it.x + 2, y: it.y + 2 }); dz.D.items.push(c); dz.sel = c.id; dzDraw(); dzProps(); dzSave(); }
 
 /* output */
+function dzLayoutFor(lang) { dz.clk = lang === "ZPL"; try { return dzLayout(); } finally { dz.clk = false; } }
 function dzLayout() {
   const D = dz.D, lw = dzLW(), items = [];
   for (let c = 0; c < D.across; c++) {
@@ -4141,7 +4143,7 @@ function dzColourPNG(ret, opt) {
 function dzDownload() {
   if (dzPrinter().driver) { toast("This colour printer has no printer language: use File → Export colour image and print it through its driver."); return; }
   if (!dzCheck()) return;
-  const D = dz.D, d = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayout(), D.lang, d);
+  const D = dz.D, d = D.lang === "EPL2" ? 203 : D.dpi, { prn } = layoutPRN(dzLayoutFor(D.lang), D.lang, d);
   const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(prn)); a.download = `design_${D.across}up_${D.lang}_${d}dpi.prn`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
@@ -4473,7 +4475,7 @@ function dzMenuOpen(name, btn) { ldMenu(dzMenus()[name], btn); }
 const DZ_IC = { // 24x24 stroke icons, drawn for this app
   ruler: "M3 8h18v8H3zM7 8v3M11 8v4M15 8v3M19 8v4",
   photo: "M3 8h4l2-3h6l2 3h4v11H3zM12 10.5a3.5 3.5 0 1 0 .01 0M18.5 3l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z",
-  text: "M5 6h14M12 6v13M9 19h6", barcode: "M4 5v14M7 5v14M10 5v14M12 5v14M15 5v14M17 5v14M20 5v14", qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2",
+  text: "M5 6h14M12 6v13M9 19h6", clock: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4M15.5 13v2.5l1.5 1", barcode: "M4 5v14M7 5v14M10 5v14M12 5v14M15 5v14M17 5v14M20 5v14", qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2",
   vcard: "M3 5h18v14H3zM9 10a2 2 0 1 0 .01 0M6 16c.5-2 5.5-2 6 0M14 10h4M14 13h4", dm: "M4 4v16h16M8 4h2M12 4h2M16 4h2M20 8v2M20 12v2M20 16v2M8 9h3v3H8zM13 13h3v3h-3z",
   image: "M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15 9.5a1.5 1.5 0 1 0 .01 0", line: "M4 18L20 6", box: "M4 6h16v12H4z",
   rect: "M3 7h18v10H3z", round: "M7 6h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z", ellipse: "M12 5c5 0 9 3 9 7s-4 7-9 7-9-3-9-7 4-7 9-7z",
@@ -4516,6 +4518,7 @@ function dzRibbonDef() {
   const filesDD = D_("openf", "Printer files", [M("Open .prn…", () => $("fileIn").click()), M("Paste printer code…", () => { dzShowViewer(); $("pasteBtn").click(); }), M("Picture to PRN…", () => dzPicOpen(true))]);
   const checkDD = D_("check", "Check", [M("LMPC check", () => lmpcCheck(false, $("dzDlg").classList.contains("viewing") ? "viewer" : "design")), M("GS1 guide", () => window.open("gs1.html", "_blank"))]);
   const textDD = D_("text", "Text", [M("Text", add("text")), M("Paragraph (wraps in a box)", add("para"))]);
+  const dtDD = D_("clock", "Date & time", () => dzDTMenu().map(x => x === "-" ? "-" : Array.isArray(x[1]) ? M(x[0], x[1].map(([a, b]) => M(a, b))) : M(x[0], x[1])), "Today's date, time, expiry and best-before dates; printed live or fixed");
   const linesDD = D_("line", "Line or box", [M("Line", add("line")), M("Box", add("box")), "-", M("Guide line (not printed)", add("guide")), M("Vertical guide (not printed)", add("vguide"))]);
   const boldB = B("bold", "Bold", () => dzToggle("bold"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.bold); }, "Bold (Ctrl+B)");
   const italB = B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)");
@@ -4524,7 +4527,7 @@ function dzRibbonDef() {
     Home: [["", [editDD, B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
       ["", [{ font: true }, { size: true }, boldB, italB, curveDD]],
       ["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
-    Insert: [["", [textDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD, B("grid", "Background", dzBgDialog, null, () => !!(dz.D && dz.D.bg && dz.D.bg.type && dz.D.bg.type !== "none"), "Colour, gradient or picture behind the label")]]],
+    Insert: [["", [textDD, dtDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD, B("grid", "Background", dzBgDialog, null, () => !!(dz.D && dz.D.bg && dz.D.bg.type && dz.D.bg.type !== "none"), "Colour, gradient or picture behind the label")]]],
     Data: [["", [connectDD, { dbinfo: true }, B("lib", "Records", () => ldPickRecords(), () => !!(dz.db && dz.db.rows && dz.db.rows.length), null, "Browse the records, pick which to print: 1, 3, 5-9, 14-25(3) where (3) = copies of each"), { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
     View: [["", [showDD, zoomDD]]],
     Tools: [["", [B("back", "Designer", () => dzOpen(), () => $("dzDlg").classList.contains("viewing")), B("preview", "Preview", click("dzToViewer"), null, () => $("dzDlg").classList.contains("viewing")), filesDD, B("lib", "Templates", () => openLibrary()), checkDD, B("vcard", "Talk to us", () => openLead("talk"))]]],
@@ -4558,7 +4561,7 @@ function dzRibbonShow(tab) {
       if (b.snap) { const s = document.createElement("select"); s.className = "rfont"; s.setAttribute("aria-label", "Snap"); s.innerHTML = [["0", "No snap"], ["0.5", "Snap 0.5 mm"], ["1", "Snap 1 mm"]].map(([v, n]) => `<option value="${v}"${$("dzSnap").value === v ? " selected" : ""}>${n}</option>`).join(""); s.onchange = () => { $("dzSnap").value = s.value; }; row.append(s); continue; }
       if (b.dd) { const el = document.createElement("button"); el.type = "button"; el.className = "rb rdd"; el.title = b.title || b.label; el.setAttribute("aria-haspopup", "menu"); el.setAttribute("aria-expanded", "false");
         el.innerHTML = `${dzIcon(b.ic)}<span></span>`; el.lastChild.textContent = b.label + " ▾";
-        el.onclick = e => { e.stopPropagation(); const open = el.getAttribute("aria-expanded") === "true"; dzMenuClose(); if (!open) dzDropAt(b.dd, el); }; row.append(el); continue; }
+        el.onclick = e => { e.stopPropagation(); const open = el.getAttribute("aria-expanded") === "true"; dzMenuClose(); if (!open) dzDropAt(typeof b.dd === "function" ? b.dd() : b.dd, el); }; row.append(el); continue; }
       const el = document.createElement("button"); el.type = "button"; el.className = "rb"; el.title = b.title || b.label;
       el.innerHTML = `${dzIcon(b.ic)}<span></span>`; el.lastChild.textContent = b.label;
       if (b.en && !b.en()) el.disabled = true; if (b.ck) el.setAttribute("aria-pressed", !!b.ck());
@@ -5431,7 +5434,7 @@ async function ldPrintRun(test, to, keepOpen) {
         if (!labels.length) throw new Error("Nothing to print: the file has no rows, or every qty is 0.");
         if (!test && labels.length > 2000 && !await ldConfirm({ title: `Print ${labels.length} labels on ${name}?`, verb: "Print labels" })) return;
         const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; if (!test) printed = labels; toast(`${labels.filter(l => !l.blank).length} label(s) prepared`);
-      } else { const { prn } = layoutPRN(dzLayout(), lang, dpi); q = ldWithQty(prn, lang, rows); }
+      } else { const { prn } = layoutPRN(dzLayoutFor(lang), lang, dpi); q = ldWithQty(prn, lang, rows); }
       if (to === "file") { const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(q.prn)); a.download = `labels_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); if (printed) ldSerialSave(printed); toast("Printer file downloaded"); return; }
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
@@ -5606,7 +5609,7 @@ function dzGs1Builder(it) {
   <div class="dlg-head"><div><h2 id="dzVarH">Build the data from parts</h2><div class="sub">Join fixed text, database fields, special characters (FNC1, GS…), dates and serial numbers into one string. Fields are filled from typed values or a CSV/Excel file when you print.</div></div><button type="button" class="x" id="dzVarX" aria-label="Close">×</button></div>
   <div class="ld-acct">
     <div id="dzVarRows" style="display:grid;gap:8px"></div>
-    <div class="ld-row" style="margin:10px 0"><button type="button" class="btn sm" data-add="text">+ Text</button><button type="button" class="btn sm" data-add="field">+ Database field</button><button type="button" class="btn sm" data-add="special">+ Special character</button><button type="button" class="btn sm" data-add="date">+ Date</button><button type="button" class="btn sm" data-add="serial">+ Serial number</button></div>
+    <div class="ld-row" style="margin:10px 0"><button type="button" class="btn sm" data-add="text">+ Text</button><button type="button" class="btn sm" data-add="field">+ Database field</button><button type="button" class="btn sm" data-add="special">+ Special character</button><button type="button" class="btn sm" data-add="date">+ Date</button><button type="button" class="btn sm" data-add="time">+ Time</button><button type="button" class="btn sm" data-add="serial">+ Serial number</button></div>
     <h3>Result with the sample values</h3>
     <div class="ld-secret" id="dzVarOut" style="text-align:left;white-space:pre-wrap"></div>
     <p class="dz-cap" id="dzVarNote" style="margin:0 0 10px"></p>
@@ -5618,14 +5621,27 @@ function dzGs1Builder(it) {
 const DZ_SPECIAL = { fnc1: ["FNC1", "^FNC1"], gs: ["GS · group separator (29)", "^029"], rs: ["RS · record separator (30)", "^030"], eot: ["EOT · end of transmission (4)", "^004"],
   us: ["US · unit separator (31)", "^031"], cr: ["CR · carriage return", "^013"], lf: ["LF · new line", "^010"], crlf: ["CR + LF", "^013^010"], tab: ["TAB", "^009"], fnc2: ["FNC2", "^FNC2"], fnc3: ["FNC3", "^FNC3"], fnc4: ["FNC4", "^FNC4"],
   iso15434: ["ISO 15434 header [)> RS 06 GS", "[)>^03006^029"], iso15434end: ["ISO 15434 end RS EOT", "^030^004"] };
-const DZ_DATEF = ["DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YY", "DDMMYY", "YYMMDD", "YYYYMMDD", "YYYY-MM-DD", "MM/YYYY", "MMM YYYY", "MMM-YY", "DD MMM YYYY", "HH:mm", "DD/MM/YYYY HH:mm"];
+const DZ_DATEF = ["DD/MM/YYYY", "DD-MM-YYYY", "DD/MM/YY", "DD.MM.YY", "DDMMYY", "YYMMDD", "YYYYMMDD", "YYYY-MM-DD", "MM/DD/YYYY", "MM/YYYY", "MM/YY", "MMM YYYY", "MMM-YY", "DD MMM YYYY", "DD-MMM-YY"];
+const DZ_TIMEF = ["HH:mm", "HH:mm:ss", "hh:mm A", "hh:mm:ss A", "HHmm", "HH.mm", "HH"];
+const DZ_DTF = ["DD/MM/YYYY HH:mm", "DD/MM/YYYY HH:mm:ss", "DD-MM-YYYY hh:mm A", "YYYY-MM-DD HH:mm", "DD MMM YYYY, hh:mm A", "YYMMDDHHmm"];
+const DZ_WHEN = { start: "When printing starts (same on all labels)", label: "Each label, when LabelDesk sends it", printer: "Printer's own clock, as each label prints", fixed: "Fixed: taken once and kept" };
+const dzIsDT = p => p && (p.t === "date" || p.t === "time");
+// The moment a date/time part shows: fixed = stored value; each label = now; printing starts = one moment for the whole job
+function dzWhen(p) {
+  if (p.when === "fixed" && p.at) { const t = +new Date(p.at); if (!isNaN(t)) return t; }
+  if (p.when === "label" || p.when === "printer" || !dz.ctx || !dz.ctx.labels) return Date.now();
+  const L = dz.ctx.labels; return L.t0 || (L.t0 = Date.now());
+}
 const DZ_MON = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 function dzFmtDate(p, when) {
-  const d = new Date(when || Date.now()), n = +p.off || 0;
-  if (p.unit === "months") d.setMonth(d.getMonth() + n); else d.setDate(d.getDate() + n);
-  const z = (v, l = 2) => String(v).padStart(l, "0");
-  return String(p.fmt || "DD/MM/YYYY").replace(/YYYY|YY|MMM|MM|DD|HH|mm/g, t => ({ YYYY: d.getFullYear(), YY: z(d.getFullYear() % 100), MMM: DZ_MON[d.getMonth()], MM: z(d.getMonth() + 1), DD: z(d.getDate()), HH: z(d.getHours()), mm: z(d.getMinutes()) }[t]));
+  const d = new Date(when || dzWhen(p)), n = +p.off || 0, u = p.unit || (p.t === "time" ? "minutes" : "days");
+  if (u === "months") d.setMonth(d.getMonth() + n); else if (u === "years") d.setFullYear(d.getFullYear() + n); else if (u === "hours") d.setHours(d.getHours() + n); else if (u === "minutes") d.setMinutes(d.getMinutes() + n); else d.setDate(d.getDate() + n);
+  const z = (v, l = 2) => String(v).padStart(l, "0"), h = d.getHours();
+  return String(p.fmt || (p.t === "time" ? "HH:mm" : "DD/MM/YYYY")).replace(/YYYY|YY|MMM|MM|DD|HH|hh|mm|ss|A/g, t => ({ YYYY: d.getFullYear(), YY: z(d.getFullYear() % 100), MMM: DZ_MON[d.getMonth()], MM: z(d.getMonth() + 1), DD: z(d.getDate()), HH: z(h), hh: z(h % 12 || 12), mm: z(d.getMinutes()), ss: z(d.getSeconds()), A: h < 12 ? "AM" : "PM" }[t]));
 }
+// Zebra real-time clock: the printer swaps these in as it prints (^FC%)
+function dzClockFmt(p) { return String(p.fmt || (p.t === "time" ? "HH:mm" : "DD/MM/YYYY")).replace(/%/g, "%%").replace(/YYYY|YY|MMM|MM|DD|HH|hh|mm|ss|A/g, t => ({ YYYY: "%Y", YY: "%y", MMM: "%b", MM: "%m", DD: "%d", HH: "%H", hh: "%I", mm: "%M", ss: "%S", A: "%p" }[t])); }
+const dzClockOK = it => dz.clk && it.type === "text" && dzNative(it) && (it.parts || []).some(q => dzIsDT(q) && q.when === "printer") && (it.parts || []).every(q => !(dzIsDT(q) && q.when === "printer") || !+q.off);
 const dzFields = () => (dz.D.fields = dz.D.fields || []);
 const dzHasSpecial = it => (it.parts || []).some(p => p.t === "special");
 // One label's content: rec = { field: value }, n = label number in the run (0, 1, 2 …)
@@ -5645,7 +5661,7 @@ function dzCompose(it, rec, n) {
     if (p.t === "text") return lit(p.v || "");
     if (p.t === "field") { const f = dzFields().find(x => x.name === p.name); const v = rec && rec[p.name] != null && rec[p.name] !== "" ? rec[p.name] : f ? f.sample : ""; return lit(v ?? ""); }
     if (p.t === "special") return bar ? (DZ_SPECIAL[p.c] || [, ""])[1] : (p.c === "lf" || p.c === "crlf" || p.c === "cr" ? "\n" : p.c === "tab" ? "\t" : "");
-    if (p.t === "date") return lit(dzFmtDate(p));
+    if (dzIsDT(p)) return lit(dz.clkNow && p.when === "printer" ? dzClockFmt(p) : dzFmtDate(p));
     if (p.t === "serial") return lit(dzSerialAt(p, n, it.id + ":" + pi));
     return "";
   }).join("");
@@ -5653,10 +5669,15 @@ function dzCompose(it, rec, n) {
 const dzKeyOf = it => it.type === "barcode" ? "data" : "text";
 // The objects for one label column at print time (fields, serials and linked copies filled in)
 function dzResolveCol(col) {
-  const items = dz.D.items, ctx = dz.ctx; if (!ctx) return items;
+  const items = dz.D.items, ctx = dz.ctx;
+  if (!ctx) return items.map(it => (it.parts || []).some(dzIsDT) ? Object.assign({}, it, { [dzKeyOf(it)]: dzCompose(it, null, 0) }) : it);
   const idx = ctx.base + col; if (ctx.labels && idx >= ctx.labels.length) return []; // last row not full: leave the label blank
   const lab = ctx.labels ? ctx.labels[idx] : { rec: ctx.rec, n: idx }; if (lab && lab.blank) return []; // skipped position on a used sheet / row
-  const out = items.map(it => it.parts && it.parts.length ? Object.assign({}, it, { [dzKeyOf(it)]: dzCompose(it, lab.rec, lab.n), esc: it.type === "barcode" && dzHasSpecial(it) }) : it);
+  const out = items.map(it => {
+    if (!(it.parts && it.parts.length)) return it;
+    if (dzClockOK(it)) { dz.clkNow = true; try { return Object.assign({}, it, { text: dzCompose(it, lab.rec, lab.n), clk: true, mtext: (dz.clkNow = false, dzCompose(it, lab.rec, lab.n)) }); } finally { dz.clkNow = false; } }
+    return Object.assign({}, it, { [dzKeyOf(it)]: dzCompose(it, lab.rec, lab.n), esc: it.type === "barcode" && dzHasSpecial(it) });
+  });
   for (let pass = 0; pass < 3; pass++) for (let i = 0; i < out.length; i++) {
     const it = out[i]; if (!it.link) continue; const src = out.find(o => o.id === it.link && o.id !== it.id); if (!src) continue;
     out[i] = Object.assign({}, it, { [dzKeyOf(it)]: (it.linkPre || "") + dzContentOf(src) + (it.linkPost || "") });
@@ -5680,9 +5701,10 @@ function dzVarBuilder(it) {
     if (p.t === "text") ins = `<input data-i="${i}" data-p="v" value="${ldEsc(p.v || "")}" placeholder="Fixed text, e.g. Batch: " style="flex:1">`;
     if (p.t === "field") { const f = fields.find(x => x.name === p.name) || {}; ins = `<select data-i="${i}" data-p="name" style="flex:1">${fOpts(p.name)}</select><input data-f="${ldEsc(p.name || "")}" value="${ldEsc(f.sample || "")}" placeholder="Sample value" title="Shown on screen and used when nothing is typed" style="flex:1">`; }
     if (p.t === "special") ins = `<select data-i="${i}" data-p="c" style="flex:1">${Object.entries(DZ_SPECIAL).map(([k, [n]]) => `<option value="${k}"${k === p.c ? " selected" : ""}>${n}</option>`).join("")}</select>`;
-    if (p.t === "date") ins = `<select data-i="${i}" data-p="fmt">${DZ_DATEF.map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">today +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="days"${p.unit !== "months" ? " selected" : ""}>days</option><option value="months"${p.unit === "months" ? " selected" : ""}>months</option></select>`;
+    if (p.t === "date") ins = `<select data-i="${i}" data-p="fmt">${DZ_DATEF.map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">today +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="days"${p.unit !== "months" ? " selected" : ""}>days</option><option value="months"${p.unit === "months" ? " selected" : ""}>months</option><option value="years"${p.unit === "years" ? " selected" : ""}>years</option></select><select data-i="${i}" data-p="when" title="When the date is taken">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${(p.when || "start") === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
+    if (p.t === "time") ins = `<select data-i="${i}" data-p="fmt">${(DZ_TIMEF.includes(p.fmt) ? DZ_TIMEF : [p.fmt, ...DZ_TIMEF]).map(f => `<option${f === p.fmt ? " selected" : ""}>${f}</option>`).join("")}</select><span style="align-self:center">now +</span><input data-i="${i}" data-p="off" type="number" value="${+p.off || 0}" style="width:80px"><select data-i="${i}" data-p="unit"><option value="minutes"${p.unit !== "hours" ? " selected" : ""}>minutes</option><option value="hours"${p.unit === "hours" ? " selected" : ""}>hours</option></select><select data-i="${i}" data-p="when" title="When the time is taken">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${(p.when || "start") === v ? " selected" : ""}>${n}</option>`).join("")}</select>`;
     if (p.t === "serial") ins = `<span style="align-self:center">start</span><input data-i="${i}" data-p="start" value="${ldEsc(p.start ?? 1)}" style="width:100px"><select data-i="${i}" data-p="dir"><option value="up"${p.dir !== "down" ? " selected" : ""}>increase</option><option value="down"${p.dir === "down" ? " selected" : ""}>decrease</option></select><span style="align-self:center">by</span><input data-i="${i}" data-p="step" type="number" min="1" value="${p.step ?? 1}" style="width:60px"><span style="align-self:center">digits</span><input data-i="${i}" data-p="width" type="number" min="0" max="20" value="${p.width ?? 6}" style="width:60px"><select data-i="${i}" data-p="base">${Object.entries(DZ_SER_BASES).map(([k, v]) => `<option value="${k}"${(p.base || "dec") === k ? " selected" : ""}>${v[0]}</option>`).join("")}</select><span style="align-self:center">same no. on</span><input data-i="${i}" data-p="every" type="number" min="1" value="${p.every ?? 1}" style="width:56px"><span style="align-self:center">label(s)</span>`;
-    const lab = { text: "Text", field: "Field", special: "Special", date: "Date", serial: "Serial" }[p.t];
+    const lab = { text: "Text", field: "Field", special: "Special", date: "Date", time: "Time", serial: "Serial" }[p.t];
     return `<div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:6px 8px"><b style="align-self:center;min-width:56px;font-size:12px;color:var(--muted)">${i + 1}. ${lab}</b>${ins}
       <span style="display:flex;gap:4px;margin-left:auto"><button type="button" class="btn sm" data-mv="${i}:-1" aria-label="Move up">↑</button><button type="button" class="btn sm" data-mv="${i}:1" aria-label="Move down">↓</button><button type="button" class="btn sm" data-rm="${i}" aria-label="Remove">×</button></span></div>`;
   };
@@ -5706,7 +5728,7 @@ function dzVarBuilder(it) {
   for (const b of dlg.querySelectorAll("[data-add]")) b.onclick = () => {
     const t = b.dataset.add;
     if (t === "field" && !fields.length) fields.push({ name: "batch", sample: "B123" });
-    parts.push(t === "text" ? { t, v: "" } : t === "field" ? { t, name: fields[0].name } : t === "special" ? { t, c: "fnc1" } : t === "date" ? { t, fmt: "DD/MM/YYYY", off: 0, unit: "days" } : { t, start: 1, step: 1, width: 6 });
+    parts.push(t === "text" ? { t, v: "" } : t === "field" ? { t, name: fields[0].name } : t === "special" ? { t, c: "fnc1" } : t === "date" ? { t, fmt: "DD/MM/YYYY", off: 0, unit: "days", when: "start" } : t === "time" ? { t, fmt: "HH:mm", off: 0, unit: "minutes", when: "start" } : { t, start: 1, step: 1, width: 6 });
     draw(); };
   $("dzVarSave").onclick = () => { dz.D.fields = fields; it.parts = parts; delete it.link; delete it.linkPre; delete it.linkPost; dzApplySample(it); dzSave(); dlg.close(); dzProps(); toast("Data built from " + parts.length + " part(s)"); };
   $("dzVarOff").onclick = () => { delete it.parts; delete it.esc; it[dzKeyOf(it)] = dzPlain($("dzVarOut").textContent.replace(/⟨[^⟩]*⟩/g, "")); dzRefresh(it); dzSave(); dlg.close(); dzProps(); };
@@ -6018,7 +6040,7 @@ function ldPickRecords(done) {
 function ldVarPRN(labels, lang, dpi) {
   const D = dz.D, rows = Math.ceil(labels.length / D.across), chunks = [];
   try {
-    for (let r = 0; r < rows; r++) { dz.ctx = { labels, base: r * D.across }; const { prn } = layoutPRN(dzLayout(), lang, dpi);
+    for (let r = 0; r < rows; r++) { dz.ctx = { labels, base: r * D.across }; const { prn } = layoutPRN(dzLayoutFor(lang), lang, dpi);
       if (chunks.length && chunks[chunks.length - 1].prn === prn) chunks[chunks.length - 1].n++; else chunks.push({ prn, n: 1 }); }
   } finally { dz.ctx = null; dz.gfx = null; }
   let all = "", unmerged = 0;
@@ -6073,6 +6095,64 @@ function dzLinkField(it, name, pre, post) {
   it.parts = [pre ? { t: "text", v: pre } : null, { t: "field", name }, post ? { t: "text", v: post } : null].filter(Boolean);
   delete it.link; delete it.linkPre; delete it.linkPost; dzApplySample(it); dzSave();
 }
+// Date & time objects: menu, insert, and the [text?, date|time, text?] pattern used by the properties panel
+function dzDTMenu(at) {
+  const ex = (t, f) => dzFmtDate({ t, fmt: f, off: 0 }, Date.now()), ins = (t, f, o) => () => dzAddDT(t, f, Object.assign({ at }, o || {}));
+  return [
+    ["Date", DZ_DATEF.map(f => [`${ex("date", f)}   (${f})`, ins("date", f)])],
+    ["Time", DZ_TIMEF.map(f => [`${ex("time", f)}   (${f})`, ins("time", f)])],
+    ["Date and time", DZ_DTF.map(f => [`${ex("date", f)}   (${f})`, ins("date", f)])],
+    "-",
+    ["Manufacturing date (MFG)", ins("date", "DD/MM/YYYY", { pre: "MFG: " })],
+    ["Expiry date (EXP, today + 6 months)", ins("date", "DD/MM/YYYY", { pre: "EXP: ", off: 6, unit: "months" })],
+    ["Best before (today + 30 days)", ins("date", "DD/MM/YYYY", { pre: "Best before: ", off: 30, unit: "days" })],
+    ["Packed on (date and time)", ins("date", "DD/MM/YYYY HH:mm", { pre: "Packed: " })],
+  ];
+}
+function dzAddDT(t, fmt, o) {
+  o = o || {}; const n0 = dz.D.items.length; dzAdd("text"); const it = dz.D.items[dz.D.items.length - 1]; if (!it || dz.D.items.length <= n0) return;
+  dzSetDT(it, { pre: o.pre || "", post: "", p: { t, fmt, off: o.off || 0, unit: o.unit || (t === "time" ? "minutes" : "days"), when: "start" } });
+  it.name = o.pre ? o.pre.replace(/[:\s]+$/, "") : t === "time" ? "Time" : /H/.test(fmt) ? "Date and time" : "Date";
+  if (o.at) { const b = dzBox(it); it.x = r1(Math.max(0, Math.min(dzLW() - Math.min(b.w, dzLW()), o.at.x))); it.y = r1(Math.max(0, Math.min(dz.D.h - Math.min(b.h, dz.D.h), o.at.y))); }
+  dzRefresh(it); dzDraw(); dzProps(); dzSave();
+}
+function dzOneDT(it) {
+  const p = it.parts || [], d = p.filter(dzIsDT); if (d.length !== 1 || p.some(x => !dzIsDT(x) && x.t !== "text") || p.length > 3) return null;
+  const i = p.indexOf(d[0]); if (i > 1 || p.length - i - 1 > 1) return null;
+  return { p: d[0], pre: i ? p[0].v || "" : "", post: p[i + 1] ? p[i + 1].v || "" : "" };
+}
+function dzSetDT(it, o) { it.parts = [o.pre ? { t: "text", v: o.pre } : null, o.p, o.post ? { t: "text", v: o.post } : null].filter(Boolean); delete it.link; dzApplySample(it); dzSave(); }
+const dzLocalISO = t => { const d = new Date(t - new Date(t).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 19); };
+function dzDTPanel(dt) {
+  const p = dt.p, kind = p.t === "time" ? "time" : /H|h/.test(p.fmt || "") ? "dt" : "date", list = kind === "time" ? DZ_TIMEF : kind === "dt" ? DZ_DTF : DZ_DATEF;
+  const fmts = list.includes(p.fmt) ? list : [p.fmt, ...list], units = kind === "time" ? [["minutes", "minutes"], ["hours", "hours"]] : [["days", "days"], ["months", "months"], ["years", "years"]];
+  const when = p.when || "start", lang = dz.D.lang, clockNote = when !== "printer" ? "" : lang !== "ZPL" ? `The printer's own clock is used on Zebra (ZPL) printers. With ${ldEsc(lang)}, LabelDesk fills in the time as each label is sent.` : +p.off ? "The printer's clock cannot add days or months: LabelDesk fills in the time as each label is sent." : "Needs a Zebra printer with the clock option, set to the right time. Use a printer font (no custom font, no curve).";
+  const note = { start: "One moment, taken when you press Print, on every label of that job.", label: "Each label gets the time it is made, so a long job shows the time moving on.", printer: clockNote, fixed: "Stays the same on every label and every reprint until you change it." }[when];
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <label style="margin:0">Type<select data-dt="kind"><option value="date"${kind === "date" ? " selected" : ""}>Date</option><option value="time"${kind === "time" ? " selected" : ""}>Time</option><option value="dt"${kind === "dt" ? " selected" : ""}>Date and time</option></select></label>
+      <label style="margin:0">Format<select data-dt="fmt">${fmts.map(f => `<option value="${ldEsc(f)}"${f === p.fmt ? " selected" : ""}>${ldEsc(dzFmtDate(Object.assign({}, p, { fmt: f, off: 0 }), Date.now()))}  (${ldEsc(f)})</option>`).join("")}<option value="__custom">Custom…</option></select></label>
+      <label style="margin:0">Add or subtract<input data-dt="off" type="number" value="${+p.off || 0}" title="Use a minus sign to go back, e.g. -1"></label>
+      <label style="margin:0">Unit<select data-dt="unit">${units.map(([v, n]) => `<option value="${v}"${(p.unit || units[0][0]) === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label style="margin:0;grid-column:1/-1">Takes the date and time<select data-dt="when">${Object.entries(DZ_WHEN).map(([v, n]) => `<option value="${v}"${when === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+      ${when === "fixed" ? `<label style="margin:0;grid-column:1/-1">Fixed at<span style="display:flex;gap:6px"><input data-dt="at" type="datetime-local" step="1" value="${ldEsc(dzLocalISO(dzWhen(p)))}" style="flex:1"><button type="button" class="btn sm" id="dzDTNow">Take now</button></span></label>` : ""}
+      <label style="margin:0">Text before<input data-dt="pre" value="${ldEsc(dt.pre)}" placeholder="e.g. EXP: "></label>
+      <label style="margin:0">Text after<input data-dt="post" value="${ldEsc(dt.post)}"></label></div>
+      <p class="dz-cap" style="margin:0">Prints as <b id="dzDTPrev">${ldEsc(dt.pre + dzFmtDate(p) + dt.post)}</b>. ${ldEsc(note)}</p>`;
+}
+function dzDTWire(it) {
+  for (const el of document.querySelectorAll("#dzProps [data-dt]")) el.addEventListener(el.tagName === "SELECT" || el.type === "datetime-local" ? "change" : "input", () => {
+    const o = dzOneDT(it); if (!o) return; const k = el.dataset.dt, p = o.p; let redraw = el.tagName === "SELECT";
+    if (k === "pre" || k === "post") o[k] = el.value;
+    else if (k === "kind") { const v = el.value; p.t = v === "time" ? "time" : "date"; p.fmt = v === "time" ? DZ_TIMEF[0] : v === "dt" ? DZ_DTF[0] : DZ_DATEF[0]; p.unit = v === "time" ? "minutes" : "days"; }
+    else if (k === "fmt") { if (el.value === "__custom") { const f = (prompt("Format: YYYY YY MMM MM DD for the date, HH (24 h) hh (12 h) mm ss A (AM/PM) for the time. Anything else prints as typed.", p.fmt) || "").trim(); if (f) p.fmt = f; } else p.fmt = el.value; }
+    else if (k === "off") p.off = Math.round(+el.value || 0);
+    else if (k === "unit") p.unit = el.value;
+    else if (k === "when") { p.when = el.value; if (p.when === "fixed" && !p.at) p.at = dzLocalISO(Date.now()); }
+    else if (k === "at") { if (el.value) p.at = el.value; }
+    dzSetDT(it, o); const pv = $("dzDTPrev"); if (pv) pv.textContent = o.pre + dzFmtDate(p) + o.post; if (redraw) dzProps();
+  });
+  const now = $("dzDTNow"); if (now) now.onclick = () => { const o = dzOneDT(it); if (!o) return; o.p.at = dzLocalISO(Date.now()); dzSetDT(it, o); dzProps(); };
+}
 function dzOneSerial(it) { // parts [text?, serial, text?]
   const p = it.parts || [], sr = p.filter(x => x.t === "serial"); if (sr.length !== 1 || p.some(x => x.t !== "serial" && x.t !== "text") || p.length > 3) return null;
   const i = p.indexOf(sr[0]); if (i > 1 || p.length - i - 1 > 1) return null;
@@ -6080,13 +6160,14 @@ function dzOneSerial(it) { // parts [text?, serial, text?]
 }
 function dzSetSerial(it, o) { it.parts = [o.pre ? { t: "text", v: o.pre } : null, Object.assign({ t: "serial" }, o.s), o.post ? { t: "text", v: o.post } : null].filter(Boolean); delete it.link; dzApplySample(it); dzSave(); }
 function dzSrcPanel(it) {
-  const one = dzOneField(it), ser = dzOneSerial(it), names = dzFieldNames(), askF = one && dzFields().find(f => f.name === one.name && f.ask), cur = !it.parts ? "" : askF ? "ask" : one ? "f:" + one.name : ser ? "serial" : "parts", db = dz.D.db;
+  const one = dzOneField(it), ser = dzOneSerial(it), dt = dzOneDT(it), names = dzFieldNames(), askF = one && dzFields().find(f => f.name === one.name && f.ask), cur = !it.parts ? "" : askF ? "ask" : one ? "f:" + one.name : ser ? "serial" : dt ? "dt" : "parts", db = dz.D.db;
   return `<div class="full" style="grid-column:1/-1;border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px">
     <label class="full" style="margin:0">Content comes from<select id="dzSrc">
       <option value=""${cur === "" ? " selected" : ""}>Typed here (fixed)</option>
       ${names.length ? `<optgroup label="${db ? ldEsc(db.kind + ": " + db.name) : "Fields"}">${names.map(n => `<option value="f:${ldEsc(n)}"${cur === "f:" + n ? " selected" : ""}>Field: ${ldEsc(n)}</option>`).join("")}</optgroup>` : ""}
       <option value="ask"${cur === "ask" ? " selected" : ""}>Asked when printing (data entry form)</option>
       <option value="serial"${cur === "serial" ? " selected" : ""}>Serial number (counts on each label)</option>
+      <option value="dt"${cur === "dt" ? " selected" : ""}>Date or time (today, expiry, clock)</option>
       <option value="new">+ New field…</option>
       <option value="parts"${cur === "parts" ? " selected" : ""}>Several parts: fields, FNC1/GS, dates, serials…</option>
     </select></label>
@@ -6110,6 +6191,7 @@ function dzSrcPanel(it) {
       <label style="margin:0;flex-direction:row;align-items:center;gap:6px;display:flex"><input type="checkbox" data-ask="keep"${askF.ask.keep ? " checked" : ""} style="width:auto"> Keep for the next label</label>
       <label style="margin:0;grid-column:1/-1">Example shown on screen<input data-ask="sample" value="${ldEsc(askF.sample || "")}"></label></div>
       <p class="dz-cap" style="margin:0">The print window asks for this; <b>Print and next</b> lets you enter and print labels one by one.</p>` : ""}
+    ${dt ? dzDTPanel(dt) : ""}
     ${cur === "parts" ? `<button type="button" class="btn sm soft" id="dzParts">Edit the ${it.parts.length} parts…</button>` : ""}
     ${!db ? `<p class="dz-cap" style="margin:0">Connect a database on the <b>Data</b> tab to pick its fields here.</p>` : ""}
   </div>`;
@@ -6123,6 +6205,7 @@ function dzSrcWire(it) {
       if (!dzFields().some(f => f.name === n)) dzFields().push({ name: n, sample: shown }); const f = dzFields().find(x => x.name === n); f.sample = f.sample || shown; f.ask = f.ask || { prompt: n, type: it.type === "barcode" ? "scan" : "text" };
       dzLinkField(it, n, "", ""); return dzProps(); }
     if (v === "serial") { const keep = String(dzContentOf(it)).match(/^(.*?)(\d+)(\D*)$/); dzSetSerial(it, { pre: keep ? keep[1] : "", post: keep ? keep[3] : "", s: { start: keep ? keep[2] : "1", step: 1, width: keep ? keep[2].length : 6, dir: "up", base: "dec", every: 1 } }); return dzProps(); }
+    if (v === "dt") { dzSetDT(it, { pre: "", post: "", p: { t: "date", fmt: "DD/MM/YYYY", off: 0, unit: "days", when: "start" } }); return dzProps(); }
     if (v === "new") { const n = (prompt("Field name (the database column it reads), e.g. batch, mrp, gtin") || "").trim().replace(/[^\w ]/g, "").slice(0, 40); if (!n) return dzProps(); dzLinkField(it, n, "", ""); return dzProps(); }
     const one = dzOneField(it); dzLinkField(it, v.slice(2), one ? one.pre : "", one ? one.post : ""); dzProps(); };
   const upd = () => { const one = dzOneField(it); if (one) dzLinkField(it, one.name, $("dzSrcPre").value, $("dzSrcPost").value); };
@@ -6131,6 +6214,7 @@ function dzSrcWire(it) {
     const one = dzOneField(it), f = one && dzFields().find(x => x.name === one.name); if (!f || !f.ask) return; const k = el.dataset.ask;
     if (k === "sample") { f.sample = el.value; dzApplySample(it); dzSave(); return; }
     f.ask[k] = el.type === "checkbox" ? el.checked : el.value; dzSave(); if (k === "type") dzProps(); });
+  dzDTWire(it);
   for (const el of document.querySelectorAll("#dzProps [data-sr]")) el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => {
     const o = dzOneSerial(it); if (!o) return; const k = el.dataset.sr, v = el.value;
     if (k === "pre" || k === "post") o[k] = v; else o.s[k] = ["step", "width", "every"].includes(k) ? Math.max(k === "width" ? 0 : 1, +v || 0) : v;
@@ -6735,6 +6819,11 @@ addEventListener("online", () => toast("Back online.", 2000));
     if (w && w < 5 && note) { note.textContent = `Each label is only ${w} mm wide. Reduce labels across or widen the liner.`; note.hidden = false; }
   }, 0));
 })();
+</script>
+
+<script>
+/* Date and time objects stay current on screen */
+setInterval(() => { try { if (!dz.D || !document.getElementById("dzDlg").open || dz.drag) return; for (const it of dz.D.items) if ((it.parts || []).some(p => dzIsDT(p) && p.when !== "fixed")) { const k = dzKeyOf(it), before = it[k]; it[k] = dzCompose(it, null, 0); if (it[k] !== before) dzRefresh(it); } } catch (_) {} }, 20000);
 </script>
 </body>
 </html>
