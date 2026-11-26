@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.6 · **Last updated:** 26 November 2026
+**Guide version:** 1.7 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -29,7 +29,7 @@ See also: **LabelDesk-Manual.md** for every feature in detail.
 
 1. Open **https://labeldesk.app**.
 2. Know your **printer model**, its **language** (TSC = TSPL, Zebra = ZPL) and **dpi** (on the printer's sticker or self-test print), and your **label size** in mm (width × height, gap between labels).
-3. To print straight to a thermal printer from a computer, install **QZ Tray** once and start it.
+3. To print straight to a thermal printer from a computer, run the **LabelDesk Print Agent** once (Guide 10). QZ Tray also works.
 
 ---
 
@@ -175,7 +175,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 1. Click **Print** at the start of the **Edit** tab, or **File → Print label…** (Ctrl+P).
 2. Choose the **printer** and **mode**:
-   - **Printer commands** for thermal label printers (QZ Tray must be running).
+   - **Printer commands** for thermal label printers (the Print Agent or QZ Tray must be running).
    - **Image via driver** for any printer or colour.
    - **PDF to the printer** for PDF-capable printers and Mac.
 3. Set copies, records, and the form fields if any.
@@ -209,7 +209,14 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 1. Run **LabelDesk-Setup-1.0.0.exe**. If Windows shows "Windows protected your PC", click **More info → Run anyway** (shown until the app is code-signed).
 2. Choose where to install and click **Install**. LabelDesk appears on the desktop and in the Start menu.
 3. No install rights? Use **LabelDesk-Portable.exe**, or unzip the Windows zip and run **LabelDesk.exe**.
-4. For direct printing to a label printer, install and start **QZ Tray** as in Guide 9.
+4. For direct printing to a label printer, add the **Print Agent** (below).
+
+### Print Agent (Windows computer next to the printer)
+1. Download **LabelDesk-Print-Agent.exe** from https://labeldesk.app/download/LabelDesk-Print-Agent.exe, or click **Download it for Windows** in LabelDesk's print window.
+2. Run it. If Windows shows "Windows protected your PC", click **More info → Run anyway**. Its page opens and a LabelDesk icon appears in the tray near the clock.
+3. **Network printer?** On the agent's page, under **Add a network printer**, type a name and the printer's IP address (from its network-settings print), keep port **9100**, click **Add printer**.
+4. In LabelDesk press **Print**: your printers are listed. Press **Print 1 test label**.
+5. **Phones without a browser on the PC:** File → Print more → Print station → choose the printer → **Let the Print Agent receive**, then scan the QR code with each phone.
 
 ---
 
@@ -217,6 +224,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.7 | 26 Nov 2026 | Print Agent: install, network printers, phone printing with the browser closed (Guide 10); Before you start and Guide 9 mention it |
 | 1.6 | 26 Nov 2026 | Guide 10: install the Android, iPhone and Windows apps; saving from the phone apps |
 | 1.5 | 26 Nov 2026 | Text, Barcodes, Image and Database buttons are also on the Edit tab, before Print |
 | 1.4 | 26 Nov 2026 | No step changes; button tips no longer pop up on phones (see manual 1.4) |

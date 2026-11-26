@@ -5,6 +5,7 @@
 | Android | `mobile/android` | Capacitor 8 (Java/Kotlin shell) | `.apk` to install, `.aab` for Google Play |
 | iPhone / iPad | `mobile/ios` | Capacitor 8 (Swift/Xcode shell) | Simulator build; `.ipa` for TestFlight when Apple secrets are set |
 | Windows | `desktop` | Electron | `LabelDesk-Setup-x.y.z.exe` installer and a portable `.exe` |
+| Print Agent (Windows, also macOS/Linux) | `agent` | Go | `LabelDesk-Print-Agent.exe`: direct printing, network printers, phone printing. Download: https://labeldesk.app/download/LabelDesk-Print-Agent.exe |
 
 All three open **https://labeldesk.app** inside a native window, so every website update reaches the apps at once with no new app release. App-only additions:
 

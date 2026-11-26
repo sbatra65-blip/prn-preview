@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LabelDesk Print Agent</title>
+<style>
+:root{--ink:#111827;--mute:#4b5563;--line:#e5e7eb;--bg:#f9fafb;--acc:#ea580c;--ok:#15803d;--bad:#b91c1c}
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#111827;color:#f9fafb;padding:16px 24px;display:flex;align-items:center;gap:12px}
+header h1{font-size:18px;font-weight:600;margin:0}header small{color:#d1d5db;font-size:13px}
+.dot{width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block}
+main{max-width:880px;margin:0 auto;padding:20px 24px 48px;display:grid;gap:16px}
+section{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 20px}
+h2{font-size:16px;font-weight:600;margin:0 0 4px}p.sub{color:var(--mute);margin:0 0 12px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--mute);font-size:13px}td small{color:var(--mute)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+label{display:grid;gap:4px;font-size:13px;color:var(--mute)}
+input,select{font:inherit;color:var(--ink);min-height:40px;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;background:#fff}
+button{font:inherit;font-weight:500;min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #d1d5db;background:#fff;color:var(--ink);cursor:pointer}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}button.link{border:0;background:none;color:var(--bad);padding:0 6px;min-height:32px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.tag{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--mute);white-space:nowrap}
+.msg{font-size:14px;margin-top:8px;min-height:1.5em}.msg.ok{color:var(--ok)}.msg.bad{color:var(--bad)}
+.log{font:13px/1.6 ui-monospace,Consolas,monospace;color:var(--mute);max-height:240px;overflow:auto;white-space:pre-wrap}
+.check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px}.check input{min-height:0;width:18px;height:18px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header><span class="dot" aria-hidden="true"></span><div><h1>LabelDesk Print Agent</h1><small id="ver">Running</small></div></header>
+<main>
+  <section>
+    <h2>How it works</h2>
+    <p class="sub" style="margin:0">Keep this agent running. In LabelDesk, press <b>Print</b>: the printers below appear in the print window and labels go straight to them. Close this page any time; the agent keeps running in the tray (bottom right, near the clock).</p>
+  </section>
+
+  <section>
+    <h2>Printers</h2>
+    <p class="sub">Printers installed on this computer, plus network printers you add below.</p>
+    <table><thead><tr><th>Printer</th><th>Type</th><th>Driver / address</th><th></th></tr></thead><tbody id="prs"><tr><td colspan="4">Loading…</td></tr></tbody></table>
+    <div class="row" style="margin-top:14px">
+      <label>Send a printer file (.prn) to<select id="tPr"></select></label>
+      <label>File<input type="file" id="tFile" accept=".prn,.txt,.zpl,.tspl,.epl,.dpl,*/*"></label>
+      <button type="button" id="tGo">Print file</button>
+    </div>
+    <div class="msg" id="tMsg" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Add a network printer</h2>
+    <p class="sub">For label printers with Ethernet or Wi-Fi. Find the IP address on the printer's self-test or network-settings print. Network printers take printer commands (TSPL, ZPL, EPL…).</p>
+    <form class="row" id="netForm">
+      <label>Name<input id="nName" placeholder="Dispatch TSC" maxlength="80"></label>
+      <label>IP address<input id="nHost" required placeholder="192.168.1.50" inputmode="decimal"></label>
+      <label>Port<input id="nPort" type="number" min="1" max="65535" value="9100" style="width:100px"></label>
+      <button type="submit" class="primary">Add printer</button>
+    </form>
+    <div class="msg" id="nMsg" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Phone printing</h2>
+    <p class="sub">Phones paired with this computer print here even when no browser is open. To pair: open LabelDesk on this computer, choose <b>File → Print more → Print station</b>, then <b>Let the Print Agent receive</b>, and scan the QR code with the phone.</p>
+    <div class="row">
+      <label>Print phone jobs on<select id="sPr"></select></label>
+      <label class="check"><input type="checkbox" id="sOn"> Receive from phones</label>
+    </div>
+    <div class="msg" id="sMsg" role="status"></div>
+  </section>
+
+  <section>
+    <h2>Settings</h2>
+    <label class="check" id="autoRow"><input type="checkbox" id="auto"> Start the agent when I sign in to Windows</label>
+  </section>
+
+  <section>
+    <h2>Recent activity</h2>
+    <div class="log" id="log">Nothing yet</div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const api = (path, opt = {}) => fetch(path, { ...opt, headers: { "content-type": "application/json", "x-labeldesk": "1" } })
+  .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Error " + r.status); return j; });
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let printers = [];
+function opts(sel, keep) { const v = keep ?? sel.value; sel.innerHTML = printers.map(p => `<option${p.name === v ? " selected" : ""}>${esc(p.name)}</option>`).join(""); }
+async function loadPrinters() {
+  printers = await api("/v1/printers").catch(() => []);
+  $("prs").innerHTML = printers.length ? printers.map(p => `<tr><td>${esc(p.name)}${p.default ? ' <span class="tag">default</span>' : ""}</td>
+    <td><span class="tag">${p.kind === "network" ? "Network" : "Installed"}</span></td><td><small>${esc(p.driver || "")}${p.driver && p.port ? "<br>" : ""}${esc(p.port || "")}</small></td>
+    <td>${p.kind === "network" ? `<button type="button" class="link" data-del="${esc(p.name)}" aria-label="Remove ${esc(p.name)}">Remove</button>` : ""}</td></tr>`).join("")
+    : '<tr><td colspan="4">No printers found. Install the printer driver in Windows, or add a network printer below.</td></tr>';
+  opts($("tPr")); opts($("sPr"));
+}
+async function loadInfo() {
+  const i = await api("/v1/info");
+  $("ver").textContent = `Running · version ${i.version} · port ${i.port}`;
+  $("auto").checked = i.autoStart; $("autoRow").hidden = !i.autoStartSupported;
+  const s = i.station; opts($("sPr"), s.printer); $("sOn").checked = s.on; $("sOn").disabled = !s.paired;
+  const m = $("sMsg");
+  if (!s.paired) { m.className = "msg"; m.textContent = "Not paired yet. Pair from LabelDesk as described above."; }
+  else if (!s.on) { m.className = "msg"; m.textContent = "Paired. Tick “Receive from phones” to start."; }
+  else if (s.error) { m.className = "msg bad"; m.textContent = s.error; }
+  else { m.className = "msg ok"; m.textContent = `Receiving · printing on ${s.printer || "—"}`; }
+}
+async function loadLog() { const l = await api("/v1/log").catch(() => []); $("log").textContent = l.join("\n") || "Nothing yet"; }
+$("prs").onclick = async e => { const n = e.target.dataset && e.target.dataset.del; if (!n || !confirm(`Remove network printer “${n}”?`)) return; await api("/v1/network?name=" + encodeURIComponent(n), { method: "DELETE" }); loadPrinters(); };
+$("netForm").onsubmit = async e => { e.preventDefault(); const m = $("nMsg");
+  try { await api("/v1/network", { method: "POST", body: JSON.stringify({ name: $("nName").value, host: $("nHost").value, port: +$("nPort").value || 9100 }) });
+    m.className = "msg ok"; m.textContent = "Printer added. It now shows in LabelDesk's print window."; $("nName").value = $("nHost").value = ""; loadPrinters(); }
+  catch (err) { m.className = "msg bad"; m.textContent = err.message; } };
+$("tGo").onclick = async () => { const f = $("tFile").files[0], m = $("tMsg"); if (!f) { m.className = "msg bad"; m.textContent = "Choose a .prn file first."; return; }
+  const u = new Uint8Array(await f.arrayBuffer()); let s = ""; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768));
+  m.className = "msg"; m.textContent = "Sending…";
+  try { await api("/v1/print", { method: "POST", body: JSON.stringify({ printer: $("tPr").value, type: "raw", data: [btoa(s)], copies: 1, title: f.name }) }); m.className = "msg ok"; m.textContent = `Sent ${f.name} to ${$("tPr").value}.`; loadLog(); }
+  catch (err) { m.className = "msg bad"; m.textContent = err.message; } };
+$("sOn").onchange = () => api("/v1/station", { method: "POST", body: JSON.stringify({ on: $("sOn").checked, printer: $("sPr").value }) }).then(loadInfo);
+$("sPr").onchange = () => api("/v1/station", { method: "POST", body: JSON.stringify({ printer: $("sPr").value }) }).then(loadInfo);
+$("auto").onchange = () => api("/v1/autostart", { method: "POST", body: JSON.stringify({ on: $("auto").checked }) }).then(loadInfo).catch(e => alert(e.message));
+loadPrinters().then(loadInfo); loadLog(); setInterval(() => { loadInfo().catch(() => {}); loadLog(); }, 5000);
+</script>
+</body>
+</html>

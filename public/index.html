@@ -5329,11 +5329,42 @@ if (typeof APP !== "undefined" && APP) ldBoot();
 /* ---------- QZ Tray printing ---------- */
 const LDQ = { lib: null, ready: false, printers: [] };
 function ldQzLoad() {
-  if (window.qz) return Promise.resolve();
+  if (window.qz && !window.qz.agent) return Promise.resolve();
   if (LDQ.lib) return LDQ.lib;
   return LDQ.lib = new Promise((ok, bad) => { const s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/qz-tray@2.2.6/qz-tray.js"; s.onload = ok; s.onerror = () => { LDQ.lib = null; bad(new Error("Could not load the QZ Tray library (check the internet connection).")); }; document.head.append(s); });
 }
+/* LabelDesk Print Agent: our own helper on http://127.0.0.1:41951. When it runs, it stands in for QZ Tray
+   behind the same small "qz" interface, so every print path below works with either. */
+const LDA = { url: "http://127.0.0.1:41951", up: null, t: 0, info: null, dl: "https://labeldesk.app/download/LabelDesk-Print-Agent.exe" };
+async function ldAgentUp(force) {
+  if (!force && LDA.up !== null && Date.now() - LDA.t < 15000) return LDA.up;
+  const c = new AbortController(), to = setTimeout(() => c.abort(), 1500);
+  try { const r = await fetch(LDA.url + "/v1/info", { signal: c.signal, cache: "no-store" }); LDA.info = r.ok ? await r.json() : null; } catch (e) { LDA.info = null; }
+  clearTimeout(to); LDA.up = !!(LDA.info && LDA.info.name); LDA.t = Date.now(); return LDA.up;
+}
+async function ldStationId() { const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ld-agent:" + lsToken()))); return [...h.slice(0, 6)].map(b => b.toString(16).padStart(2, "0")).join(""); }
+const ldAgentCall = (path, body, method) => fetch(LDA.url + path, body === undefined && !method ? { cache: "no-store" } : { method: method || "POST", headers: { "content-type": "application/json", "x-labeldesk": "1" }, body: body === undefined ? undefined : JSON.stringify(body) })
+  .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "Print Agent error " + r.status); return j; },
+    () => { LDA.up = false; throw new Error("The LabelDesk Print Agent is not running on this computer. Start it from the Start menu, then try again."); });
+const LDA_QZ = {
+  agent: true,
+  websocket: { isActive: () => true, connect: async () => {}, disconnect: async () => {} },
+  security: { setCertificatePromise() {}, setSignatureAlgorithm() {}, setSignaturePromise() {} },
+  printers: {
+    find: async () => (await ldAgentCall("/v1/printers")).map(p => p.name),
+    details: async () => (await ldAgentCall("/v1/printers")).map(p => ({ name: p.name, driver: p.driver || "", connection: p.port || "", default: !!p.default, network: p.kind === "network" }))
+  },
+  configs: { create: (name, o) => ({ name, o: o || {} }) },
+  print: async (cfg, data) => {
+    const o = cfg.o, raw = data.every(d => d.type === "raw"), title = (dz && dz.D && dz.D.name) || "LabelDesk labels";
+    if (!raw && data.some(d => d.format !== "image")) throw new Error("Send as printer commands or pictures when printing through the Print Agent.");
+    return ldAgentCall("/v1/print", raw ? { printer: cfg.name, type: "raw", data: data.map(d => d.data), copies: o.copies || 1, title }
+      : { printer: cfg.name, type: "image", data: data.map(d => d.data), copies: o.copies || 1, widthMm: o.size && o.size.width, heightMm: o.size && o.size.height, title });
+  }
+};
 async function ldQzConnect() {
+  if (await ldAgentUp()) { if (window.qz && !window.qz.agent) LDQ.realQz = window.qz; window.qz = LDA_QZ; LDQ.agent = true; return; }
+  LDQ.agent = false; if (window.qz && window.qz.agent) window.qz = LDQ.realQz || undefined;
   await ldQzLoad();
   if (qz.websocket.isActive()) return;
   // Signed printing (no "allow this site?" pop-up) once LabelDesk's QZ certificate is installed on the server;
@@ -5418,12 +5449,12 @@ function ldGuessPrinter(name) {
 async function ldPrintOpen() {
   const dlg = document.getElementById("ldPrint"), body = document.getElementById("ldPrintBody"), D = dz.D, p = dzPrinter();
   if (!dlg.open) dlg.showModal();
-  body.innerHTML = '<p class="dz-empty">Connecting to QZ Tray on this computer…</p>';
+  body.innerHTML = '<p class="dz-empty">Looking for the LabelDesk Print Agent on this computer…</p>';
   try { await ldQzConnect(); LDQ.printers = await qz.printers.find(); LDQ.details = {}; try { for (const d of await qz.printers.details()) LDQ.details[d.name] = d; } catch (e) {} }
   catch (e) { LDQ.printers = []; LDQ.err = e && e.message || ""; }
   const saved = store.get(ldPrKey()), guess = LDQ.printers.find(n => n === saved) || LDQ.printers.find(n => new RegExp(p.brand === "Any" ? "^$" : p.brand, "i").test(n) || new RegExp(p.model.split(" ")[0].replace(/\W/g, ""), "i").test(n.replace(/\W/g, ""))) || LDQ.printers[0];
   const colourOnly = p.driver, per = D.across;
-  body.innerHTML = `${LDQ.printers.length ? "" : `<div class="dz-warn" style="margin:0 0 12px;padding:10px 12px;border-radius:10px"><b>Direct printing needs QZ Tray on this computer.</b> Install it free from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a>, start it, then <button type="button" class="ld-link" id="ldQzRetry">try again</button>. Meanwhile you can download a PDF or a printer file below.</div>`}
+  body.innerHTML = `${LDQ.printers.length ? (LDQ.agent ? `<p class="dz-cap" style="margin:0 0 10px">Printing through the LabelDesk Print Agent · <a href="${LDA.url}/" target="_blank" rel="noopener">Add a network printer</a></p>` : "") : LDQ.agent ? `<div class="dz-warn" style="margin:0 0 12px;padding:10px 12px;border-radius:10px"><b>The Print Agent found no printers.</b> Install the printer's Windows driver, or <a href="${LDA.url}/" target="_blank" rel="noopener">add a network printer</a> by its IP address, then <button type="button" class="ld-link" id="ldQzRetry">try again</button>.</div>` : `<div class="dz-warn" style="margin:0 0 12px;padding:10px 12px;border-radius:10px"><b>Direct printing needs the LabelDesk Print Agent on this computer.</b> <a href="${LDA.dl}" rel="noopener">Download it for Windows</a> (free, about 8 MB), run it, then <button type="button" class="ld-link" id="ldQzRetry">try again</button>. QZ Tray also works. Meanwhile you can download a PDF or a printer file below.</div>`}
     <div class="ld-grid2">
       <label class="ld-f">Printer on this computer<select id="ldPrName">${LDQ.printers.map(n => `<option${n === guess ? " selected" : ""}>${ldEsc(n)}</option>`).join("")}</select></label>
       <label class="ld-f">Number of labels<input id="ldPrQty" type="number" min="1" max="99999" value="${per}" step="1"></label>
@@ -5520,12 +5551,13 @@ async function ldPrintRun(test, to, keepOpen) {
       if (printed) ldSerialSave(printed);
     } else if (mode === "pdf") { // one PDF page per label row, sent to the printer as PDF: works with fields, serials and records
       let labels = ldLabels(test ? 1 : qty); if (test) labels = labels.filter(l => !l.blank).slice(0, D.across); if (!labels.length) throw new Error("Nothing to print.");
-      const jsPDF = await loadJsPDF(), k = 12, rowsN = Math.ceil(labels.length / D.across); let doc = null;
+      const jsPDF = await loadJsPDF(), k = 12, rowsN = Math.ceil(labels.length / D.across), pages = []; let doc = null;
       try { for (let r = 0; r < rowsN; r++) { dz.ctx = { labels, base: r * D.across }; const full = dzColourPNG(true, { plain: true, k, mono: !dzPrinter().colour }); const row = document.createElement("canvas"); row.width = full.width; row.height = Math.round(D.h * k); row.getContext("2d").drawImage(full, 0, -Math.round(D.vgap * k));
-          const o = D.paper > D.h ? "l" : "p"; if (!doc) doc = new jsPDF({ unit: "mm", format: [D.paper, D.h], orientation: o, compress: true }); else doc.addPage([D.paper, D.h], o); doc.addImage(row.toDataURL("image/png"), "PNG", 0, 0, D.paper, D.h, undefined, "FAST"); for (let c = 0; c < Math.min(D.across, labels.length - r * D.across); c++) if (!labels[r * D.across + c].blank) ldPdfOutline(doc, D.edge + c * (dzLW() + D.hgap), 0, dzLW(), D.h); } }
+          const png = row.toDataURL("image/png"); if (LDQ.agent) { pages.push(png.split(",")[1]); continue; } const o = D.paper > D.h ? "l" : "p"; if (!doc) doc = new jsPDF({ unit: "mm", format: [D.paper, D.h], orientation: o, compress: true }); else doc.addPage([D.paper, D.h], o); doc.addImage(png, "PNG", 0, 0, D.paper, D.h, undefined, "FAST"); for (let c = 0; c < Math.min(D.across, labels.length - r * D.across); c++) if (!labels[r * D.across + c].blank) ldPdfOutline(doc, D.edge + c * (dzLW() + D.hgap), 0, dzLW(), D.h); } }
       finally { dz.ctx = null; dz.gfx = null; }
-      const b64 = doc.output("datauristring").split(",")[1];
-      await qz.print(qz.configs.create(name, { size: { width: D.paper, height: D.h }, units: "mm", margins: 0, scaleContent: false, colorType: dzPrinter().colour ? "color" : "blackwhite" }), [{ type: "pixel", format: "pdf", flavor: "base64", data: b64 }]);
+      if (LDQ.agent) await qz.print(qz.configs.create(name, { size: { width: D.paper, height: D.h }, units: "mm" }), pages.map(data => ({ type: "pixel", format: "image", flavor: "base64", data })));
+      else { const b64 = doc.output("datauristring").split(",")[1];
+      await qz.print(qz.configs.create(name, { size: { width: D.paper, height: D.h }, units: "mm", margins: 0, scaleContent: false, colorType: dzPrinter().colour ? "color" : "blackwhite" }), [{ type: "pixel", format: "pdf", flavor: "base64", data: b64 }]); }
       if (!test) printed = labels.filter(l => !l.blank); if (printed) ldSerialSave(printed);
     } else {
       if (dzVarNeeds().any) throw new Error("Fields and serial numbers print in printer-language or PDF mode. Choose “Printer commands” or “PDF to the printer”.");
@@ -6574,7 +6606,7 @@ document.addEventListener("drop", e => { const f = [...(e.dataTransfer.files || 
 </div>
 <div id="ldQPScan" hidden><video id="qsVideo" playsinline muted></video><div class="qs-box"></div><div class="qs-bar"><span id="qsMsg">Point the camera at a barcode or QR code</span><button type="button" id="qsClose">Cancel</button></div></div>
 <dialog id="ldStation" style="width:min(720px,96vw);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink)">
-  <div class="dlg-head"><div><h2>Print station</h2><div class="sub">Phones send labels here; this computer prints them through QZ Tray.</div></div><button type="button" class="x" id="lsClose" aria-label="Close">×</button></div>
+  <div class="dlg-head"><div><h2>Print station</h2><div class="sub">Phones send labels here; this computer prints them through the LabelDesk Print Agent or QZ Tray.</div></div><button type="button" class="x" id="lsClose" aria-label="Close">×</button></div>
   <div class="ld-acct" id="lsBody"></div>
 </dialog>
 <script>
@@ -6757,10 +6789,12 @@ function lsToken() { let t = store.get("ld-station"); if (!t || !/^[A-Za-z0-9_-]
 const lsLink = () => `${location.origin}/?print&station=${lsToken()}`;
 async function lsOpen() {
   const d = qp$("ldStation"), body = qp$("lsBody"); if (!d.open) d.showModal();
-  body.innerHTML = '<p class="dz-empty">Connecting to QZ Tray…</p>';
+  body.innerHTML = '<p class="dz-empty">Looking for printers on this computer…</p>';
   let printers = []; try { await ldQzConnect(); printers = await qz.printers.find(); } catch (e) {}
+  const ast = LDQ.agent && LDA.info && LDA.info.station || null, mine = ast && ast.id && ast.id === await ldStationId(), agentOn = !!(ast && ast.on && mine);
   const saved = store.get("ld-station-printer"), qr = bwipCanvas({ bcid: "qrcode", text: lsLink(), scale: 5, eclevel: "M" });
-  body.innerHTML = `${printers.length ? "" : '<div class="dz-warn" style="padding:10px 12px;border-radius:10px;margin-bottom:12px"><b>QZ Tray is needed on this computer.</b> Install it free from <a href="https://qz.io/download/" target="_blank" rel="noopener">qz.io/download</a>, start it, then reopen this window.</div>'}
+  body.innerHTML = `${printers.length ? "" : `<div class="dz-warn" style="padding:10px 12px;border-radius:10px;margin-bottom:12px"><b>${LDQ.agent ? "The Print Agent found no printers." : "The LabelDesk Print Agent is needed on this computer."}</b> ${LDQ.agent ? `Install the printer driver or <a href="${LDA.url}/" target="_blank" rel="noopener">add a network printer</a>, then reopen this window.` : `<a href="${LDA.dl}" rel="noopener">Download it for Windows</a>, run it, then reopen this window. QZ Tray also works.`}</div>`}
+    ${LDQ.agent ? `<div class="dz-cap" style="margin:0 0 12px;padding:10px 12px;border:1px solid var(--line,#e5e7eb);border-radius:10px"><b>Print Agent: ${agentOn ? `receiving phone jobs on ${ldEsc(ast.printer || "—")}` : ast && ast.on ? "receiving for a different pairing code" : "not receiving phone jobs"}.</b> ${agentOn ? "Phones print here even when this browser is closed." : "Let the agent receive and phones print here even when this browser is closed."} <button type="button" class="ld-link" id="lsAgent">${agentOn ? "Stop agent receiving" : "Let the Print Agent receive"}</button></div>` : ""}
     <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start">
       <div class="ls-qr" id="lsQr"></div>
       <div><p style="margin:0 0 8px"><b>1.</b> On the phone, open <b>labeldesk.app</b>, tap <b>Pair</b> and scan this code.<br><b>2.</b> Keep this tab open: labels sent from the phone print here.</p>
@@ -6770,8 +6804,16 @@ async function lsOpen() {
     <h3 style="font-size:14px;margin:14px 0 6px">Recent jobs</h3><div class="ls-log" id="lsLog"></div>`;
   if (qr) { qr.style.width = "180px"; qr.style.height = "180px"; qr.style.imageRendering = "pixelated"; qp$("lsQr").append(qr); }
   qp$("lsGo").onclick = () => { LS.on ? lsStop() : lsStart(); lsOpen(); };
+  if (qp$("lsAgent")) qp$("lsAgent").onclick = async () => {
+    const on = !agentOn, pr = qp$("lsPr").value;
+    if (on && !pr) return toast("Choose the printer first");
+    try { await ldAgentCall("/v1/station", on ? { token: lsToken(), printer: pr, on: true } : { on: false }); if (on && LS.on) lsStop(); await ldAgentUp(true);
+      toast(on ? `Print Agent now receives phone jobs on ${pr}` : "Print Agent stopped receiving"); } catch (e) { toast(e.message); }
+    lsOpen(); };
   qp$("lsCopy").onclick = () => navigator.clipboard && navigator.clipboard.writeText(lsLink()).then(() => toast("Phone link copied"));
-  qp$("lsNew").onclick = async () => { if (!await ldConfirm({ title: "Make a new pairing code?", body: "Phones paired with the old code must scan again.", verb: "Make new code", danger: 1 })) return; store.set("ld-station", ""); lsOpen(); };
+  qp$("lsNew").onclick = async () => { if (!await ldConfirm({ title: "Make a new pairing code?", body: "Phones paired with the old code must scan again.", verb: "Make new code", danger: 1 })) return; store.set("ld-station", "");
+    if (agentOn) await ldAgentCall("/v1/station", { token: lsToken() }).catch(() => {});
+    lsOpen(); };
   qp$("lsPr").onchange = e => { store.set("ld-station-printer", e.target.value); if (LS.on) lsHello(); };
   lsDraw();
 }

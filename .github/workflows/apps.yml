@@ -14,6 +14,38 @@ on:
     tags: ["app-v*"]
 
 jobs:
+  agent:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/agent } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: apps/agent/go.mod }
+      - name: Windows icon and version info
+        run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon icon.png --manifest gui --product-name "LabelDesk Print Agent" --file-description "LabelDesk Print Agent" --company-name "Infinite Solutions" --product-version 1.0.0 --file-version 1.0.0 --original-filename LabelDesk-Print-Agent.exe
+      - name: Build
+        run: |
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent.exe .
+          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent-arm64.exe .
+          GOOS=linux GOARCH=amd64 go build -trimpath -o dist/labeldesk-agent-linux-x64 .
+      - uses: actions/upload-artifact@v4
+        with: { name: LabelDesk-Print-Agent, path: apps/agent/dist/* }
+
+  agent-mac:
+    runs-on: macos-15
+    defaults: { run: { working-directory: apps/agent } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: apps/agent/go.mod }
+      - run: |
+          mkdir -p dist
+          GOARCH=arm64 go build -trimpath -o dist/labeldesk-agent-mac-arm64 .
+          GOARCH=amd64 go build -trimpath -o dist/labeldesk-agent-mac-x64 .
+      - uses: actions/upload-artifact@v4
+        with: { name: LabelDesk-Print-Agent-mac, path: apps/agent/dist/* }
+
   android:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/mobile } }

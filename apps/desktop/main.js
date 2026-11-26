@@ -55,7 +55,7 @@ else {
     Menu.setApplicationMenu(null);
     // Camera (picture to label) and microphone (speak a description) only for LabelDesk itself.
     session.defaultSession.setPermissionRequestHandler((wc, perm, cb, details) => {
-      const okPerm = ["media", "clipboard-read", "clipboard-sanitized-write", "notifications", "fullscreen", "persistent-storage"].includes(perm);
+      const okPerm = ["media", "clipboard-read", "clipboard-sanitized-write", "notifications", "fullscreen", "persistent-storage", "local-network-access", "local-network", "loopback-network"].includes(perm);
       cb(okPerm && ours(details.requestingUrl || wc.getURL()));
     });
     // Ask where to save every file (.ldl, .prn, PDF, PNG).

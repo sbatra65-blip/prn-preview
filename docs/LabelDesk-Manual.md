@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.6 · **Last updated:** 26 November 2026
+**Manual version:** 1.7 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -39,7 +39,7 @@
 
 ## 1. What LabelDesk does
 
-LabelDesk designs and prints barcode labels from any web browser on Windows, Mac, Android or iPhone. Nothing needs to be installed except the free QZ Tray print helper on computers that print directly to a label printer.
+LabelDesk designs and prints barcode labels from any web browser on Windows, Mac, Android or iPhone. Nothing needs to be installed except the free **LabelDesk Print Agent** (or QZ Tray) on computers that print directly to a label printer.
 
 - Design labels to the millimetre with text, 60+ barcode types, QR codes, lines, shapes, images, dates and serial numbers.
 - Print to thermal label printers in their own language (TSPL, ZPL, EPL2, DPL, SBPL, Fingerprint, CPCL), or as an image or PDF to any printer.
@@ -304,7 +304,7 @@ Click **Print** at the start of the **Edit** tab (the ribbon shown when LabelDes
 
 | Mode | Use for |
 |---|---|
-| **Printer commands** | Thermal label printers. Sharpest and fastest. Needs QZ Tray on the computer |
+| **Printer commands** | Thermal label printers. Sharpest and fastest. Needs the LabelDesk Print Agent (or QZ Tray) on the computer |
 | **Image via driver** | Any printer with a Windows/Mac driver; colour labels |
 | **PDF to the printer** | Printers that print PDF, and Mac drivers |
 
@@ -324,7 +324,21 @@ Click **Print** at the start of the **Edit** tab (the ribbon shown when LabelDes
 
   The choice is remembered for each printer. The printer keeps tear, peel or cut settings for later jobs until changed. For other printer languages, and in Image or PDF mode, set tear, peel or cut on the printer or in its driver.
 
-### QZ Tray (direct printing from a computer)
+### LabelDesk Print Agent (direct printing from a computer)
+
+1. Download **LabelDesk-Print-Agent.exe** from https://labeldesk.app/download/LabelDesk-Print-Agent.exe (or the link in the print window) and run it. No admin rights are needed.
+2. It installs itself for your Windows user, adds **LabelDesk Print Agent** to the Start menu, starts with Windows, and sits in the tray near the clock. Its page opens once.
+3. In LabelDesk press **Print**. The print window says "Printing through the LabelDesk Print Agent" and lists the printers installed on the computer.
+4. **Network printers:** tray icon → **Open Print Agent** → **Add a network printer**: name, IP address, port 9100. They then appear in LabelDesk's print window. Network printers take Printer commands only.
+5. **Send a printer file:** on the agent's page, choose a .prn file and a printer → **Print file**.
+6. If the browser asks to allow labeldesk.app to reach apps on this device, choose **Allow**.
+7. The agent only accepts jobs from labeldesk.app and only listens on this computer. To remove it: untick **Start with Windows** in the tray menu, **Quit**, and delete the folder `%LOCALAPPDATA%\LabelDesk Print Agent`.
+
+Windows may say "Windows protected your PC" on first run until the agent is code-signed: **More info → Run anyway**.
+
+### QZ Tray (alternative)
+
+LabelDesk still works with QZ Tray when the Print Agent is not running.
 
 1. Install **QZ Tray** (free) on the Windows or Mac computer connected to the printer.
 2. Start it. On the first print, allow labeldesk.app when QZ Tray asks.
@@ -338,6 +352,7 @@ Click **Print** at the start of the **Edit** tab (the ribbon shown when LabelDes
 
 - **Phone print screen** (File → Print more): pick a design, fill in fields, print.
 - **Print station** (on the PC next to the printer): File → Print more → Print station. It shows a pairing code or QR. Phones scan it once, and their jobs then print on that PC's printer.
+- **With the Print Agent:** in the Print station window click **Let the Print Agent receive**. Phone jobs then print even when no browser is open on the PC, as long as the PC is on. The agent's page shows the printer used and recent jobs.
 - **Make a new pairing code** disconnects old phones; they must scan again.
 
 ---
@@ -433,7 +448,9 @@ These are switched on once the administrator has set up the server keys.
 
 | Problem | Fix |
 |---|---|
-| "QZ Tray is needed on this computer" | Install and start QZ Tray, then allow labeldesk.app |
+| "Direct printing needs the LabelDesk Print Agent" | Download and run the Print Agent (or start it from the Start menu), then **try again** |
+| "The Print Agent found no printers" | Install the printer's Windows driver, or add it as a network printer on the agent's page |
+| "Network printers take printer commands only" | Choose **Printer commands** in the print window, or print through an installed printer |
 | "No printer found on this computer" | Check the printer is installed in Windows/Mac and switched on |
 | Print is blurred or text is the wrong size | Use **Printer commands** mode and a printer font; check language and dpi in Label setup |
 | Label prints offset | Check label size, gap and edge in Label setup; calibrate the printer's media sensor |
@@ -458,7 +475,8 @@ Help: **Tools → Talk to us**.
 | Liner | The backing paper the labels sit on |
 | Gap | Space between labels on the roll |
 | .ldl | LabelDesk's own encrypted design file |
-| QZ Tray | Free helper program that lets a web page print directly to a printer |
+| LabelDesk Print Agent | LabelDesk's own helper program that prints to installed and network printers and receives phone jobs |
+| QZ Tray | Free third-party helper that lets a web page print directly to a printer |
 | GS1 / AI | Global barcode standard; Application Identifiers such as (01) GTIN and (17) expiry |
 | LMPC | Legal Metrology (Packaged Commodities) rules for labels on packaged goods in India |
 | MRN | Medical record number on a patient wristband |
@@ -469,6 +487,7 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.7 | 26 Nov 2026 | LabelDesk Print Agent (section 13): direct printing without QZ Tray, network printers by IP, phone printing with the browser closed (section 14), troubleshooting rows |
 | 1.6 | 26 Nov 2026 | Android, iPhone and Windows apps (section 2): share-sheet saving on phones, Save-as dialogs and own window on Windows, offline page |
 | 1.5 | 26 Nov 2026 | Edit tab ribbon starts with quick-insert buttons: Text, Barcodes ▾, Image, Database ▾ (same as the Insert tab), placed before Print |
 | 1.4 | 26 Nov 2026 | Button tips: shown on hover or keyboard Tab only, not when the designer opens or on touch screens (fixes "About LabelDesk" showing on the iPhone) |
