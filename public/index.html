@@ -4533,7 +4533,7 @@ const DZ_IC = { // 24x24 stroke icons, drawn for this app
   arcup: "M3 17a9 9 0 0 1 18 0", arcdn: "M3 7a9 9 0 0 0 18 0", ring: "M12 4a8 8 0 1 0 .01 0", wave: "M2 12c3-6 5-6 8 0s5 6 8 0 3-3 4-3", flat: "M4 12h16",
   grid: "M4 4h16v16H4zM4 10h16M4 16h16M10 4v16M16 4v16", zin: "M10 4a6 6 0 1 0 .01 0M15 15l5 5M7 10h6M10 7v6", zout: "M10 4a6 6 0 1 0 .01 0M15 15l5 5M7 10h6", fit: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
   newdoc: "M6 3h9l4 4v14H6zM14 3v5h5M12 11v6M9 14h6", openf: "M3 7h6l2 2h10v10H3zM12 12v5M9.5 14.5L12 12l2.5 2.5", lib: "M4 4h4v16H4zM10 4h4v16h-4zM16 5l4 1-3 14-4-1z",
-  check: "M5 12l4 4 10-10M4 4h16v16H4z", gs1: "M4 5h16v14H4zM8 9v6M11 9v6M14 9v6M17 9v6", pic: "M4 6h16v12H4zM7 15l3-3 2 2 3-4 3 5M12 2v3M3 21h18", back: "M10 6l-6 6 6 6M4 12h16", printers: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5z", code: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16", printer: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5zM9 14h6",
+  check: "M5 12l4 4 10-10M4 4h16v16H4z", gs1: "M4 5h16v14H4zM8 9v6M11 9v6M14 9v6M17 9v6", pic: "M4 6h16v12H4zM7 15l3-3 2 2 3-4 3 5M12 2v3M3 21h18", back: "M10 6l-6 6 6 6M4 12h16", printers: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5z", code: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16", printer: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5zM9 14h6", noprint: "M7 8V3h10v5M5 8h14v8h-2v4H7v-4H5zM3 3l18 18",
 };
 const dzIcon = (k, sz = 20) => `<svg aria-hidden="true" width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${DZ_IC[k] || ""}"/></svg>`;
 function dzRibbonDef() {
@@ -4567,9 +4567,10 @@ function dzRibbonDef() {
   const italB = B("italic", "Italic", () => dzToggle("italic"), () => dzSelTextAll().some(o => o.font), () => { const l = dzSelTextAll().filter(o => o.font); return !!l.length && l.every(o => o.italic); }, "Italic (Ctrl+I)");
   // every command has one home: Home = edit and format, Insert = new objects, the rest as named
   return {
-    Home: [["", [editDD, B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
+    Home: [["", [B("printer", "Print", () => ldPrintOpen(), null, null, "Print label (Ctrl+P)")]],
+      ["", [editDD, B("undo", "Undo", () => dzUndo(-1), null, null, "Undo (Ctrl+Z)"), B("redo", "Redo", () => dzUndo(1), null, null, "Redo (Ctrl+Y)")]],
       ["", [{ font: true }, { size: true }, boldB, italB, curveDD]],
-      ["", [B("printer", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
+      ["", [B("noprint", "Don't print", noPrint, has, isNoPrint, "Keep the selected objects on screen but never print them"), alignDD, orderDD, rotateDD]]],
     Insert: [["", [textDD, dtDD, { symsel: true }, B("image", "Image", () => $("dzImgFile").click()), linesDD, shapesDD, pictureDD, B("grid", "Background", dzBgDialog, null, () => !!(dz.D && dz.D.bg && dz.D.bg.type && dz.D.bg.type !== "none"), "Colour, gradient or picture behind the label")]]],
     Data: [["", [connectDD, { dbinfo: true }, B("lib", "Records", () => ldPickRecords(), () => !!(dz.db && dz.db.rows && dz.db.rows.length), null, "Browse the records, pick which to print: 1, 3, 5-9, 14-25(3) where (3) = copies of each"), { dbfields: true }, B("dup", "Serial number", serial, null, null, "Make the selected object (or a new text) a serial number")]]],
     View: [["", [showDD, zoomDD]]],
@@ -5525,7 +5526,7 @@ document.getElementById("ldPrintX").onclick = () => document.getElementById("ldP
   const b = document.createElement("button"); b.type = "button"; b.className = "btn primary"; b.id = "dzPrint"; b.textContent = "Print"; b.title = "Print straight to the label printer (Ctrl+P)";
   b.onclick = ldPrintOpen; prn.before(b);
   const rt = document.querySelector("#dzRibbon .rt"); // in the app the header is hidden: put Print in the ribbon row too
-  if (rt) { const r = document.createElement("button"); r.type = "button"; r.className = "rpicon"; r.title = "Print label (Ctrl+P)"; r.setAttribute("aria-label", "Print label"); r.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>'; r.onclick = ldPrintOpen; const tabs = rt.querySelectorAll("[data-tab]"); const last = tabs[tabs.length - 1]; if (last) last.after(r); else rt.append(r); }
+  if (rt && false) { const r = document.createElement("button"); r.type = "button"; r.className = "rpicon"; r.title = "Print label (Ctrl+P)"; r.setAttribute("aria-label", "Print label"); r.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>'; r.onclick = ldPrintOpen; const tabs = rt.querySelectorAll("[data-tab]"); const last = tabs[tabs.length - 1]; if (last) last.after(r); else rt.append(r); }
   document.getElementById("dzDlg").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); ldPrintOpen(); } });
 })();
 </script>

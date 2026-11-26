@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.2 · **Last updated:** 26 November 2026
+**Manual version:** 1.3 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -75,7 +75,7 @@ LabelDesk designs and prints barcode labels from any web browser on Windows, Mac
 
 | Area | What it holds |
 |---|---|
-| **Top bar** | Logo, **File** menu, ribbon tabs (Edit, Insert, Data, View, Tools) and the **printer icon** (Print label) |
+| **Top bar** | Logo, **File** menu, ribbon tabs (Edit, Insert, Data, View, Tools) |
 | **Ribbon** | Buttons for the chosen tab. Buttons with ▾ open a menu; ▸ in a menu opens a sub-menu |
 | **Describe bar** | Type or speak a label description (English or Hindi), then **Design it**. Tick **change current** to edit the open design instead of starting a new one. On phones it is behind the ✨ button |
 | **View controls** | Show (As designed / Portrait / Landscape), Grid, Snap, Zoom −, Fit, 1:1, + |
@@ -87,7 +87,7 @@ LabelDesk designs and prints barcode labels from any web browser on Windows, Mac
 | Tab | Buttons |
 |---|---|
 | **File** (menu) | New design · New wristband ▸ · Label setup… · Open ▸ (Recent, My designs, .ldl file, paste code) · Save ▸ (cloud, .ldl, .prn, PNG) · Print label… · Print more ▸ · Settings ▸ · About |
-| **Edit** | Clipboard ▾ (paste, copy, duplicate, delete) · Undo · Redo · Font · Size (pt) · Bold · Italic · Curve ▾ · Don't print · Align ▾ · Order ▾ · Rotate ▾ |
+| **Edit** (opens first) | **Print** · Clipboard ▾ (paste, copy, duplicate, delete) · Undo · Redo · Font · Size (pt) · Bold · Italic · Curve ▾ · Don't print · Align ▾ · Order ▾ · Rotate ▾ |
 | **Insert** | Text ▾ · Date & time ▾ · Barcodes ▾ · Image · Line or box ▾ · Shapes ▾ · Picture ▾ (Picture to label, Picture to PRN) · Background |
 | **Data** | Connect ▾ (CSV/Excel/JSON/XML, Tally, Zoho Inventory, SAP/Oracle/ERP, ODBC/SQL) · data source info · Records · fields · Serial number |
 | **View** | Show ▾ (As designed, Portrait, Landscape, Grid) · Zoom ▾ (in, out, fit, actual size, calibrate) |
@@ -286,7 +286,7 @@ AI uses a monthly allowance per account or company. The picture is used only to 
 
 ## 13. Printing
 
-Click the **printer icon** next to the tabs, or **File → Print label…**, or press Ctrl+P.
+Click **Print** at the start of the **Edit** tab (the ribbon shown when LabelDesk opens), or **File → Print label…**, or press Ctrl+P.
 
 **Print modes**
 
@@ -457,6 +457,7 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.3 | 26 Nov 2026 | Print button moved to the start of the Edit tab ribbon (default tab); Don't print has its own crossed-out printer icon |
 | 1.2 | 26 Nov 2026 | Orange Print button replaced by a printer icon next to the tabs and File → Print label… (with icon); phone print screen is in File → Print more |
 | 1.1 | 26 Nov 2026 | Print window: After printing — tear off, peel off, cut every label, every N labels, or once per job (TSPL, ZPL) |
 | 1.0 | 26 Nov 2026 | First manual: designer, Label setup in File, ribbon tabs (Edit, Insert, Data, View, Tools), date and time objects with custom formats, wristbands, recent designs, encrypted browser storage with PIN, dark-mode fix, describe bar behind ✨ on phones |
