@@ -6949,6 +6949,7 @@ async function ldRecentLoad() {
 }
 function ldRecentTouch() {
   const D = dz.D; if (!D || !D.items || !D.items.length || dz.restoring) return;
+  if (!ldRecentTouch.asked && navigator.storage && navigator.storage.persist) { ldRecentTouch.asked = true; navigator.storage.persist().catch(() => {}); }
   if (!D.rid) D.rid = D.cloud && D.cloud.id ? "c-" + D.cloud.id : "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   clearTimeout(ldRecentTouch.t);
   ldRecentTouch.t = setTimeout(async () => {
