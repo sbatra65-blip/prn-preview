@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.0 · **Last updated:** 26 November 2026
+**Manual version:** 1.1 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -299,6 +299,18 @@ Press **Print** (Ctrl+P).
 **Print window**
 - Printer, copies, record selection, the data entry form, **Print 1 test label**.
 - **Label outline** for PDF and laser printing: none, square, or rounded corners.
+- **After printing** (Printer commands mode, TSC TSPL and Zebra ZPL):
+
+  | Choice | What the printer does | Needs |
+  |---|---|---|
+  | As set on the printer | Nothing is sent; the printer's own setting is used | — |
+  | Tear off | Stops each label at the tear bar | — |
+  | Peel off each label | Peels each label from the liner; the next prints when it is taken | Peeler / label dispenser |
+  | Cut after every label | Cuts each label | Cutter |
+  | Cut after every … labels | Cuts after the number of labels you set (e.g. every 10) | Cutter |
+  | Cut once at the end of the job | One cut after the last label | Cutter |
+
+  The choice is remembered for each printer. The printer keeps tear, peel or cut settings for later jobs until changed. For other printer languages, and in Image or PDF mode, set tear, peel or cut on the printer or in its driver.
 
 ### QZ Tray (direct printing from a computer)
 
@@ -445,5 +457,6 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.1 | 26 Nov 2026 | Print window: After printing — tear off, peel off, cut every label, every N labels, or once per job (TSPL, ZPL) |
 | 1.0 | 26 Nov 2026 | First manual: designer, Label setup in File, ribbon tabs (Edit, Insert, Data, View, Tools), date and time objects with custom formats, wristbands, recent designs, encrypted browser storage with PIN, dark-mode fix, describe bar behind ✨ on phones |
 | | | *Add new rows above this line* |

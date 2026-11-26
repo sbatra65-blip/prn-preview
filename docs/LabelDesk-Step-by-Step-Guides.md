@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.0 · **Last updated:** 26 November 2026
+**Guide version:** 1.1 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -178,6 +178,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
    - **Image via driver** for any printer or colour.
    - **PDF to the printer** for PDF-capable printers and Mac.
 3. Set copies, records, and the form fields if any.
+   **After printing:** choose **Tear off**, **Peel off each label**, **Cut after every label**, **Cut after every … labels** (type the number) or **Cut once at the end of the job**. Peel and cut need the peeler or cutter fitted on the printer.
 4. Press **Print 1 test label** first. Check alignment, then print the full job.
 
 ### Save
@@ -193,5 +194,6 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.1 | 26 Nov 2026 | Guide 9: peel-off and cutter choices |
 | 1.0 | 26 Nov 2026 | First guides: placing objects, picture to label (AI), PRN files and code, picture to PRN, describe it, Excel, typed at print time, wristband, print and save |
 | | | *Add new rows above this line* |

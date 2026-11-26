@@ -5412,6 +5412,17 @@ async function ldPrintOpen() {
         <option value="pdf">PDF to the printer (printers with PDF printing, Mac drivers)</option></select></label>
       <div class="ld-f">Label<small id="ldPrInfo"></small></div>
     </div>
+    <div class="ld-grid2" id="ldAfterRow">
+      <label class="ld-f">After printing<select id="ldAfter">
+        <option value="">As set on the printer</option>
+        <option value="tear">Tear off</option>
+        <option value="peel">Peel off each label</option>
+        <option value="cut1">Cut after every label</option>
+        <option value="cutn">Cut after every … labels</option>
+        <option value="batch">Cut once at the end of the job</option></select></label>
+      <label class="ld-f" id="ldCutNL" hidden>Labels per cut<input id="ldCutN" type="number" min="2" max="9999" value="10" inputmode="numeric"></label>
+    </div>
+    <p class="dz-cap" id="ldAfterNote" hidden></p>
     <p class="ld-err" id="ldPrErr" role="alert"></p>
     <div class="ld-row"><button type="button" class="btn primary" id="ldPrGo"${LDQ.printers.length ? "" : " disabled"}>Print</button><button type="button" class="btn" id="ldPrTest"${LDQ.printers.length ? "" : " disabled"}>Print 1 test label</button><button type="button" class="btn" id="ldPrPrev">Preview labels</button>${dzVarNeeds().fields.some(f => f.ask) ? `<button type="button" class="btn primary" id="ldPrNext"${LDQ.printers.length ? "" : " disabled"} title="Print, then clear the form for the next label (Enter in the last box)">Print and next</button>` : ""}
       <span style="flex:1"></span>
@@ -5437,7 +5448,8 @@ async function ldPrintOpen() {
     if (raw && dpi !== D.dpi && lang !== "EPL2") msg.push(`The design is set for ${D.dpi} dpi; it will be made at ${dpi} dpi for this printer. The size in mm stays the same.`);
     if (raw && lang !== D.lang) msg.push(`Commands will be ${DZ_LANG_NAME[lang]} instead of the design's ${DZ_LANG_NAME[D.lang]}.`);
     n.hidden = !msg.length; n.textContent = msg.join(" "); };
-  $p("ldPrName").onchange = fit; $p("ldPrDpi").onchange = note; $p("ldPrLang").onchange = note; $p("ldPrMode").onchange = note; fit();
+  $p("ldPrName").onchange = () => { fit(); ldAfterLoad(); }; $p("ldPrDpi").onchange = note; $p("ldPrLang").onchange = () => { note(); ldAfterSync(); }; $p("ldPrMode").onchange = () => { note(); ldAfterSync(); }; fit();
+  $p("ldAfter").onchange = () => { ldAfterSync(); ldAfterKeep(); }; $p("ldCutN").onchange = () => { const e = $p("ldCutN"); e.value = Math.max(2, Math.min(9999, Math.round(+e.value) || 10)); ldAfterKeep(); }; ldAfterLoad();
   document.getElementById("ldPrGo").onclick = () => ldPrintRun(false);
   document.getElementById("ldPdfGo").onclick = () => ldPrintPDF(); document.getElementById("ldOutline").onchange = e => store.set("ld-outline", e.target.value);
   document.getElementById("ldPrnGo").onclick = () => ldPrintRun(false, "file");
@@ -5471,6 +5483,7 @@ async function ldPrintRun(test, to, keepOpen) {
         if (!test && labels.length > 2000 && !await ldConfirm({ title: `Print ${labels.length} labels on ${name}?`, verb: "Print labels" })) return;
         const v = ldVarPRN(labels, lang, dpi); q = { prn: v.prn, done: true }; if (!test) printed = labels; toast(`${labels.filter(l => !l.blank).length} label(s) prepared`);
       } else { const { prn } = layoutPRN(dzLayoutFor(lang), lang, dpi); q = ldWithQty(prn, lang, rows); }
+      q.prn = ldAfterApply(q.prn, lang);
       if (to === "file") { const a = document.createElement("a"); a.href = URL.createObjectURL(prnBytes(q.prn)); a.download = `labels_${lang}_${dpi}dpi.prn`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); if (printed) ldSerialSave(printed); toast("Printer file downloaded"); return; }
       const data = [{ type: "raw", format: "command", flavor: "base64", data: await ldB64(prnBytes(q.prn)) }];
       await qz.print(qz.configs.create(name, { copies: q.done ? 1 : rows }), data);
@@ -7122,6 +7135,54 @@ async function lvSettings() {
   if (on) $$("lvOff").onclick = async () => { if (!await checkCur()) return; const key = await lvDeviceKey(); LV.key = key; LV.rec = { id: "main", mode: "device", key }; await lvRewriteAll(); await lvPut(LV.rec); d.close(); toast("PIN removed. Designs here stay encrypted."); };
   $$("lvClear").onclick = async () => { if (on && !await checkCur()) return; if (await ldConfirm({ title: "Clear LabelDesk data from this device?", body: "Deletes the draft and recent designs kept in this browser, and the PIN. Cloud designs, .ldl files and your fonts are not affected. This cannot be undone.", verb: "Clear data", danger: 1 })) { d.close(); await lvWipe(); } };
   d.showModal(); (on ? $$("lvCur") : $$("lvP1")).focus();
+}
+</script>
+
+<script>
+/* After printing: tear off, peel off, or cut (every label, every N labels, once per job).
+   TSPL: SET TEAR / SET PEEL / SET CUTTER OFF|BATCH|n. ZPL: ^MMT / ^MMP / ^MMC, ^PQ pause-and-cut count, ^XB to skip a cut. */
+const ldAfterOK = lang => lang === "TSPL" || lang === "ZPL";
+function ldAfterSync() {
+  const g = id => document.getElementById(id), sel = g("ldAfter"); if (!sel) return;
+  const lang = g("ldPrLang") ? g("ldPrLang").value : dz.D.lang, raw = g("ldPrMode") ? g("ldPrMode").value === "raw" : true, m = sel.value, note = g("ldAfterNote");
+  g("ldAfterRow").hidden = !raw; g("ldCutNL").hidden = !raw || m !== "cutn";
+  let t = "";
+  if (raw && m && !ldAfterOK(lang)) t = `For ${lang} printers, choose tear off, peel off or the cutter on the printer itself (its menu or settings tool). LabelDesk sends it for TSPL (TSC) and ZPL (Zebra).`;
+  else if (raw && m === "peel") t = "Needs the peeler (label dispenser) fitted. The next label prints when the last one is taken.";
+  else if (raw && /cut|batch/.test(m)) t = "Needs a cutter fitted. Counts printed label rows. The printer keeps this setting for later jobs until it is changed.";
+  else if (!raw && m) t = "In Image and PDF modes, set tear, peel or cut in the printer driver (Printing preferences).";
+  note.textContent = t; note.hidden = !t;
+}
+function ldAfterKeep() { const g = id => document.getElementById(id), name = g("ldPrName") ? g("ldPrName").value : ""; store.set("ld-after:" + (name || "-"), JSON.stringify({ m: g("ldAfter").value, n: +g("ldCutN").value || 10 })); }
+function ldAfterLoad() {
+  const g = id => document.getElementById(id); if (!g("ldAfter")) return; let v = {};
+  try { v = JSON.parse(store.get("ld-after:" + ((g("ldPrName") && g("ldPrName").value) || "-")) || "{}"); } catch (_) {}
+  g("ldAfter").value = v.m || ""; g("ldCutN").value = v.n || 10; ldAfterSync();
+}
+function ldAfterApply(prn, lang) {
+  const g = id => document.getElementById(id); if (!g("ldAfter")) return prn;
+  const m = g("ldAfter").value, n = Math.max(2, Math.min(9999, +g("ldCutN").value || 10));
+  if (!m || !ldAfterOK(lang)) return prn;
+  if (lang === "TSPL") {
+    const nl = /\r\n/.test(prn) ? "\r\n" : "\n";
+    const pre = { tear: `SET PEEL OFF${nl}SET CUTTER OFF${nl}SET TEAR ON${nl}`, peel: `SET CUTTER OFF${nl}SET PEEL ON${nl}`, cut1: `SET PEEL OFF${nl}SET CUTTER 1${nl}` }[m];
+    if (pre) return pre + prn;
+    const blocks = prn.match(/[\s\S]*?PRINT [^\r\n]*(\r?\n)?/g) || []; const tail = prn.slice(blocks.join("").length), k = blocks.length;
+    if (k <= 1) return `SET PEEL OFF${nl}SET CUTTER ${m === "batch" ? "BATCH" : n}${nl}` + prn;
+    let out = `SET PEEL OFF${nl}SET CUTTER OFF${nl}`;
+    blocks.forEach((b, i) => { const j = i + 1, cut = j === k || (m === "cutn" && j % n === 0); out += cut ? b.replace(/(PRINT [^\r\n]*(\r?\n)?)$/, `SET CUTTER 1${nl}$1` + (j < k ? `SET CUTTER OFF${nl}` : "")) : b; });
+    return out + tail;
+  }
+  // ZPL
+  const mm = m === "tear" ? "^MMT" : m === "peel" ? "^MMP" : "^MMC", parts = prn.split(/(?=\^XA)/), k = parts.filter(x => x.startsWith("^XA")).length; let j = 0;
+  return parts.map(x => {
+    if (!x.startsWith("^XA")) return x; j++; let b = x.replace(/^\^XA/, "^XA" + mm);
+    if (m === "cutn" || m === "batch") {
+      if (k === 1) { if (/\^PQ\d+/.test(b)) b = b.replace(/\^PQ(\d+)[^\^]*/, (_, q) => `^PQ${q},${m === "batch" ? q : Math.min(n, +q)},0,Y`); }
+      else if (!(j === k || (m === "cutn" && j % n === 0))) b = b.replace(/\^XZ/, "^XB^XZ");
+    }
+    return b;
+  }).join("");
 }
 </script>
 </body>
