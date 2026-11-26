@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.1 · **Last updated:** 26 November 2026
+**Guide version:** 1.2 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -153,7 +153,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 1. Select the object → **Content comes from → Asked when printing**.
 2. Set the question (e.g. "Net weight"), type (text, number, date, list or scan), required, and **keep last value**.
-3. Press **Print**. The form appears in the print window.
+3. Click the printer icon. The form appears in the print window.
 4. Fill it in and press **Print and next**. It prints and clears for the next label.
 
 ---
@@ -163,7 +163,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 1. **File → New wristband ▸ Hospital: adult** (or child or infant).
 2. The band opens with name, MRN, DOB, sex, ward, admission date and barcodes. The printer is set to a wristband printer if yours is too narrow.
 3. Load wristbands in the printer and do one **test print**. If text falls on the clasp, drag it along the band.
-4. Press **Print**, fill in the patient details (scan the MRN if you have a scanner), then **Print and next** for the next patient.
+4. Click the printer icon, fill in the patient details (scan the MRN if you have a scanner), then **Print and next** for the next patient.
 5. Patient details are not saved in the design.
 
 ---
@@ -172,7 +172,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 ### Print
 
-1. Press **Print** (Ctrl+P).
+1. Click the **printer icon** next to the tabs, or **File → Print label…** (Ctrl+P).
 2. Choose the **printer** and **mode**:
    - **Printer commands** for thermal label printers (QZ Tray must be running).
    - **Image via driver** for any printer or colour.
@@ -194,6 +194,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.2 | 26 Nov 2026 | Printing starts from the printer icon or File → Print label… |
 | 1.1 | 26 Nov 2026 | Guide 9: peel-off and cutter choices |
 | 1.0 | 26 Nov 2026 | First guides: placing objects, picture to label (AI), PRN files and code, picture to PRN, describe it, Excel, typed at print time, wristband, print and save |
 | | | *Add new rows above this line* |

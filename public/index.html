@@ -612,6 +612,13 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 .lv-note { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
 .lv-set { width: min(520px, 94vw); }
 @media (max-width: 480px) { .lv-g { grid-template-columns: 1fr; } }
+
+/* Print: an icon in the tab row (also File → Print label…) */
+.dz-ribbon .rt .rpicon { align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin: 0 0 4px 4px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--ink); cursor: pointer; }
+.dz-ribbon .rt .rpicon:hover { background: #f1f5f9; border-color: var(--line); color: var(--accent); }
+.dz-ribbon .rt .rpicon:active { background: #e2e8f0; }
+@media (pointer: coarse) { .dz-ribbon .rt .rpicon { width: 44px; height: 44px; min-width: 44px; } }
+.dz-drop button .ck svg { display: block; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -4447,7 +4454,7 @@ function dzMenus() {
       ["Open", [...ldRecentMenu(), ["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")]]],
       ["Save", [["Save to cloud", click("dzSave"), "Ctrl+S"], ["Save as .ldl file…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG]]],
       "-",
-      ["Print…", () => ldPrintOpen(), "Ctrl+P"],
+      ["Print label…", () => ldPrintOpen(), "Ctrl+P", null, null, "printer"],
       ["Print more", [["Preview as printed", click("dzToViewer")], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()]]],
       "-",
       ["Settings", [["Privacy and PIN…", () => lvSettings()], ["My fonts…", () => ldFontsManage()], ["Calibrate screen…", () => dzCalibrate()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")]]],
@@ -4481,8 +4488,8 @@ function ldMenu(items, at, level = 0) {
   for (const m of items) {
     if (m === "-") { if (drop.lastChild && drop.lastChild.tagName !== "HR") drop.append(document.createElement("hr")); continue; }
     if (typeof m === "string" && m[0] === "#") { const g = document.createElement("div"); g.className = "grp"; g.textContent = m.slice(1); drop.append(g); continue; }
-    const [label, run, key, en, ck] = m, sub = Array.isArray(run), b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
-    b.innerHTML = `<span class="ck">${!sub && ck && ck() ? "✓" : ""}</span><span></span>${sub ? '<b class="sub" aria-hidden="true">▸</b>' : key ? `<kbd>${key}</kbd>` : ""}`; b.children[1].textContent = label;
+    const [label, run, key, en, ck, ic] = m, sub = Array.isArray(run), b = document.createElement("button"); b.type = "button"; b.setAttribute("role", "menuitem");
+    b.innerHTML = `<span class="ck">${!sub && ck && ck() ? "✓" : ic && typeof dzIcon === "function" ? dzIcon(ic, 16) : ""}</span><span></span>${sub ? '<b class="sub" aria-hidden="true">▸</b>' : key ? `<kbd>${key}</kbd>` : ""}`; b.children[1].textContent = label;
     if (en && !en()) b.disabled = true;
     if (sub) { b.setAttribute("aria-haspopup", "menu"); const open = () => { for (const x of drop.querySelectorAll(".open")) x.classList.remove("open"); b.classList.add("open");
         if (touch || innerWidth < 700) { // small screens: the sub-menu replaces this one, with a Back row
@@ -5518,7 +5525,7 @@ document.getElementById("ldPrintX").onclick = () => document.getElementById("ldP
   const b = document.createElement("button"); b.type = "button"; b.className = "btn primary"; b.id = "dzPrint"; b.textContent = "Print"; b.title = "Print straight to the label printer (Ctrl+P)";
   b.onclick = ldPrintOpen; prn.before(b);
   const rt = document.querySelector("#dzRibbon .rt"); // in the app the header is hidden: put Print in the ribbon row too
-  if (rt) { const r = document.createElement("button"); r.type = "button"; r.className = "rprint"; r.title = b.title; r.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>Print'; r.onclick = ldPrintOpen; rt.append(r); }
+  if (rt) { const r = document.createElement("button"); r.type = "button"; r.className = "rpicon"; r.title = "Print label (Ctrl+P)"; r.setAttribute("aria-label", "Print label"); r.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg>'; r.onclick = ldPrintOpen; const tabs = rt.querySelectorAll("[data-tab]"); const last = tabs[tabs.length - 1]; if (last) last.after(r); else rt.append(r); }
   document.getElementById("dzDlg").addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p" && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); ldPrintOpen(); } });
 })();
 </script>
@@ -6771,7 +6778,7 @@ qp$("lsClose").onclick = () => qp$("ldStation").close();
 if (store.get("ld-station-on") && store.get("ld-station-printer") && !qpPhone()) setTimeout(() => { LS.on = true; lsHello().catch(() => {}); lsPoll(); }, 2500);
 
 /* phones: a button in the designer's ribbon goes back to the print screen */
-setTimeout(() => { const rt = document.querySelector(".dz-ribbon .rt"); if (!rt || rt.querySelector(".rqp")) return; const b = document.createElement("button"); b.type = "button"; b.className = "rprint rqp"; b.textContent = "Print mode"; b.title = "Phone print screen"; b.onclick = qpOpen; rt.append(b); }, 900);
+
 /* start in print mode on phones (the designer stays one tap away), or when the link says ?print */
 if (APP) setTimeout(() => { if (new URLSearchParams(location.search).has("print") || (qpPhone() && store.get("ld-qp-mode") !== "design")) qpOpen(); }, 600);
 /* service worker: lets phones install the app and open it without a connection */
