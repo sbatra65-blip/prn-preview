@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.4 · **Last updated:** 26 November 2026
+**Manual version:** 1.5 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -87,7 +87,7 @@ LabelDesk designs and prints barcode labels from any web browser on Windows, Mac
 | Tab | Buttons |
 |---|---|
 | **File** (menu) | New design · New wristband ▸ · Label setup… · Open ▸ (Recent, My designs, .ldl file, paste code) · Save ▸ (cloud, .ldl, .prn, PNG) · Print label… · Print more ▸ · Settings ▸ · About |
-| **Edit** (opens first) | **Print** · Clipboard ▾ (paste, copy, duplicate, delete) · Undo · Redo · Font · Size (pt) · Bold · Italic · Curve ▾ · Don't print · Align ▾ · Order ▾ · Rotate ▾ |
+| **Edit** (opens first) | Quick insert: **Text** · **Barcodes ▾** · **Image** · **Database ▾** (CSV/Excel/JSON/XML, business software, records) · **Print** · Clipboard ▾ (paste, copy, duplicate, delete) · Undo · Redo · Font · Size (pt) · Bold · Italic · Curve ▾ · Don't print · Align ▾ · Order ▾ · Rotate ▾ |
 | **Insert** | Text ▾ · Date & time ▾ · Barcodes ▾ · Image · Line or box ▾ · Shapes ▾ · Picture ▾ (Picture to label, Picture to PRN) · Background |
 | **Data** | Connect ▾ (CSV/Excel/JSON/XML, Tally, Zoho Inventory, SAP/Oracle/ERP, ODBC/SQL) · data source info · Records · fields · Serial number |
 | **View** | Show ▾ (As designed, Portrait, Landscape, Grid) · Zoom ▾ (in, out, fit, actual size, calibrate) |
@@ -459,6 +459,7 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.5 | 26 Nov 2026 | Edit tab ribbon starts with quick-insert buttons: Text, Barcodes ▾, Image, Database ▾ (same as the Insert tab), placed before Print |
 | 1.4 | 26 Nov 2026 | Button tips: shown on hover or keyboard Tab only, not when the designer opens or on touch screens (fixes "About LabelDesk" showing on the iPhone) |
 | 1.3 | 26 Nov 2026 | Print button moved to the start of the Edit tab ribbon (default tab); Don't print has its own crossed-out printer icon |
 | 1.2 | 26 Nov 2026 | Orange Print button replaced by a printer icon next to the tabs and File → Print label… (with icon); phone print screen is in File → Print more |

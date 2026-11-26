@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.4 · **Last updated:** 26 November 2026
+**Guide version:** 1.5 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -43,7 +43,7 @@ See also: **LabelDesk-Manual.md** for every feature in detail.
    3. **Gap:** usually 2–3 mm. **Labels across:** 1.
    4. Click **Close setup**.
 3. **Add the product name.**
-   1. **Insert → Text ▾ → Text.** A text object appears.
+   1. **Insert → Text ▾ → Text** (or the **Text** button at the start of the Edit tab). A text object appears.
    2. Double-click it and type `BASMATI RICE 1 KG`.
    3. In **Edit**, set the size (e.g. 16 pt). Pick a font, or keep the printer font for the sharpest print.
    4. Drag it to the top left.
@@ -56,7 +56,7 @@ See also: **LabelDesk-Manual.md** for every feature in detail.
    2. In the properties panel set **Add or subtract** (e.g. 12 months) and **Format** (e.g. MMM YYYY).
    3. **Takes the date and time:** keep **When printing starts**.
 7. **Add the barcode.**
-   1. **Insert → Barcodes ▾ → 1D ▸ EAN-13.**
+   1. **Insert → Barcodes ▾ → 1D ▸ EAN-13** (the same **Barcodes ▾** button is also on the Edit tab).
    2. In properties, type the 12 or 13 digits; the check digit is worked out.
    3. Drag the corner handle to size it. Keep the white space at both sides (quiet zone).
 8. **Tidy up.**
@@ -194,6 +194,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.5 | 26 Nov 2026 | Text, Barcodes, Image and Database buttons are also on the Edit tab, before Print |
 | 1.4 | 26 Nov 2026 | No step changes; button tips no longer pop up on phones (see manual 1.4) |
 | 1.3 | 26 Nov 2026 | Print is on the Edit tab ribbon |
 | 1.2 | 26 Nov 2026 | Printing starts from the printer icon or File → Print label… |
