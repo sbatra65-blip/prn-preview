@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.5 · **Last updated:** 26 November 2026
+**Manual version:** 1.6 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -68,6 +68,16 @@ LabelDesk designs and prints barcode labels from any web browser on Windows, Mac
    - **Windows/Mac:** Chrome or Edge address bar → **Install** icon.
 
    An installed app keeps its saved data more reliably, especially on iPhone.
+
+4. **LabelDesk apps.** Native apps open the same LabelDesk, so website updates reach them at once:
+
+   | App | Get it | Differences from the website |
+   |---|---|---|
+   | **Android** | Install the LabelDesk .apk (Google Play once published) | Save, Download and PDF open the share sheet: save to Files or Drive, send by WhatsApp, or print. Camera for Picture to label |
+   | **iPhone / iPad** | TestFlight, then the App Store once published | Same as Android |
+   | **Windows** | Run **LabelDesk-Setup.exe** (or the portable .exe) | Its own window and Start-menu icon, remembers its size, asks where to save each file. QZ Tray printing works as in Chrome |
+
+   Without internet the apps show "LabelDesk can't reach the internet" with **Try again**. Designs kept on the device are not affected.
 
 ---
 
@@ -459,6 +469,7 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.6 | 26 Nov 2026 | Android, iPhone and Windows apps (section 2): share-sheet saving on phones, Save-as dialogs and own window on Windows, offline page |
 | 1.5 | 26 Nov 2026 | Edit tab ribbon starts with quick-insert buttons: Text, Barcodes ▾, Image, Database ▾ (same as the Insert tab), placed before Print |
 | 1.4 | 26 Nov 2026 | Button tips: shown on hover or keyboard Tab only, not when the designer opens or on touch screens (fixes "About LabelDesk" showing on the iPhone) |
 | 1.3 | 26 Nov 2026 | Print button moved to the start of the Edit tab ribbon (default tab); Don't print has its own crossed-out printer icon |

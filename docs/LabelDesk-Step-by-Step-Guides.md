@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.5 · **Last updated:** 26 November 2026
+**Guide version:** 1.6 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -20,6 +20,7 @@ See also: **LabelDesk-Manual.md** for every feature in detail.
 - [Guide 7: Labels typed in at print time](#guide-7-labels-typed-in-at-print-time)
 - [Guide 8: Hospital wristband](#guide-8-hospital-wristband)
 - [Guide 9: Print and save](#guide-9-print-and-save)
+- [Guide 10: Install the app (Android, iPhone, Windows)](#guide-10-install-the-app-android-iphone-windows)
 - [Change log](#change-log)
 
 ---
@@ -187,6 +188,28 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 - **Permanent:** **File → Save → Save as .ldl file…** keeps the file on your device. Open it anywhere with **File → Open → LabelDesk file (.ldl)**.
 - **All devices:** **File → Save → Save to cloud** (after sign-in).
 - **For other software:** **File → Save → Download .prn**.
+- **In the Android or iPhone app:** every save opens the share sheet. Pick **Save to Files** (or Drive), WhatsApp, email or **Print**.
+
+---
+
+## Guide 10: Install the app (Android, iPhone, Windows)
+
+### Android
+1. Copy **LabelDesk.apk** to the phone (WhatsApp to yourself, Drive or USB) and tap it.
+2. If Android asks, allow **Install unknown apps** for the app you opened it from (Files, Chrome or WhatsApp), then tap **Install**.
+3. Open **LabelDesk** from the home screen. The first time you use Picture to label, allow the camera.
+4. Once LabelDesk is on Google Play, install from there instead; updates then come automatically.
+
+### iPhone / iPad
+1. Install **TestFlight** from the App Store and open the LabelDesk invite link (once the app is published, install LabelDesk from the App Store).
+2. Tap **Install**, then open LabelDesk. Allow the camera when asked.
+3. Until then, Safari → Share → **Add to Home Screen** gives the same LabelDesk.
+
+### Windows
+1. Run **LabelDesk-Setup-1.0.0.exe**. If Windows shows "Windows protected your PC", click **More info → Run anyway** (shown until the app is code-signed).
+2. Choose where to install and click **Install**. LabelDesk appears on the desktop and in the Start menu.
+3. No install rights? Use **LabelDesk-Portable.exe**, or unzip the Windows zip and run **LabelDesk.exe**.
+4. For direct printing to a label printer, install and start **QZ Tray** as in Guide 9.
 
 ---
 
@@ -194,6 +217,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.6 | 26 Nov 2026 | Guide 10: install the Android, iPhone and Windows apps; saving from the phone apps |
 | 1.5 | 26 Nov 2026 | Text, Barcodes, Image and Database buttons are also on the Edit tab, before Print |
 | 1.4 | 26 Nov 2026 | No step changes; button tips no longer pop up on phones (see manual 1.4) |
 | 1.3 | 26 Nov 2026 | Print is on the Edit tab ribbon |

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LabelDesk</string>
+    <string name="title_activity_main">LabelDesk</string>
+    <string name="package_name">app.labeldesk</string>
+    <string name="custom_url_scheme">app.labeldesk</string>
+</resources>

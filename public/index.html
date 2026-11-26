@@ -15,6 +15,26 @@
 <meta property="og:title" content="LabelDesk: cloud label designer">
 <meta property="og:url" content="https://labeldesk.app/">
 <meta name="theme-color" content="#1f5eff">
+<script>/* Native apps (Android/iPhone via Capacitor): files the page "downloads" go to the share sheet instead */
+(function () {
+  var C = window.Capacitor; if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;
+  document.documentElement.classList.add("ld-native", "ld-" + C.getPlatform());
+  function b64(blob) { return new Promise(function (ok, bad) { var f = new FileReader(); f.onload = function () { ok(String(f.result).split(",")[1]); }; f.onerror = bad; f.readAsDataURL(blob); }); }
+  async function save(href, name) {
+    var P = C.Plugins, blob = await (await fetch(href)).blob();
+    name = (name || "labeldesk-file").replace(/[\\/:*?"<>|]+/g, "_");
+    var w = await P.Filesystem.writeFile({ path: name, data: await b64(blob), directory: "CACHE" });
+    try { await P.Share.share({ title: name, dialogTitle: "Save or send " + name, files: [w.uri] }); }
+    catch (e) { if (!/cancel/i.test(String(e && e.message))) alert("Could not open the share sheet: " + (e && e.message || e)); }
+  }
+  function grab(a) { if (!a || !a.hasAttribute("download") || !a.href) return false; save(a.href, a.getAttribute("download")).catch(function (e) { alert("Could not save the file: " + (e && e.message || e)); }); return true; }
+  var oc = HTMLAnchorElement.prototype.click, od = HTMLAnchorElement.prototype.dispatchEvent;
+  HTMLAnchorElement.prototype.click = function () { if (!grab(this)) return oc.call(this); };
+  HTMLAnchorElement.prototype.dispatchEvent = function (ev) { if (ev && ev.type === "click" && grab(this)) return false; return od.call(this, ev); };
+  document.addEventListener("click", function (e) { var a = e.target && e.target.closest && e.target.closest("a[download]"); if (a && grab(a)) e.preventDefault(); }, true);
+  window.ldNative = { platform: C.getPlatform(), save: save };
+})();
+</script>
 <script>/* LabelDesk moved to labeldesk.app: carry this browser's workspace key and draft across, then switch */
 (function(){try{var L=location,h=L.hostname;if(h==="labels.infinitesolutions.co.in"){var m={};try{var o=localStorage.getItem("p2l-owner");if(o)m.o=o;var d=localStorage.getItem("p2l-design");if(d&&d.length<60000)m.d=d;}catch(e){}var f=Object.keys(m).length?"#move="+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(m))))):"";L.replace("https://labeldesk.app/"+L.search+f);return;}if(L.hash.indexOf("#move=")===0){var j=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(L.hash.slice(6))))));if(j.o&&/^[A-Za-z0-9_-]{32,128}$/.test(j.o)&&!localStorage.getItem("p2l-owner"))localStorage.setItem("p2l-owner",j.o);if(j.d&&!localStorage.getItem("p2l-design"))localStorage.setItem("p2l-design",j.d);history.replaceState(null,"",L.pathname+L.search);}}catch(e){}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">

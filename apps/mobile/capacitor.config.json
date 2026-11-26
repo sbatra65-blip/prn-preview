@@ -1,0 +1,12 @@
+{
+  "appId": "app.labeldesk",
+  "appName": "LabelDesk",
+  "webDir": "www",
+  "server": {
+    "url": "https://labeldesk.app/?app=1",
+    "errorPath": "offline.html",
+    "allowNavigation": ["labeldesk.app", "www.labeldesk.app"]
+  },
+  "android": { "backgroundColor": "#111827", "allowMixedContent": false },
+  "ios": { "backgroundColor": "#111827", "contentInset": "never", "limitsNavigationsToAppBoundDomains": true }
+}

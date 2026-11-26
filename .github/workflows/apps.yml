@@ -1,0 +1,117 @@
+# Builds the LabelDesk apps. Run it from GitHub → Actions → "Build apps" → Run workflow,
+# or push a tag like app-v1.0.1. Each job uploads its files under the run's "Artifacts".
+#
+# Optional secrets (Settings → Secrets and variables → Actions). Without them you still get
+# installable test builds; with them you get store-ready, signed builds.
+#   Android (Play Store):  ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+#   Windows (no SmartScreen warning): WIN_CSC_LINK (base64 .pfx), WIN_CSC_KEY_PASSWORD
+#   iPhone (TestFlight/App Store): IOS_P12_BASE64, IOS_P12_PASSWORD, IOS_PROFILE_BASE64, IOS_TEAM_ID
+name: Build apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["app-v*"]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: apps/mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - run: npx cap sync android
+      - name: Signing key (if set)
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > android/release.jks
+            printf 'storeFile=../release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$KS_PASS" "$KEY_ALIAS" "$KEY_PASS" > android/keystore.properties
+          fi
+      - name: Build
+        env: { LD_BUILD: "${{ github.run_number }}" }
+        run: |
+          cd android
+          if [ -f keystore.properties ]; then ./gradlew assembleRelease bundleRelease; else ./gradlew assembleDebug; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LabelDesk-Android
+          path: |
+            apps/mobile/android/app/build/outputs/apk/**/*.apk
+            apps/mobile/android/app/build/outputs/bundle/**/*.aab
+
+  windows:
+    runs-on: windows-latest
+    defaults: { run: { working-directory: apps/desktop } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: Build installer
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          [ -z "$CSC_LINK" ] && unset CSC_LINK CSC_KEY_PASSWORD
+          npx electron-builder --win nsis portable --x64 --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LabelDesk-Windows
+          path: apps/desktop/dist/*.exe
+
+  ios:
+    runs-on: macos-15
+    defaults: { run: { working-directory: apps/mobile } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - run: npx cap sync ios
+      - name: Build for the simulator (checks the app compiles; no Apple account needed)
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+          cd build/Build/Products/Debug-iphonesimulator && zip -qry "$GITHUB_WORKSPACE/LabelDesk-iOS-Simulator.zip" App.app
+      - name: Signed build for TestFlight (only when Apple secrets are set)
+        env:
+          P12: ${{ secrets.IOS_P12_BASE64 }}
+          P12_PASS: ${{ secrets.IOS_P12_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROFILE_BASE64 }}
+          TEAM: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          [ -z "$P12" ] && { echo "No Apple signing secrets: skipping the App Store build."; exit 0; }
+          KC=$RUNNER_TEMP/ld.keychain-db; security create-keychain -p ld "$KC"; security set-keychain-settings "$KC"; security unlock-keychain -p ld "$KC"
+          echo "$P12" | base64 -d > $RUNNER_TEMP/c.p12
+          security import $RUNNER_TEMP/c.p12 -P "$P12_PASS" -A -t cert -f pkcs12 -k "$KC"; security list-keychain -d user -s "$KC"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE" | base64 -d > $RUNNER_TEMP/p.mobileprovision
+          UUID=$(security cms -D -i $RUNNER_TEMP/p.mobileprovision | plutil -extract UUID raw -)
+          cp $RUNNER_TEMP/p.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -archivePath $RUNNER_TEMP/App.xcarchive \
+            -destination 'generic/platform=iOS' DEVELOPMENT_TEAM=$TEAM CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER=$UUID CURRENT_PROJECT_VERSION=${{ github.run_number }} archive
+          cat > $RUNNER_TEMP/export.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>teamID</key><string>$TEAM</string>
+          <key>signingStyle</key><string>manual</string><key>provisioningProfiles</key><dict><key>app.labeldesk</key><string>$UUID</string></dict></dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath $RUNNER_TEMP/App.xcarchive -exportOptionsPlist $RUNNER_TEMP/export.plist -exportPath "$GITHUB_WORKSPACE/ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LabelDesk-iPhone
+          if-no-files-found: ignore
+          path: |
+            LabelDesk-iOS-Simulator.zip
+            ipa/*.ipa
