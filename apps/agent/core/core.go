@@ -1,12 +1,10 @@
-// LabelDesk Print Agent: a small program on the computer next to the printer.
-// LabelDesk (website, Windows app) sends it labels over http://127.0.0.1:41951, and it prints them
-// as printer commands (RAW) or as pictures through the printer driver, to installed printers or to
-// network printers on port 9100. It can also act as a print station for phones, with no browser open.
-package main
+// Package core is the LabelDesk Print Agent: a local print server on http://127.0.0.1:41951 that
+// LabelDesk (website or Windows app) uses to print to installed and network printers, plus the
+// phone print-station worker. It runs on its own (cmd/print-agent) or inside the Windows app (cmd/labeldesk).
+package core
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -20,7 +18,7 @@ import (
 )
 
 const (
-	Version = "1.0.0"
+	Version = "1.1.0"
 	Port    = 41951
 	AppName = "LabelDesk Print Agent"
 )
@@ -45,6 +43,7 @@ var (
 	cfg   Config
 	logMu sync.Mutex
 	logs  []string
+	host  = "agent" // "agent" (stand-alone) or "desktop" (inside the LabelDesk Windows app)
 )
 
 func cfgPath() string {
@@ -58,8 +57,7 @@ func cfgPath() string {
 func loadConfig() {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
-	b, err := os.ReadFile(cfgPath())
-	if err == nil {
+	if b, err := os.ReadFile(cfgPath()); err == nil {
 		_ = json.Unmarshal(b, &cfg)
 	}
 	if cfg.Server == "" {
@@ -78,7 +76,7 @@ func saveConfig() {
 	}
 }
 
-func logf(format string, a ...any) {
+func Logf(format string, a ...any) {
 	line := time.Now().Format("15:04:05") + " · " + fmt.Sprintf(format, a...)
 	logMu.Lock()
 	logs = append([]string{line}, logs...)
@@ -89,7 +87,8 @@ func logf(format string, a ...any) {
 	log.Println(line)
 }
 
-func openURL(u string) {
+// OpenURL opens a web address in the normal browser (or a mail/phone app).
+func OpenURL(u string) {
 	switch runtime.GOOS {
 	case "windows":
 		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", u).Start()
@@ -100,49 +99,34 @@ func openURL(u string) {
 	}
 }
 
-func statusURL() string { return fmt.Sprintf("http://127.0.0.1:%d/", Port) }
+func StatusURL() string { return fmt.Sprintf("http://127.0.0.1:%d/", Port) }
 
-func main() {
-	noTray := flag.Bool("notray", false, "run without the tray icon")
-	background := flag.Bool("background", false, "started with the computer: do not open the status page")
-	portable := flag.Bool("portable", false, "run from where it is, without installing")
-	remove := flag.Bool("uninstall", false, "stop starting with the computer and remove the Start-menu shortcut")
-	flag.Parse()
-	if *remove {
-		uninstall()
-		return
+// Start runs the print server. It returns false when another copy (the stand-alone agent or the
+// Windows app) already answers on the port; LabelDesk then simply uses that one.
+func Start(asDesktop bool) bool {
+	if asDesktop {
+		host = "desktop"
 	}
-	if !*background && !*portable && selfInstall() {
-		return
-	}
-
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", Port))
-	if err != nil { // already running: show it instead of starting twice
-		if !*background {
-			openURL(statusURL())
-		}
-		return
+	if err != nil {
+		return false
 	}
 	loadConfig()
-	cfgMu.Lock()
-	first := !cfg.AutoStartSet
-	if first && autoStartSupported() {
-		if setAutoStart(true) == nil {
-			cfg.AutoStartSet = true
-			saveConfig()
-		}
-	}
-	cfgMu.Unlock()
-
 	srv := &http.Server{Handler: routes(), ReadHeaderTimeout: 10 * time.Second}
-	go func() { log.Fatal(srv.Serve(ln)) }()
+	go func() { log.Println(srv.Serve(ln)) }()
 	go stationLoop()
-	logf("%s %s started on %s", AppName, Version, statusURL())
-	if first && !*background {
-		openURL(statusURL())
+	Logf("%s %s started on %s (%s)", AppName, Version, StatusURL(), host)
+	return true
+}
+
+// FirstRun reports (once) whether this is the first start, and records it.
+func FirstRun() bool {
+	cfgMu.Lock()
+	defer cfgMu.Unlock()
+	if cfg.AutoStartSet {
+		return false
 	}
-	if *noTray || !trayAvailable() {
-		select {}
-	}
-	runTray()
+	cfg.AutoStartSet = true
+	saveConfig()
+	return true
 }

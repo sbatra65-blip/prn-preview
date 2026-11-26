@@ -15,6 +15,18 @@
 <meta property="og:title" content="LabelDesk: cloud label designer">
 <meta property="og:url" content="https://labeldesk.app/">
 <meta name="theme-color" content="#1f5eff">
+<script>/* Windows app (Go/Wails): links to other websites open in the normal browser through the built-in Print Agent */
+(function () {
+  try { if (new URLSearchParams(location.search).get("app") === "wingo") sessionStorage.setItem("ld-app", "wingo"); if (sessionStorage.getItem("ld-app") !== "wingo") return; } catch (e) { return; }
+  document.documentElement.classList.add("ld-native", "ld-windows");
+  function ext(u) { try { var x = new URL(u, location.href); return /^(https?|mailto|tel):$/.test(x.protocol) && x.origin !== location.origin; } catch (e) { return false; } }
+  function out(u) { fetch("http://127.0.0.1:41951/v1/open", { method: "POST", headers: { "content-type": "application/json", "x-labeldesk": "1" }, body: JSON.stringify({ url: new URL(u, location.href).href }) }).catch(function () {}); }
+  var wo = window.open;
+  window.open = function (u) { if (u && ext(u)) { out(u); return null; } return wo.apply(window, arguments); };
+  document.addEventListener("click", function (e) { var a = e.target && e.target.closest && e.target.closest("a[href]"); if (a && !a.hasAttribute("download") && ext(a.href)) { e.preventDefault(); out(a.href); } }, true);
+  window.ldNative = window.ldNative || { platform: "windows", app: "wingo" };
+})();
+</script>
 <script>/* Native apps (Android/iPhone via Capacitor): files the page "downloads" go to the share sheet instead */
 (function () {
   var C = window.Capacitor; if (!C || !C.isNativePlatform || !C.isNativePlatform()) return;

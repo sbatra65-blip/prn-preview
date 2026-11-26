@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.7 · **Last updated:** 26 November 2026
+**Manual version:** 1.8 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -75,7 +75,7 @@ LabelDesk designs and prints barcode labels from any web browser on Windows, Mac
    |---|---|---|
    | **Android** | Install the LabelDesk .apk (Google Play once published) | Save, Download and PDF open the share sheet: save to Files or Drive, send by WhatsApp, or print. Camera for Picture to label |
    | **iPhone / iPad** | TestFlight, then the App Store once published | Same as Android |
-   | **Windows** | Run **LabelDesk-Setup.exe** (or the portable .exe) | Its own window and Start-menu icon, remembers its size, asks where to save each file. QZ Tray printing works as in Chrome |
+   | **Windows** | Download and run **LabelDesk.exe** (about 12 MB) from https://labeldesk.app/download/LabelDesk.exe | Its own window and Start-menu icon, remembers its size. **Print Agent built in**: prints straight to installed and network printers with no QZ Tray. Other websites open in your browser; files save to Downloads |
 
    Without internet the apps show "LabelDesk can't reach the internet" with **Try again**. Designs kept on the device are not affected.
 
@@ -327,7 +327,7 @@ Click **Print** at the start of the **Edit** tab (the ribbon shown when LabelDes
 ### LabelDesk Print Agent (direct printing from a computer)
 
 1. Download **LabelDesk-Print-Agent.exe** from https://labeldesk.app/download/LabelDesk-Print-Agent.exe (or the link in the print window) and run it. No admin rights are needed.
-2. It installs itself for your Windows user, adds **LabelDesk Print Agent** to the Start menu, starts with Windows, and sits in the tray near the clock. Its page opens once.
+2. Not needed if you use the **LabelDesk Windows app**, which has the agent built in. Keep the separate agent for phone printing while LabelDesk is closed. It installs itself for your Windows user, adds **LabelDesk Print Agent** to the Start menu, starts with Windows, and sits in the tray near the clock. Its page opens once.
 3. In LabelDesk press **Print**. The print window says "Printing through the LabelDesk Print Agent" and lists the printers installed on the computer.
 4. **Network printers:** tray icon → **Open Print Agent** → **Add a network printer**: name, IP address, port 9100. They then appear in LabelDesk's print window. Network printers take Printer commands only.
 5. **Send a printer file:** on the agent's page, choose a .prn file and a printer → **Print file**.
@@ -487,6 +487,7 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.8 | 26 Nov 2026 | Windows app rebuilt in Go (Wails): 12 MB instead of 150 MB, Print Agent built in, download from labeldesk.app/download/LabelDesk.exe |
 | 1.7 | 26 Nov 2026 | LabelDesk Print Agent (section 13): direct printing without QZ Tray, network printers by IP, phone printing with the browser closed (section 14), troubleshooting rows |
 | 1.6 | 26 Nov 2026 | Android, iPhone and Windows apps (section 2): share-sheet saving on phones, Save-as dialogs and own window on Windows, offline page |
 | 1.5 | 26 Nov 2026 | Edit tab ribbon starts with quick-insert buttons: Text, Barcodes ▾, Image, Database ▾ (same as the Insert tab), placed before Print |

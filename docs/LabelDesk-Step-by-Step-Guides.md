@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.7 · **Last updated:** 26 November 2026
+**Guide version:** 1.8 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -206,12 +206,12 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 3. Until then, Safari → Share → **Add to Home Screen** gives the same LabelDesk.
 
 ### Windows
-1. Run **LabelDesk-Setup-1.0.0.exe**. If Windows shows "Windows protected your PC", click **More info → Run anyway** (shown until the app is code-signed).
-2. Choose where to install and click **Install**. LabelDesk appears on the desktop and in the Start menu.
-3. No install rights? Use **LabelDesk-Portable.exe**, or unzip the Windows zip and run **LabelDesk.exe**.
-4. For direct printing to a label printer, add the **Print Agent** (below).
+1. Download **LabelDesk.exe** from https://labeldesk.app/download/LabelDesk.exe and run it. If Windows shows "Windows protected your PC", click **More info → Run anyway** (shown until the app is code-signed).
+2. It installs itself for your Windows user (no admin rights) and adds **LabelDesk** to the Start menu. Next time, open it from there.
+3. Press **Print**: printers installed on the computer are listed straight away; the Print Agent is built in. To add a network printer, open http://127.0.0.1:41951 in your browser.
+4. Windows 10 without the Edge WebView2 runtime is asked to install it once (Windows 11 has it).
 
-### Print Agent (Windows computer next to the printer)
+### Print Agent (for phone printing with LabelDesk closed, or when you use LabelDesk in a browser)
 1. Download **LabelDesk-Print-Agent.exe** from https://labeldesk.app/download/LabelDesk-Print-Agent.exe, or click **Download it for Windows** in LabelDesk's print window.
 2. Run it. If Windows shows "Windows protected your PC", click **More info → Run anyway**. Its page opens and a LabelDesk icon appears in the tray near the clock.
 3. **Network printer?** On the agent's page, under **Add a network printer**, type a name and the printer's IP address (from its network-settings print), keep port **9100**, click **Add printer**.
@@ -224,6 +224,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.8 | 26 Nov 2026 | Guide 10: new LabelDesk.exe for Windows with the Print Agent built in |
 | 1.7 | 26 Nov 2026 | Print Agent: install, network printers, phone printing with the browser closed (Guide 10); Before you start and Guide 9 mention it |
 | 1.6 | 26 Nov 2026 | Guide 10: install the Android, iPhone and Windows apps; saving from the phone apps |
 | 1.5 | 26 Nov 2026 | Text, Barcodes, Image and Database buttons are also on the Edit tab, before Print |

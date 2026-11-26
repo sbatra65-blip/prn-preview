@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package core
 
 import (
 	"io"
@@ -11,27 +11,28 @@ import (
 	"syscall"
 )
 
-func installDir() string {
+func installDir(name string) string {
 	d := os.Getenv("LOCALAPPDATA")
 	if d == "" {
 		d, _ = os.UserConfigDir()
 	}
-	return filepath.Join(d, "LabelDesk Print Agent")
+	return filepath.Join(d, name)
 }
 
-func shortcutPath() string {
-	return filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`, AppName+".lnk")
+func shortcutPath(name string) string {
+	return filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`, name+".lnk")
 }
 
-// selfInstall copies the downloaded exe to the user's app folder (no admin rights), adds a Start-menu
+// SelfInstall copies the downloaded exe to the user's app folder (no admin rights), adds a Start-menu
 // shortcut and runs the installed copy. It returns true when this process should exit.
-func selfInstall() bool {
+// name is the folder and shortcut name ("LabelDesk"), exeName the installed file name.
+func SelfInstall(name, exeName string) bool {
 	exe, err := os.Executable()
 	if err != nil {
 		return false
 	}
-	dir := installDir()
-	target := filepath.Join(dir, "LabelDesk-Print-Agent.exe")
+	dir := installDir(name)
+	target := filepath.Join(dir, exeName)
 	if strings.EqualFold(filepath.Clean(exe), filepath.Clean(target)) {
 		return false
 	}
@@ -41,9 +42,9 @@ func selfInstall() bool {
 	if err := copyFile(exe, target); err != nil {
 		return false // an older copy is running: carry on from here; it answers on the same port
 	}
-	ps := `$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:LD_LNK);$s.TargetPath=$env:LD_EXE;$s.Description='LabelDesk Print Agent';$s.Save()`
+	ps := `$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:LD_LNK);$s.TargetPath=$env:LD_EXE;$s.Description=$env:LD_NAME;$s.Save()`
 	c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", ps)
-	c.Env = append(os.Environ(), "LD_LNK="+shortcutPath(), "LD_EXE="+target)
+	c.Env = append(os.Environ(), "LD_LNK="+shortcutPath(name), "LD_EXE="+target, "LD_NAME="+name)
 	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = c.Run()
 	if exec.Command(target).Start() != nil {
@@ -52,9 +53,10 @@ func selfInstall() bool {
 	return true
 }
 
-func uninstall() {
-	_ = setAutoStart(false)
-	_ = os.Remove(shortcutPath())
+// Uninstall stops start-with-Windows and removes the Start-menu shortcut.
+func Uninstall(name string) {
+	_ = SetAutoStart(false)
+	_ = os.Remove(shortcutPath(name))
 }
 
 func copyFile(src, dst string) error {

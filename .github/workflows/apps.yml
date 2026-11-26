@@ -4,7 +4,7 @@
 # Optional secrets (Settings → Secrets and variables → Actions). Without them you still get
 # installable test builds; with them you get store-ready, signed builds.
 #   Android (Play Store):  ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
-#   Windows (no SmartScreen warning): WIN_CSC_LINK (base64 .pfx), WIN_CSC_KEY_PASSWORD
+#   Windows: sign LabelDesk.exe and LabelDesk-Print-Agent.exe with your code-signing certificate before sharing
 #   iPhone (TestFlight/App Store): IOS_P12_BASE64, IOS_P12_PASSWORD, IOS_PROFILE_BASE64, IOS_TEAM_ID
 name: Build apps
 
@@ -14,23 +14,34 @@ on:
     tags: ["app-v*"]
 
 jobs:
-  agent:
+  windows:
+    # LabelDesk for Windows (Go + Wails, Print Agent built in) and the stand-alone Print Agent.
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: apps/agent } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version-file: apps/agent/go.mod }
-      - name: Windows icon and version info
-        run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon icon.png --manifest gui --product-name "LabelDesk Print Agent" --file-description "LabelDesk Print Agent" --company-name "Infinite Solutions" --product-version 1.0.0 --file-version 1.0.0 --original-filename LabelDesk-Print-Agent.exe
+      - name: Windows icons and version info
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          cd cmd/labeldesk
+          go-winres simply --icon ../../icon.png --manifest gui --company-name "Infinite Solutions" --product-version 1.1.0 --file-version 1.1.0 \
+            --product-name "LabelDesk" --file-description "LabelDesk" --original-filename LabelDesk.exe
+          cd ../print-agent
+          go-winres simply --icon ../../icon.png --manifest gui --company-name "Infinite Solutions" --product-version 1.1.0 --file-version 1.1.0 \
+            --product-name "LabelDesk Print Agent" --file-description "LabelDesk Print Agent" --original-filename LabelDesk-Print-Agent.exe
       - name: Build
         run: |
           mkdir -p dist
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent.exe .
-          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent-arm64.exe .
-          GOOS=linux GOARCH=amd64 go build -trimpath -o dist/labeldesk-agent-linux-x64 .
+          for A in amd64 arm64; do
+            S=$([ $A = amd64 ] && echo "" || echo "-arm64")
+            GOOS=windows GOARCH=$A go build -tags desktop,production -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk$S.exe ./cmd/labeldesk
+            GOOS=windows GOARCH=$A go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent$S.exe ./cmd/print-agent
+          done
+          GOOS=linux GOARCH=amd64 go build -trimpath -o dist/labeldesk-agent-linux-x64 ./cmd/print-agent
       - uses: actions/upload-artifact@v4
-        with: { name: LabelDesk-Print-Agent, path: apps/agent/dist/* }
+        with: { name: LabelDesk-Windows, path: apps/agent/dist/* }
 
   agent-mac:
     runs-on: macos-15
@@ -41,8 +52,8 @@ jobs:
         with: { go-version-file: apps/agent/go.mod }
       - run: |
           mkdir -p dist
-          GOARCH=arm64 go build -trimpath -o dist/labeldesk-agent-mac-arm64 .
-          GOARCH=amd64 go build -trimpath -o dist/labeldesk-agent-mac-x64 .
+          GOARCH=arm64 go build -trimpath -o dist/labeldesk-agent-mac-arm64 ./cmd/print-agent
+          GOARCH=amd64 CGO_ENABLED=1 go build -trimpath -o dist/labeldesk-agent-mac-x64 ./cmd/print-agent
       - uses: actions/upload-artifact@v4
         with: { name: LabelDesk-Print-Agent-mac, path: apps/agent/dist/* }
 
@@ -79,27 +90,6 @@ jobs:
           path: |
             apps/mobile/android/app/build/outputs/apk/**/*.apk
             apps/mobile/android/app/build/outputs/bundle/**/*.aab
-
-  windows:
-    runs-on: windows-latest
-    defaults: { run: { working-directory: apps/desktop } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: "22" }
-      - run: npm ci
-      - name: Build installer
-        shell: bash
-        env:
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-        run: |
-          [ -z "$CSC_LINK" ] && unset CSC_LINK CSC_KEY_PASSWORD
-          npx electron-builder --win nsis portable --x64 --publish never
-      - uses: actions/upload-artifact@v4
-        with:
-          name: LabelDesk-Windows
-          path: apps/desktop/dist/*.exe
 
   ios:
     runs-on: macos-15

@@ -1,12 +1,12 @@
 //go:build !windows
 
-package main
+package core
 
 import "errors"
 
-func autoStartSupported() bool   { return false }
-func autoStartOn() bool          { return false }
-func setAutoStart(on bool) error {
+func AutoStartSupported() bool   { return false }
+func AutoStartOn() bool          { return false }
+func SetAutoStart(on bool) error {
 	if !on {
 		return nil
 	}

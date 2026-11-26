@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bytes"
@@ -89,9 +89,9 @@ func stationLoop() {
 					done := map[string]any{"id": j.ID, "ok": err == nil}
 					if err != nil {
 						done["note"] = err.Error()
-						logf("Phone job failed: %s: %v", j.Title, err)
+						Logf("Phone job failed: %s: %v", j.Title, err)
 					} else {
-						logf("Printed phone job %s on %s", j.Title, pr)
+						Logf("Printed phone job %s on %s", j.Title, pr)
 					}
 					_ = queueCall(srv, tok, "done", done, nil)
 				}
@@ -107,7 +107,7 @@ func stationLoop() {
 			}
 			cfgMu.Unlock()
 			if err != nil && prev != err.Error() {
-				logf("Phone printing: %v", err)
+				Logf("Phone printing: %v", err)
 			}
 		} else {
 			lastHello = time.Time{}

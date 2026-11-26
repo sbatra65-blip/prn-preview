@@ -2,6 +2,8 @@
 
 A small program (Go, about 8 MB, no installer needed) for the computer next to the label printer. It replaces QZ Tray.
 
+Layout: `core/` is the print server (shared), `cmd/print-agent/` the stand-alone tray program, `cmd/labeldesk/` the LabelDesk Windows app (Wails window + the same print server built in).
+
 - **Direct printing:** LabelDesk (website or Windows app) finds it on `http://127.0.0.1:41951` and lists its printers in the print window.
   - *Printer commands* (TSPL, ZPL, EPL, DPL…) go RAW to installed printers through the Windows spooler, or straight to network printers on port 9100.
   - *Pictures / PDF mode* prints each label row as a picture through the printer driver, at the exact label size.
@@ -27,7 +29,8 @@ A small program (Go, about 8 MB, no installer needed) for the computer next to t
 
 ## Build
 ```bash
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent.exe .
-go build -o dist/labeldesk-agent .        # macOS / Linux (prints through CUPS)
+GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk-Print-Agent.exe ./cmd/print-agent
+GOOS=windows GOARCH=amd64 go build -tags desktop,production -trimpath -ldflags "-s -w -H windowsgui" -o dist/LabelDesk.exe ./cmd/labeldesk
+go build -o dist/labeldesk-agent ./cmd/print-agent        # macOS / Linux (prints through CUPS)
 ```
 Flags: `-portable` (run without installing), `-notray`, `-background`, `-uninstall`.

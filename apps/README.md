@@ -4,13 +4,13 @@
 |---|---|---|---|
 | Android | `mobile/android` | Capacitor 8 (Java/Kotlin shell) | `.apk` to install, `.aab` for Google Play |
 | iPhone / iPad | `mobile/ios` | Capacitor 8 (Swift/Xcode shell) | Simulator build; `.ipa` for TestFlight when Apple secrets are set |
-| Windows | `desktop` | Electron | `LabelDesk-Setup-x.y.z.exe` installer and a portable `.exe` |
-| Print Agent (Windows, also macOS/Linux) | `agent` | Go | `LabelDesk-Print-Agent.exe`: direct printing, network printers, phone printing. Download: https://labeldesk.app/download/LabelDesk-Print-Agent.exe |
+| Windows | `agent/cmd/labeldesk` | Go + Wails (WebView2), Print Agent built in | `LabelDesk.exe` (~12 MB, installs itself, no admin). Download: https://labeldesk.app/download/LabelDesk.exe |
+| Print Agent (Windows, also macOS/Linux) | `agent/cmd/print-agent` | Go | `LabelDesk-Print-Agent.exe`: direct printing, network printers, phone printing. Download: https://labeldesk.app/download/LabelDesk-Print-Agent.exe |
 
 All three open **https://labeldesk.app** inside a native window, so every website update reaches the apps at once with no new app release. App-only additions:
 
 - **Android / iPhone:** files the site downloads (.ldl, .prn, PDF, PNG) open the share sheet (save to Files/Drive, WhatsApp, print). Camera access for Picture to label. Friendly offline page.
-- **Windows:** remembers window size, Save-as dialog for every file, other websites open in the browser, single window, offline page. QZ Tray printing works as in Chrome.
+- **Windows:** built-in Print Agent (direct printing to installed and network printers, no QZ Tray), remembers window size, other websites open in the browser, single window, offline page.
 
 ## Build in the cloud (no Mac or Windows PC needed)
 
@@ -23,10 +23,10 @@ GitHub → **Actions → Build apps → Run workflow**. Download results from th
 cd apps/mobile && npm ci && npx cap sync android && cd android && ./gradlew assembleDebug
 # iPhone (needs a Mac with Xcode 16+)
 cd apps/mobile && npm ci && npx cap sync ios && npx cap open ios
-# Windows (on Windows)
-cd apps/desktop && npm ci && npx electron-builder --win nsis portable --x64
+# Windows (from any OS; Go 1.24+)
+cd apps/agent && GOOS=windows go build -tags desktop,production -ldflags "-s -w -H windowsgui" -o dist/LabelDesk.exe ./cmd/labeldesk
 ```
 
-New app icons: replace `mobile/resources/icon-only.png` and `icon-foreground.png`, then `npm run assets`. Windows icon: `desktop/build/icon.png` (256 × 256).
+New app icons: replace `mobile/resources/icon-only.png` and `icon-foreground.png`, then `npm run assets`. Windows icon: `agent/icon.png` (256 × 256), added by go-winres in the workflow.
 
-Release: raise `version` in `desktop/package.json`, `versionName` in `mobile/android/app/build.gradle` and `MARKETING_VERSION` in Xcode, then push a tag `app-v1.0.1`.
+Release: raise `Version` in `agent/core/core.go`, `versionName` in `mobile/android/app/build.gradle` and `MARKETING_VERSION` in Xcode, then push a tag `app-v1.0.1`.

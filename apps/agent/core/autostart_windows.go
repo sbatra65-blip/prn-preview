@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package core
 
 import (
 	"os"
@@ -10,9 +10,9 @@ import (
 
 const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
 
-func autoStartSupported() bool { return true }
+func AutoStartSupported() bool { return true }
 
-func autoStartOn() bool {
+func AutoStartOn() bool {
 	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE)
 	if err != nil {
 		return false
@@ -23,7 +23,7 @@ func autoStartOn() bool {
 }
 
 // setAutoStart starts the agent when this Windows user signs in (no admin rights needed).
-func setAutoStart(on bool) error {
+func SetAutoStart(on bool) error {
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
 	if err != nil {
 		return err

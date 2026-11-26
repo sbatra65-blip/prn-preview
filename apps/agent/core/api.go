@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	"bytes"
@@ -64,7 +64,7 @@ type Job struct {
 func allPrinters() []Printer {
 	ps, err := sysPrinters()
 	if err != nil {
-		logf("Could not list printers: %v", err)
+		Logf("Could not list printers: %v", err)
 	}
 	cfgMu.Lock()
 	for _, n := range cfg.NetPrinters {
@@ -194,8 +194,8 @@ func info() map[string]any {
 	cfgMu.Lock()
 	defer cfgMu.Unlock()
 	return map[string]any{
-		"name": AppName, "version": Version, "os": runtime.GOOS, "port": Port,
-		"autoStart": autoStartOn(), "autoStartSupported": autoStartSupported(),
+		"name": AppName, "version": Version, "os": runtime.GOOS, "port": Port, "host": host,
+		"autoStart": AutoStartOn(), "autoStartSupported": AutoStartSupported(),
 		"station": map[string]any{"paired": cfg.StationToken != "", "id": stationID(cfg.StationToken), "printer": cfg.StationPrinter, "on": cfg.StationOn,
 			"lastSeen": stationSeen.Format(time.RFC3339), "error": stationErr},
 	}
@@ -225,11 +225,11 @@ func routes() http.Handler {
 		}
 		t0 := time.Now()
 		if err := printJob(j); err != nil {
-			logf("Failed: %s on %s: %v", j.Title, j.Printer, err)
+			Logf("Failed: %s on %s: %v", j.Title, j.Printer, err)
 			fail(w, 500, err)
 			return
 		}
-		logf("Printed %s on %s (%s, %d cop%s) in %dms", j.Title, j.Printer, j.Type, max(1, j.Copies), map[bool]string{true: "y", false: "ies"}[max(1, j.Copies) == 1], time.Since(t0).Milliseconds())
+		Logf("Printed %s on %s (%s, %d cop%s) in %dms", j.Title, j.Printer, j.Type, max(1, j.Copies), map[bool]string{true: "y", false: "ies"}[max(1, j.Copies) == 1], time.Since(t0).Milliseconds())
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 	m.HandleFunc("POST /v1/network", func(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +262,7 @@ func routes() http.Handler {
 		cfg.NetPrinters = append(out, n)
 		saveConfig()
 		cfgMu.Unlock()
-		logf("Added network printer %s (%s:%d)", n.Name, n.Host, n.Port)
+		Logf("Added network printer %s (%s:%d)", n.Name, n.Host, n.Port)
 		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 	m.HandleFunc("DELETE /v1/network", func(w http.ResponseWriter, r *http.Request) {
@@ -308,8 +308,18 @@ func routes() http.Handler {
 		on, pr := cfg.StationOn, cfg.StationPrinter
 		cfgMu.Unlock()
 		stationKick()
-		logf("Phone printing %s%s", map[bool]string{true: "on, printing on ", false: "off"}[on], map[bool]string{true: pr, false: ""}[on])
+		Logf("Phone printing %s%s", map[bool]string{true: "on, printing on ", false: "off"}[on], map[bool]string{true: pr, false: ""}[on])
 		writeJSON(w, 200, info())
+	})
+	// Links LabelDesk opens in a new window (WhatsApp, help pages) go to the normal browser.
+	m.HandleFunc("POST /v1/open", func(w http.ResponseWriter, r *http.Request) {
+		var s struct{ URL string }
+		if err := readBody(r, &s); err != nil || !(strings.HasPrefix(s.URL, "https://") || strings.HasPrefix(s.URL, "http://") || strings.HasPrefix(s.URL, "mailto:") || strings.HasPrefix(s.URL, "tel:")) || len(s.URL) > 4000 {
+			fail(w, 400, errors.New("only web, mail and phone links can be opened"))
+			return
+		}
+		OpenURL(s.URL)
+		writeJSON(w, 200, map[string]any{"ok": true})
 	})
 	m.HandleFunc("POST /v1/autostart", func(w http.ResponseWriter, r *http.Request) {
 		var s struct{ On bool }
@@ -317,7 +327,7 @@ func routes() http.Handler {
 			fail(w, 400, err)
 			return
 		}
-		if err := setAutoStart(s.On); err != nil {
+		if err := SetAutoStart(s.On); err != nil {
 			fail(w, 500, err)
 			return
 		}
