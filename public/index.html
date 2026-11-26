@@ -583,6 +583,26 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 .dz-clampnote { margin: 12px 0 0; padding: 8px 12px; border-radius: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 13px; }
 .dz-clampnote[hidden] { display: none; }
 .dz-ask .msg .ld-link { margin-left: 4px; }
+
+/* The designer and everything it opens is drawn on light surfaces: keep light text tokens there even when the phone is in dark mode */
+@media (prefers-color-scheme: dark) {
+  html.dz-on {
+    color-scheme: light;
+    --bg: #f5f6f8; --surface: #ffffff; --ink: #101828; --muted: #5b6475; --line: #e3e6ec;
+    --accent: #c2410c; --accent-ink: #9a3412; --accent-soft: #fff1e8; --accent-line: #f6d3bf;
+    --good: #1b6b3a; --good-soft: #e7f5ec; --warn: #7a4f00; --warn-soft: #fff4d6; --bad: #b42318; --bad-soft: #fde8e2;
+    --code-bg: #fbfbfc; --stage: #1e2633;
+  }
+}
+
+.dz-recentw { margin-top: 24px; }
+.dz-recentw h3 { font-size: 14px; font-weight: 600; color: #cbd5e1; margin: 0 0 8px; }
+.dz-recentw .rl2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.dz-recentw button { display: flex; flex-direction: column; gap: 2px; text-align: left; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); color: #f8fafc; border-radius: 10px; padding: 8px 12px; cursor: pointer; min-height: 44px; font: inherit; }
+.dz-recentw button:hover, .dz-recentw button:focus-visible { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .3); }
+.dz-recentw b { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dz-welcome .dz-recentw button span { font-size: 12px; color: #cbd5e1; }
+.dz-welcome .dz-recentw button b { color: #f8fafc; }
 </style>
 </head>
 <body>
@@ -910,6 +930,7 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
             <button type="button" data-w="pic"><b>Turn a picture into PRN</b><span>A logo becomes a printer graphic; a label photo becomes editable code with AI</span></button>
             <button type="button" data-w="lib"><b>Start from the library</b><span>LMPC, GS1, courier, pharma, jewellery, asset and bin labels</span></button>
           </div>
+          <div class="dz-recentw" id="dzRecentW" hidden><h3>Recent designs</h3><div class="rl2"></div></div>
         </div>
       </div>
       <div class="dz-viewhost" id="dzViewHost" hidden></div>
@@ -3019,7 +3040,7 @@ function dzSyncLinks() { // copy linked content (a few passes so chains settle);
     if (!changed) break;
   }
 }
-function dzSave() { dzSyncLinks(); if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
+function dzSave() { if (typeof ldRecentTouch === "function") ldRecentTouch(); dzSyncLinks(); if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
 
 var APP = !new URLSearchParams(location.search).has("about");
 function dzShowViewer() {
@@ -4414,7 +4435,7 @@ function dzMenus() {
   const turn = by => () => { const it = sel(); if (it && turnable()) { dzTurn(it, by); dzRefresh(it); dzProps(); dzSave(); } };
   return {
     File: [["New design", click("dzNew")], ["New wristband", [["Hospital: adult (30 × 279 mm)", () => dzWristband("adult")], ["Hospital: child (25 × 178 mm)", () => dzWristband("child")], ["Hospital: infant (25 × 152 mm)", () => dzWristband("infant")], "-", ["Event or entry pass (25 × 254 mm)", () => dzWristband("event")], ["Blank wristband (25 × 254 mm)", () => dzWristband("blank")]]], ["Label setup…", () => dzSetupOpen()],
-      ["Open", [["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")]]],
+      ["Open", [...ldRecentMenu(), ["My designs…", click("dzOpenBtn")], ["LabelDesk file (.ldl)…", () => ldlPick(), "Ctrl+O"], ["Printer code (paste)…", click("dzPasteBtn")]]],
       ["Save", [["Save to cloud", click("dzSave"), "Ctrl+S"], ["Save as .ldl file…", () => ldlSaveDialog(), "Ctrl+Shift+S"], "-", ["Download .prn", click("dzPrn")], ["Export colour image (PNG)", dzColourPNG]]],
       "-",
       ["Print…", () => ldPrintOpen(), "Ctrl+P"],
@@ -6872,7 +6893,7 @@ async function dzWristband(kind) {
   const pr = DZ_PRINTERS.find(x => x.id === p.printer) || DZ_PRINTERS[0], fits = (p.pw || pr.pw) >= k.w;
   const wbp = DZ_PRINTERS.find(x => x.kind === "Wristband");
   const base = fits ? { printer: p.printer, lang: p.lang, dpi: p.dpi, pw: p.pw, mw: p.mw } : { printer: wbp.id, lang: "ZPL", dpi: 300, pw: wbp.pw, mw: wbp.mw };
-  const D = Object.assign(dzDefault(), base, { paper: k.L, across: 1, hgap: 0, edge: 0, h: k.w, vgap: 3, items: [], fields: [] });
+  const D = Object.assign(dzDefault(), base, { paper: k.L, across: 1, hgap: 0, edge: 0, h: k.w, vgap: 3, items: [], fields: [], name: k.name });
   let id = 1; const W = k.w, x0 = k.x0, span = k.x1 - k.x0, ask = (name, sample, type, req) => D.fields.push({ name, sample, ask: { prompt: name, type: type || "text", required: !!req } });
   const T = (x, y, h, parts, o) => { const it = Object.assign({ id: id++, type: "text", x, y, h, parts }, o || {}); D.items.push(it); return it; };
   const F = n => ({ t: "field", name: n }), X = v => ({ t: "text", v });
@@ -6906,6 +6927,55 @@ async function dzWristband(kind) {
   dzSetupForm(); dzProps(); dzDraw(); try { dzFit(); } catch (_) {} dzSave();
   toast(`${k.name}: ${k.w} × ${k.L} mm${fits ? "" : ", printer set to " + wbp.brand + " " + wbp.model}. Fields are asked when printing.`, 5000);
 }
+</script>
+
+<script>
+/* Light theme while the designer is open (see html.dz-on) */
+(function () { const d = document.getElementById("dzDlg"); if (!d) return; const set = () => document.documentElement.classList.toggle("dz-on", d.open); new MutationObserver(set).observe(d, { attributes: true, attributeFilter: ["open"] }); set(); })();
+</script>
+
+<script>
+/* Recent designs: the last 5 designs worked on, kept whole in this browser (IndexedDB) so any of them opens again */
+const LDR = { list: [], db: null };
+function ldRecentDB() { return LDR.db || (LDR.db = new Promise((res, rej) => { const r = indexedDB.open("ld-recent", 1); r.onupgradeneeded = () => r.result.createObjectStore("r", { keyPath: "rid" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); }
+function ldRecentName(D) {
+  if (D.cloud && D.cloud.name) return D.cloud.name; if (D.name) return D.name;
+  const t = (D.items || []).find(i => i.type === "text" && String(i.text || "").trim()); return t ? String(t.text).trim().split("\n")[0].slice(0, 40) : "Untitled label";
+}
+function ldAgo(t) { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + " h ago"; if (h < 48) return "yesterday"; return new Date(t).toLocaleDateString("en-IN", { day: "numeric", month: "short" }); }
+async function ldRecentLoad() {
+  try { const db = await ldRecentDB(); LDR.list = await new Promise(r => { const q = db.transaction("r").objectStore("r").getAll(); q.onsuccess = () => r(q.result.sort((a, b) => b.at - a.at).slice(0, 5)); q.onerror = () => r([]); }); } catch (_) { LDR.list = []; }
+  ldRecentPaint();
+}
+function ldRecentTouch() {
+  const D = dz.D; if (!D || !D.items || !D.items.length || dz.restoring) return;
+  if (!D.rid) D.rid = D.cloud && D.cloud.id ? "c-" + D.cloud.id : "r" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  clearTimeout(ldRecentTouch.t);
+  ldRecentTouch.t = setTimeout(async () => {
+    const D = dz.D; if (!D || !D.rid || !D.items.length) return;
+    const e = { rid: D.rid, name: ldRecentName(D), size: `${r1(dzLWOf(D))} × ${r1(D.h)} mm`, at: Date.now(), json: JSON.stringify(D) };
+    LDR.list = [e, ...LDR.list.filter(x => x.rid !== e.rid)].slice(0, 5); ldRecentPaint();
+    try { const db = await ldRecentDB(), st = db.transaction("r", "readwrite").objectStore("r"); st.put(e); const q = st.getAll(); q.onsuccess = () => q.result.sort((a, b) => b.at - a.at).slice(5).forEach(x => st.delete(x.rid)); } catch (_) {}
+  }, 1200);
+}
+function ldRecentOpen(rid) {
+  const e = LDR.list.find(x => x.rid === rid); if (!e) return;
+  if (dz.D && dz.D.rid === rid) { $("dzWelcome").hidden = true; return; }
+  let D; try { D = JSON.parse(e.json); } catch (_) { return toast("That design could not be read."); }
+  dzHist(); dz.D = Object.assign(dzDefault(), D); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1;
+  $("dzWelcome").hidden = true; store.set("p2l-welcomed", "1");
+  dzSetupForm(); dzProps(); dzDraw(); try { dzFit(); } catch (_) {} dzSave(); toast(`Opened “${e.name}”`);
+}
+function ldRecentMenu() {
+  const cur = dz.D && dz.D.rid, list = LDR.list.filter(x => x.rid !== cur); if (!list.length) return [];
+  return ["#Recent", ...list.map(x => [`${x.name}   ·   ${x.size}, ${ldAgo(x.at)}`, () => ldRecentOpen(x.rid)]), "-"];
+}
+function ldRecentPaint() {
+  const w = document.getElementById("dzRecentW"); if (!w) return;
+  w.hidden = !LDR.list.length;
+  w.querySelector(".rl2").replaceChildren(...LDR.list.map(x => { const b = document.createElement("button"); b.type = "button"; b.innerHTML = `<b></b><span></span>`; b.firstChild.textContent = x.name; b.lastChild.textContent = `${x.size} · ${ldAgo(x.at)}`; b.title = "Open " + x.name; b.onclick = () => ldRecentOpen(x.rid); return b; }));
+}
+ldRecentLoad().then(() => { if (dz.D && dz.D.items && dz.D.items.length) ldRecentTouch(); });
 </script>
 </body>
 </html>
