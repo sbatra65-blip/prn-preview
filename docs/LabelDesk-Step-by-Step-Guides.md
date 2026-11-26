@@ -1,7 +1,7 @@
 # LabelDesk Step-by-Step Guides
 
 **Website:** https://labeldesk.app
-**Guide version:** 1.3 · **Last updated:** 26 November 2026
+**Guide version:** 1.4 · **Last updated:** 26 November 2026
 See also: **LabelDesk-Manual.md** for every feature in detail.
 
 > To keep these guides current: when a screen or button changes, update the step that mentions it and add a line to the change log at the end.
@@ -194,6 +194,7 @@ Tip: very small text or a crumpled label reads less well. Take the photo again c
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.4 | 26 Nov 2026 | No step changes; button tips no longer pop up on phones (see manual 1.4) |
 | 1.3 | 26 Nov 2026 | Print is on the Edit tab ribbon |
 | 1.2 | 26 Nov 2026 | Printing starts from the printer icon or File → Print label… |
 | 1.1 | 26 Nov 2026 | Guide 9: peel-off and cutter choices |

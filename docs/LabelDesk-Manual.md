@@ -3,7 +3,7 @@
 **Product:** LabelDesk, the online label designer and PRN previewer
 **Website:** https://labeldesk.app
 **Made by:** Infinite Solutions, New Delhi
-**Manual version:** 1.3 · **Last updated:** 26 November 2026
+**Manual version:** 1.4 · **Last updated:** 26 November 2026
 
 > How to keep this manual current: add a line to the **Change log** at the end whenever a feature is added or changed, update the section it affects, and raise the version number (1.0 → 1.1 for additions, 2.0 for big changes).
 
@@ -94,6 +94,8 @@ LabelDesk designs and prints barcode labels from any web browser on Windows, Mac
 | **Tools** | Designer · Preview · Printer files ▾ · Templates · Check ▾ (LMPC check, GS1 guide) · Talk to us |
 
 Right-click (or long-press on a phone) on an object for its menu. Right-click or double-click empty canvas for the **Insert** menu.
+
+Hover over a button to see its name and shortcut. With the keyboard, Tab to a button to see the same tip. Tips don't pop up on their own when a window opens, and phones and tablets don't show them.
 
 ---
 
@@ -457,6 +459,7 @@ Help: **Tools → Talk to us**.
 
 | Version | Date | Changes |
 |---|---|---|
+| 1.4 | 26 Nov 2026 | Button tips: shown on hover or keyboard Tab only, not when the designer opens or on touch screens (fixes "About LabelDesk" showing on the iPhone) |
 | 1.3 | 26 Nov 2026 | Print button moved to the start of the Edit tab ribbon (default tab); Don't print has its own crossed-out printer icon |
 | 1.2 | 26 Nov 2026 | Orange Print button replaced by a printer icon next to the tabs and File → Print label… (with icon); phone print screen is in File → Print more |
 | 1.1 | 26 Nov 2026 | Print window: After printing — tear off, peel off, cut every label, every N labels, or once per job (TSPL, ZPL) |

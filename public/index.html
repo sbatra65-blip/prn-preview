@@ -6825,7 +6825,9 @@ function ldConfirm(o) {
   }
   function hide() { clearTimeout(t); tip.classList.remove("on"); if (cur) cur.removeAttribute("aria-describedby"); cur = null; }
   document.addEventListener("pointerover", ev => { if (ev.pointerType === "touch") return; const el = ev.target.closest && ev.target.closest("[title],[data-tip]"); if (el === cur) return; hide(); if (el) { prep(el); t = setTimeout(() => show(el), 350); } }, true);
-  document.addEventListener("focusin", ev => { const el = ev.target.closest && ev.target.closest("[title],[data-tip]"); hide(); if (el && ev.target.matches(":focus-visible")) show(el); }, true);
+  // focus tips only after keyboard use (Tab), never when a window opens or on touch screens
+  let kb = false; document.addEventListener("keydown", e => { if (e.key === "Tab" || e.key.startsWith("Arrow")) kb = true; }, true); document.addEventListener("pointerdown", () => { kb = false; }, true);
+  document.addEventListener("focusin", ev => { const el = ev.target.closest && ev.target.closest("[title],[data-tip]"); hide(); if (el && kb && !matchMedia("(pointer: coarse)").matches && ev.target.matches(":focus-visible")) show(el); }, true);
   ["pointerdown", "focusout", "scroll", "keydown"].forEach(k => document.addEventListener(k, ev => { if (k === "keydown" && ev.key !== "Escape") return; hide(); }, true));
 })();
 </script>
