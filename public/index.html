@@ -603,6 +603,15 @@ body.appmode dialog.dz { background: #f6f7f9; color: #0f172a; font-family: Inter
 .dz-recentw b { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dz-welcome .dz-recentw button span { font-size: 12px; color: #cbd5e1; }
 .dz-welcome .dz-recentw button b { color: #f8fafc; }
+
+.lv-l { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+.lv-l input, .lv-l select { font-size: 16px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: #fff; min-height: 44px; }
+.lv-g { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.lv-c { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 0 0 12px; }
+.lv-err { color: var(--bad); font-size: 13px; margin: 0 0 12px; }
+.lv-note { font-size: 12px; color: var(--muted); margin: 0 0 16px; }
+.lv-set { width: min(520px, 94vw); }
+@media (max-width: 480px) { .lv-g { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -3021,7 +3030,7 @@ function dzUndo(step) {
   clearTimeout(dzSave.t); dzHist();
   if (!dz.hist || dz.hi + step < 0 || dz.hi + step >= dz.hist.length) return toast(step < 0 ? "Nothing to undo" : "Nothing to redo");
   dz.hi += step; dz.D = JSON.parse(dz.hist[dz.hi]); if (!dz.D.items.some(i => i.id === dz.sel)) dz.sel = null;
-  dz.restoring = true; dzSetupForm(); dzProps(); dz.restoring = false; try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) {}
+  dz.restoring = true; dzSetupForm(); dzProps(); dz.restoring = false; if (typeof ldDraftPut === "function") ldDraftPut();
 }
 function dzLinkSrc(it) { return it.link ? dz.D.items.find(i => i.id === it.link && i.id !== it.id) : null; }
 // Escaped barcode data (from the data builder): ^FNC1 and ^ddd stand for FNC1 and control characters (bwip-js "parse" form)
@@ -3040,7 +3049,7 @@ function dzSyncLinks() { // copy linked content (a few passes so chains settle);
     if (!changed) break;
   }
 }
-function dzSave() { if (typeof ldRecentTouch === "function") ldRecentTouch(); dzSyncLinks(); if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } try { localStorage.setItem("p2l-design", JSON.stringify(dz.D)); } catch (e) { $("dzStatus").textContent = "Design too large to keep in this browser: use Save design."; return; } $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
+function dzSave() { if (typeof ldRecentTouch === "function") ldRecentTouch(); dzSyncLinks(); if (!dz.restoring) { clearTimeout(dzSave.t); dzSave.t = setTimeout(dzHist, 250); } if (typeof ldDraftPut === "function") ldDraftPut(); $("dzStatus").textContent = dz.D.cloud ? `Cloud design “${dz.D.cloud.name}” · changes kept as a draft here until you save to cloud` : "Draft kept in this browser · use Save to cloud to store it"; }
 
 var APP = !new URLSearchParams(location.search).has("about");
 function dzShowViewer() {
@@ -3049,9 +3058,9 @@ function dzShowViewer() {
 }
 function dzShowDesigner() { $("dzDlg").classList.remove("viewing"); $("dzViewHost").hidden = true; }
 function dzOpen() {
-  if (!dz.D) { try { dz.D = JSON.parse(store.get("p2l-design")); } catch (e) {} if (!dz.D || !dz.D.items) dz.D = dzDefault(); }
+  if (!dz.D) { try { dz.D = JSON.parse(store.get("p2l-design")); } catch (e) {} if (!dz.D || !dz.D.items) dz.D = dz.bootDefault = dzDefault(); }
   dz.seq = Math.max(1, ...dz.D.items.map(i => i.id)) + 1;
-  for (const d of document.querySelectorAll("dialog[open]")) if (d.id !== "dzDlg") d.close();
+  for (const d of document.querySelectorAll("dialog[open]")) if (d.id !== "dzDlg" && !d.classList.contains("lv-lock")) d.close();
   if (!$("dzDlg").open) { if (APP) $("dzDlg").show(); else $("dzDlg").showModal(); }
   dzShowDesigner(); if (typeof dzDbRestore === "function") dzDbRestore();
   /* phones: start with the properties sheet folded */ if (dzPhone()) { dz.lastSelN = -1; setTimeout(() => dzProps(), 0); } for (const it of dz.D.items) dzEnsureFont(it); dzSetupForm(); dzFit(); dzRibbonShow(dz.D.items.length ? "Home" : "Label");
@@ -4441,7 +4450,7 @@ function dzMenus() {
       ["Print…", () => ldPrintOpen(), "Ctrl+P"],
       ["Print more", [["Preview as printed", click("dzToViewer")], ["Phone print screen", () => qpOpen()], ["Print station (receive from phones)…", () => lsOpen()]]],
       "-",
-      ["Settings", [["My fonts…", () => ldFontsManage()], ["Calibrate screen…", () => dzCalibrate()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")]]],
+      ["Settings", [["Privacy and PIN…", () => lvSettings()], ["My fonts…", () => ldFontsManage()], ["Calibrate screen…", () => dzCalibrate()], ["Touch gestures…", () => dzGestureHelp()], ["Completion sounds", () => { const off = !store.get("ld-beep-off"); store.set("ld-beep-off", off ? "1" : ""); toast(off ? "Sounds off" : "Sounds on"); if (!off) ldBeep("done"); }, null, null, () => !store.get("ld-beep-off")]]],
       ...(APP ? [] : [["Close designer", click("dzClose")]]), ["About LabelDesk", () => { location.href = "./?about"; }]],
     Edit: [["Undo", () => dzUndo(-1), "Ctrl+Z"], ["Redo", () => dzUndo(1), "Ctrl+Y"], "-", ["Copy", dzCopy, "Ctrl+C", has], ["Paste", dzPaste, "Ctrl+V", () => !!dz.clip], ["Duplicate", dzDuplicate, "Ctrl+D", has], ["Delete", dzDelete, "Del", has], "-", ["Select next object", () => dzSelNext(), "Tab"], ["Select previous object", () => dzSelNext(true), "Shift+Tab"], ["Select all", () => dzSelectMany(dz.D.items.map(i => i.id)), "Ctrl+A"], ["Select none", () => dzSelect(null), "Esc"]],
     Insert: [["Text", () => dzAdd("text")], ["Paragraph", () => dzAdd("para")], ["Barcode", () => dzAdd("barcode")], ["GS1-128 barcode", () => dzAdd("gs1")], ["QR code", () => dzAdd("qrcode")], ["Contact QR (vCard)", () => dzAdd("vcard")], ["DataMatrix", () => dzAdd("datamatrix")], ["Line", () => dzAdd("line")], ["Box", () => dzAdd("box")], ["Image (BMP, JPG, PNG)…", () => $("dzImgFile").click()], "#Shapes (text fits inside)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("shape:" + k)]), "#Text shaped like (no outline)", ...Object.entries(DZ_SHAPES).map(([k, n]) => [n, () => dzAdd("tshape:" + k)])],
@@ -6944,8 +6953,20 @@ function ldRecentName(D) {
 }
 function ldAgo(t) { const m = Math.round((Date.now() - t) / 60000); if (m < 1) return "just now"; if (m < 60) return m + " min ago"; const h = Math.round(m / 60); if (h < 24) return h + " h ago"; if (h < 48) return "yesterday"; return new Date(t).toLocaleDateString("en-IN", { day: "numeric", month: "short" }); }
 async function ldRecentLoad() {
-  try { const db = await ldRecentDB(); LDR.list = await new Promise(r => { const q = db.transaction("r").objectStore("r").getAll(); q.onsuccess = () => r(q.result.sort((a, b) => b.at - a.at).slice(0, 5)); q.onerror = () => r([]); }); } catch (_) { LDR.list = []; }
-  ldRecentPaint();
+  let rows = [];
+  try { const db = await ldRecentDB(); rows = await new Promise(r => { const q = db.transaction("r").objectStore("r").getAll(); q.onsuccess = () => r(q.result.sort((a, b) => b.at - a.at).slice(0, 5)); q.onerror = () => r([]); }); } catch (_) {}
+  const out = [], plain = [];
+  for (const x of rows) {
+    if (x.blob) { try { const m = JSON.parse(await lvDec(x.blob)); out.push({ rid: x.rid, at: x.at, name: m.name, size: m.size, json: m.json }); } catch (_) {} }
+    else if (x.json) { out.push(x); plain.push(x); } // stored before encryption: sealed now
+  }
+  LDR.list = out; ldRecentPaint();
+  for (const x of plain) await ldRecentPut(x);
+}
+async function ldRecentPut(e) {
+  const blob = await lvEnc(JSON.stringify({ name: e.name, size: e.size, json: e.json }));
+  const db = await ldRecentDB(), st = db.transaction("r", "readwrite").objectStore("r"); st.put({ rid: e.rid, at: e.at, blob });
+  const q = st.getAll(); q.onsuccess = () => q.result.sort((a, b) => b.at - a.at).slice(5).forEach(x => st.delete(x.rid));
 }
 function ldRecentTouch() {
   const D = dz.D; if (!D || !D.items || !D.items.length || dz.restoring) return;
@@ -6956,7 +6977,7 @@ function ldRecentTouch() {
     const D = dz.D; if (!D || !D.rid || !D.items.length) return;
     const e = { rid: D.rid, name: ldRecentName(D), size: `${r1(dzLWOf(D))} × ${r1(D.h)} mm`, at: Date.now(), json: JSON.stringify(D) };
     LDR.list = [e, ...LDR.list.filter(x => x.rid !== e.rid)].slice(0, 5); ldRecentPaint();
-    try { const db = await ldRecentDB(), st = db.transaction("r", "readwrite").objectStore("r"); st.put(e); const q = st.getAll(); q.onsuccess = () => q.result.sort((a, b) => b.at - a.at).slice(5).forEach(x => st.delete(x.rid)); } catch (_) {}
+    try { await LV.ready; await ldRecentPut(e); } catch (_) {}
   }, 1200);
 }
 function ldRecentOpen(rid) {
@@ -6976,7 +6997,132 @@ function ldRecentPaint() {
   w.hidden = !LDR.list.length;
   w.querySelector(".rl2").replaceChildren(...LDR.list.map(x => { const b = document.createElement("button"); b.type = "button"; b.innerHTML = `<b></b><span></span>`; b.firstChild.textContent = x.name; b.lastChild.textContent = `${x.size} · ${ldAgo(x.at)}`; b.title = "Open " + x.name; b.onclick = () => ldRecentOpen(x.rid); return b; }));
 }
-ldRecentLoad().then(() => { if (dz.D && dz.D.items && dz.D.items.length) ldRecentTouch(); });
+
+</script>
+
+<script>
+/* Vault: designs kept in this browser (draft + recent designs) are sealed with AES-256-GCM.
+   Without a PIN the key is a non-exportable browser key; with a PIN the key is wrapped by PBKDF2(PIN) and lives in memory only while unlocked. */
+const LV = { key: null, rec: null, ready: null, hid: 0 };
+const lvB64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const lvU8 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+function lvDB() { return lvDB.p || (lvDB.p = new Promise((res, rej) => { const r = indexedDB.open("ld-vault", 1); r.onupgradeneeded = () => r.result.createObjectStore("k", { keyPath: "id" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); }
+async function lvGet() { const db = await lvDB(); return new Promise(r => { const q = db.transaction("k").objectStore("k").get("main"); q.onsuccess = () => r(q.result || null); q.onerror = () => r(null); }); }
+async function lvPut(rec) { const db = await lvDB(); return new Promise((r, j) => { const t = db.transaction("k", "readwrite"); t.objectStore("k").put(rec); t.oncomplete = () => r(); t.onerror = () => j(t.error); }); }
+async function lvEnc(str) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, LV.key, new TextEncoder().encode(str))); return "ldv1:" + lvB64(iv) + ":" + lvB64(ct); }
+async function lvDec(s) { if (typeof s !== "string" || !s.startsWith("ldv1:")) return s; const [, iv, ct] = s.split(":"); return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: lvU8(iv) }, LV.key, lvU8(ct))); }
+const lvDeviceKey = () => crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+async function lvKek(pin, salt, iter) { const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]); return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]); }
+async function lvOpenPin(rec, pin) { const kek = await lvKek(pin, rec.salt, rec.iter); const raw = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: rec.wiv }, kek, rec.wrapped)); const k = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]); raw.fill(0); return k; }
+async function lvPinRecord(pin, old) {
+  const raw = crypto.getRandomValues(new Uint8Array(32)), salt = crypto.getRandomValues(new Uint8Array(16)), wiv = crypto.getRandomValues(new Uint8Array(12)), iter = 310000;
+  const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: wiv }, await lvKek(pin, salt, iter), raw));
+  const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]); raw.fill(0);
+  return { rec: { id: "main", mode: "pin", salt, wiv, iter, wrapped, fails: 0, wipe: old && old.wipe === false ? false : true, autolock: old && old.autolock != null ? old.autolock : 15 }, key };
+}
+/* Draft: written sealed, a moment after each change */
+function ldDraftPut() { clearTimeout(ldDraftPut.t); ldDraftPut.t = setTimeout(ldDraftWrite, 300); }
+async function ldDraftWrite() {
+  clearTimeout(ldDraftPut.t); await LV.ready; if (!dz.D) return;
+  try { localStorage.setItem("p2l-design", await lvEnc(JSON.stringify(dz.D))); }
+  catch (e) { const st = document.getElementById("dzStatus"); if (st) st.textContent = "Design too large to keep in this browser: use File → Save."; }
+}
+async function lvLoadDraft() {
+  const raw = localStorage.getItem("p2l-design"); if (!raw) return;
+  if (!raw.startsWith("ldv1:")) return; // plain draft from before: already loaded, sealed on the next write
+  let D; try { D = JSON.parse(await lvDec(raw)); } catch (_) { return; }
+  if (!D || !D.items || (dz.D && dz.D !== dz.bootDefault)) return;
+  dz.D = Object.assign(dzDefault(), D); dz.sel = null; dz.seq = Math.max(1, ...dz.D.items.map(i => i.id || 0)) + 1;
+  try { dzSetupForm(); dzProps(); dzDraw(); dzFit(); } catch (_) {}
+}
+async function lvRewriteAll() { await ldDraftWrite(); for (const e of LDR.list) await ldRecentPut(e); }
+async function lvWipe(silent) {
+  try { localStorage.removeItem("p2l-design"); } catch (_) {}
+  try { const db = await ldRecentDB(); await new Promise(r => { const t = db.transaction("r", "readwrite"); t.objectStore("r").clear(); t.oncomplete = r; t.onerror = r; }); } catch (_) {}
+  const key = await lvDeviceKey(); await lvPut({ id: "main", mode: "device", key }); LV.rec = { id: "main", mode: "device", key }; LV.key = key; LDR.list = [];
+  if (!silent) location.reload();
+}
+/* Unlock screen (PIN mode) */
+function lvUnlockUI(rec) {
+  return new Promise(res => {
+    const d = document.createElement("dialog"); d.className = "ld-cf lv-lock"; d.setAttribute("aria-labelledby", "lvH");
+    d.innerHTML = `<form method="dialog"><h2 id="lvH">LabelDesk is locked</h2><p>Enter your PIN to open the designs kept in this browser.</p>
+      <label class="lv-l">PIN<input id="lvPin" type="password" inputmode="numeric" autocomplete="off" required minlength="4" maxlength="32"></label>
+      <p class="lv-err" id="lvErr" role="alert" hidden></p>
+      <div class="ld-cf-row"><button type="button" class="btn" id="lvForgot">Forgot PIN</button><button class="btn primary" id="lvGo">Unlock</button></div></form>`;
+    document.body.append(d); d.addEventListener("cancel", e => e.preventDefault());
+    let done = false; d.addEventListener("close", () => { if (!done) setTimeout(() => { if (!done && d.isConnected) { d.showModal(); d.querySelector("#lvPin").focus(); } }, 0); });
+    const finish = k => { done = true; d.close(); d.remove(); res(k); };
+    const pin = d.querySelector("#lvPin"), err = d.querySelector("#lvErr"), go = d.querySelector("#lvGo");
+    pin.addEventListener("input", () => { err.hidden = true; });
+    d.querySelector("form").onsubmit = async e => {
+      e.preventDefault(); if (pin.value.length < 4) { err.textContent = "Enter at least 4 characters."; err.hidden = false; return; }
+      go.disabled = true; go.textContent = "Checking…";
+      try { const k = await lvOpenPin(rec, pin.value); rec.fails = 0; await lvPut(rec); finish(k); }
+      catch (_) {
+        rec.fails = (rec.fails || 0) + 1; await lvPut(rec); pin.value = ""; pin.focus();
+        if (rec.wipe !== false && rec.fails >= 10) { done = true; d.close(); d.remove(); await lvWipe(true); toast("10 wrong PINs: the designs kept in this browser were wiped. Cloud designs and .ldl files are not affected.", 8000); return res(LV.key); }
+        err.textContent = `That PIN is not right. ${rec.wipe !== false ? `${10 - rec.fails} tries left before the designs in this browser are wiped.` : "Try again."}`; err.hidden = false;
+      } finally { go.disabled = false; go.textContent = "Unlock"; }
+    };
+    d.querySelector("#lvForgot").onclick = async () => {
+      if (!await ldConfirm({ title: "Wipe the designs kept in this browser?", body: "Without the PIN they cannot be opened. The draft and recent designs on this device are deleted. Cloud designs and .ldl files are not affected. This cannot be undone.", verb: "Wipe and start fresh", danger: 1 })) return;
+      done = true; d.close(); d.remove(); await lvWipe(true); res(LV.key);
+    };
+    d.showModal(); pin.focus();
+  });
+}
+async function lvBoot() {
+  if (!(window.crypto && crypto.subtle && window.indexedDB)) { LV.key = null; throw new Error("no crypto"); }
+  let rec = await lvGet();
+  if (!rec) { rec = { id: "main", mode: "device", key: await lvDeviceKey() }; await lvPut(rec); }
+  LV.rec = rec;
+  LV.key = rec.mode === "pin" ? await lvUnlockUI(rec) : rec.key;
+  await lvLoadDraft(); await ldRecentLoad();
+  if (dz.D && dz.D.items && dz.D.items.length) ldRecentTouch();
+  if (localStorage.getItem("p2l-design") && !localStorage.getItem("p2l-design").startsWith("ldv1:")) setTimeout(ldDraftWrite, 0);
+}
+LV.ready = lvBoot().catch(() => {});
+/* Auto-lock after time away (PIN mode) */
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { LV.hid = Date.now(); if (ldDraftPut.t) ldDraftWrite(); return; }
+  const r = LV.rec; if (r && r.mode === "pin" && r.autolock && LV.hid && Date.now() - LV.hid > r.autolock * 60000) location.reload();
+});
+/* Settings → Privacy and PIN */
+async function lvSettings() {
+  await LV.ready; const r = LV.rec || {}, on = r.mode === "pin";
+  let d = document.getElementById("lvSet"); if (d) d.remove();
+  d = document.createElement("dialog"); d.id = "lvSet"; d.className = "ld-cf lv-set"; d.setAttribute("aria-labelledby", "lvSH");
+  d.innerHTML = `<form method="dialog"><h2 id="lvSH">Privacy and PIN</h2>
+    <p>Designs kept in this browser (the draft and the last 5 recent designs) are encrypted with AES-256. ${on ? "<b>A PIN is on</b>: LabelDesk asks for it when opened." : "Add a PIN so nobody using this device can open them."}</p>
+    ${on ? `<label class="lv-l">Current PIN<input id="lvCur" type="password" inputmode="numeric" autocomplete="off" minlength="4" maxlength="32"></label>` : ""}
+    <div class="lv-g"><label class="lv-l">${on ? "New PIN" : "PIN"}<input id="lvP1" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" maxlength="32" placeholder="4 to 32 characters"></label>
+    <label class="lv-l">Type it again<input id="lvP2" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" maxlength="32"></label></div>
+    <label class="lv-l">Lock again after the app is away for<select id="lvAuto">${[[5, "5 minutes"], [15, "15 minutes"], [60, "1 hour"], [0, "only when closed"]].map(([v, n]) => `<option value="${v}"${(r.autolock ?? 15) === v ? " selected" : ""}>${n}</option>`).join("")}</select></label>
+    <label class="lv-c"><input type="checkbox" id="lvWipe"${r.wipe === false ? "" : " checked"}> Wipe the designs in this browser after 10 wrong PINs</label>
+    <p class="lv-err" id="lvSErr" role="alert" hidden></p>
+    <p class="lv-note">A 4-digit PIN stops someone picking up the device. For strong protection use 8 or more characters. Fonts you uploaded are kept separately and are not covered.</p>
+    <div class="ld-cf-row"><button type="button" class="btn danger" id="lvClear">Clear LabelDesk data…</button>${on ? `<button type="button" class="btn" id="lvOff">Remove PIN</button>` : ""}<button type="button" class="btn" value="no" id="lvX">Close</button><button type="button" class="btn primary" id="lvSave">${on ? "Save changes" : "Turn on PIN"}</button></div></form>`;
+  document.body.append(d);
+  const $$ = id => d.querySelector("#" + id), err = $$("lvSErr"), say = t => { err.textContent = t; err.hidden = !t; };
+  const checkCur = async () => { if (!on) return true; try { await lvOpenPin(r, $$("lvCur").value); return true; } catch (_) { say("The current PIN is not right."); $$("lvCur").focus(); return false; } };
+  $$("lvX").onclick = () => d.close();
+  d.addEventListener("close", () => d.remove());
+  d.querySelectorAll("input").forEach(i => i.addEventListener("input", () => say("")));
+  $$("lvSave").onclick = async () => {
+    const p1 = $$("lvP1").value, p2 = $$("lvP2").value, auto = +$$("lvAuto").value, wipe = $$("lvWipe").checked;
+    if (on && !p1 && !p2) { if (!await checkCur()) return; r.autolock = auto; r.wipe = wipe; await lvPut(r); d.close(); return toast("Privacy settings saved"); }
+    if (p1.length < 4) { say("Use at least 4 characters."); return $$("lvP1").focus(); }
+    if (p1 !== p2) { say("The two PINs are different."); return $$("lvP2").focus(); }
+    if (!await checkCur()) return;
+    $$("lvSave").disabled = true; $$("lvSave").textContent = "Encrypting…";
+    const { rec, key } = await lvPinRecord(p1, { autolock: auto, wipe }); LV.key = key; LV.rec = rec; await lvRewriteAll(); await lvPut(rec);
+    d.close(); toast(on ? "PIN changed" : "PIN is on. LabelDesk will ask for it when opened.", 4000);
+  };
+  if (on) $$("lvOff").onclick = async () => { if (!await checkCur()) return; const key = await lvDeviceKey(); LV.key = key; LV.rec = { id: "main", mode: "device", key }; await lvRewriteAll(); await lvPut(LV.rec); d.close(); toast("PIN removed. Designs here stay encrypted."); };
+  $$("lvClear").onclick = async () => { if (on && !await checkCur()) return; if (await ldConfirm({ title: "Clear LabelDesk data from this device?", body: "Deletes the draft and recent designs kept in this browser, and the PIN. Cloud designs, .ldl files and your fonts are not affected. This cannot be undone.", verb: "Clear data", danger: 1 })) { d.close(); await lvWipe(); } };
+  d.showModal(); (on ? $$("lvCur") : $$("lvP1")).focus();
+}
 </script>
 </body>
 </html>
